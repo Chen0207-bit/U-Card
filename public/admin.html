@@ -412,7 +412,7 @@
 
     <!-- 11. 分销链路 -->
     <section class="page" id="page-chain">
-      <div class="notice">📡 此页已开启<b>自动监听</b>(每 5 秒) — 在用户端 <b><a href="/app" target="_blank" style="color:inherit">发起一笔消费</a></b>, 新的分佣链路会自动出现、高亮并弹出提示<button class="btn-outline btn-sm" style="margin-left:auto" onclick="LOADERS.chain()">🔄 立即刷新</button></div>
+      <div class="notice">📡 此页已开启<b>自动监听</b>(每 5 秒) — 在用户端 <b><a href="/app" target="_blank" style="color:inherit">发起一笔消费</a></b>, 新的分佣链路会自动出现、高亮并弹出提示<button class="btn-outline btn-sm" style="margin-left:auto" onclick="LOADERS.chain(true)">🔄 立即刷新</button></div>
       <div class="card" id="chainRules"></div>
       <div class="card">
         <div class="card-title">分销组织树</div>
@@ -529,6 +529,12 @@ window.addEventListener('hashchange', navigate);
 // 驾驶舱/分销链路/客户交易等展示型页面定时重拉, 用户端每笔操作数秒内自动出现, 无需手动刷新
 var AUTO_PAGES = {dashboard: 5000, chain: 5000, tx: 8000, commission: 10000};
 var pollTimer = null, lastChainKey = null, lastTxKey = null;
+var LAST_SIG = {}; // 每页最近一次数据指纹: 轮询时数据未变则不碰 DOM(零闪烁的无感刷新)
+function sigChanged(key, data){
+  var sig = JSON.stringify(data);
+  if (LAST_SIG[key] === sig) return false;
+  LAST_SIG[key] = sig; return true;
+}
 function syncPoll(){
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   var key = (location.hash || '#dashboard').slice(1);
@@ -537,7 +543,7 @@ function syncPoll(){
   pollTimer = setInterval(function(){
     if (document.hidden) return;                                        // 标签页在后台时不空转
     if ($('#modalRoot').innerHTML || $('#drawerRoot').innerHTML) return; // 弹窗/抽屉操作中不打断
-    if (LOADERS[key]) LOADERS[key]();
+    if (LOADERS[key]) LOADERS[key](true); // silent: 静默拉取, 无 loading 占位, 数据不变不渲染
   }, iv);
 }
 
@@ -569,10 +575,11 @@ function fetchSales(force){
 }
 
 /* ================= 1. 驾驶舱 ================= */
-LOADERS.dashboard = function(){
+LOADERS.dashboard = function(silent){
   var els = [$('#dashStats'), $('#dashTrend'), $('#dashPerf'), $('#dashRecent')];
-  els.forEach(function(el){ el.innerHTML = loadingBox(); });
+  if (!silent) els.forEach(function(el){ el.innerHTML = loadingBox(); });
   api('/api/admin/dashboard').then(function(d){
+    if (!sigChanged('dashboard', d)) return; // 数据无变化: 不重绘, 完全无感
     var t0 = d.recentTx && d.recentTx[0];
     var txKey = t0 ? (t0.id + '|' + t0.createdAt) : '';
     if (lastTxKey && txKey && txKey !== lastTxKey) toast('🔔 实时进账: ' + t0.user + ' ' + (t0.type === 'topup' ? '充值 ' : '消费 ') + fmtMoney(t0.amount));
@@ -581,7 +588,7 @@ LOADERS.dashboard = function(){
     renderTrend(d.trend);
     renderDashPerf(d.perf);
     renderRecent(d.recentTx);
-  }).catch(function(e){ els.forEach(function(el){ el.innerHTML = errBox(e); }); });
+  }).catch(function(e){ if (!silent) els.forEach(function(el){ el.innerHTML = errBox(e); }); });
 };
 
 function renderDashStats(s){
@@ -805,9 +812,10 @@ function switchTx(t){
   $$('#txTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.t === t); });
   LOADERS.tx();
 }
-LOADERS.tx = function(){
-  $('#txBody').innerHTML = loadingBox();
+LOADERS.tx = function(silent){
+  if (!silent) $('#txBody').innerHTML = loadingBox();
   api('/api/admin/transactions' + (TXTYPE ? '?type=' + TXTYPE : '')).then(function(l){
+    if (!sigChanged('tx' + TXTYPE, l)) return;
     TXL = l;
     if (!l.length){ $('#txBody').innerHTML = emptyBox('暂无交易'); return; }
     var rows = l.map(function(t){
@@ -826,7 +834,7 @@ LOADERS.tx = function(){
         '<td>' + (canRefund ? '<button class="btn-danger" onclick="openRefund(' + t.id + ')">退款</button>' : '') + '</td></tr>';
     }).join('');
     $('#txBody').innerHTML = '<table><thead><tr><th>单号</th><th>类型</th><th>用户</th><th>卡号</th><th>金额</th><th>手续费</th><th>方式</th><th>返积分</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
-  }).catch(function(e){ $('#txBody').innerHTML = errBox(e); });
+  }).catch(function(e){ if (!silent) $('#txBody').innerHTML = errBox(e); });
 };
 function openRefund(txId){
   var t = TXL.find(function(x){ return x.id === txId; });
@@ -984,9 +992,10 @@ LOADERS.perf = function(){
 };
 
 /* ================= 7. 佣金管理 ================= */
-LOADERS.commission = function(){
-  $('#comBody').innerHTML = loadingBox(); $('#comSum').innerHTML = '';
+LOADERS.commission = function(silent){
+  if (!silent){ $('#comBody').innerHTML = loadingBox(); $('#comSum').innerHTML = ''; }
   api('/api/admin/commissions').then(function(list){
+    if (!sigChanged('commission', list)) return;
     var sum = function(f){ return list.filter(f).reduce(function(s, c){ return s + c.amount; }, 0); };
     var mine = list.filter(function(c){ return c.salesId === ME.id; });
     var direct = mine.filter(function(c){ return c.tier === 0; }).reduce(function(s, c){ return s + c.amount; }, 0);
@@ -1013,7 +1022,7 @@ LOADERS.commission = function(){
         '<td>' + (c.status === 'pending' ? '<button class="btn-outline btn-sm" onclick="settleCom(' + c.id + ')">结算</button>' : '') + '</td></tr>';
     }).join('');
     $('#comBody').innerHTML = '<table><thead><tr><th>受益销售</th><th>层级</th><th>类型</th><th>佣金来源</th><th>计佣基数</th><th>费率</th><th>佣金额</th><th>关联单号</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
-  }).catch(function(e){ $('#comBody').innerHTML = errBox(e); });
+  }).catch(function(e){ if (!silent){ $('#comBody').innerHTML = errBox(e); $('#comSum').innerHTML = ''; } });
 };
 function settleCom(id){
   post('/api/admin/commissions/settle', {id: id}).then(function(){ toast('佣金已结算'); LOADERS.commission(); })
@@ -1021,9 +1030,10 @@ function settleCom(id){
 }
 
 /* ================= 7b. 分销链路 ================= */
-LOADERS.chain = function(){
-  $('#chainRules').innerHTML = loadingBox(); $('#chainTree').innerHTML = loadingBox(); $('#chainList').innerHTML = loadingBox();
+LOADERS.chain = function(silent){
+  if (!silent){ $('#chainRules').innerHTML = loadingBox(); $('#chainTree').innerHTML = loadingBox(); $('#chainList').innerHTML = loadingBox(); }
   api('/api/admin/commissions/tree').then(function(d){
+    if (!sigChanged('chain', d)) return;
     // ---- 分佣规则卡 ----
     var tls = d.tierLabels || TIER_LABELS;
     var ruleCard = function(key){
@@ -1076,7 +1086,7 @@ LOADERS.chain = function(){
         '<span class="chain-arrow">➜</span>' + pathHtml + '</div>';
     }).join('') : emptyBox('暂无分佣链路, 去用户端发起一笔消费试试');
   }).catch(function(e){
-    $('#chainRules').innerHTML = errBox(e); $('#chainTree').innerHTML = ''; $('#chainList').innerHTML = '';
+    if (!silent){ $('#chainRules').innerHTML = errBox(e); $('#chainTree').innerHTML = ''; $('#chainList').innerHTML = ''; }
   });
 };
 
