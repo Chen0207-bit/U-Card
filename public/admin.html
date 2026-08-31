@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>U-Card 优卡 · 运营后台</title>
+<style>
+  :root{
+    --pri:#4f46e5; --pri2:#7c3aed;
+    --ok:#16a34a; --warn:#f59e0b; --bad:#dc2626; --info:#0ea5e9;
+    --bg:#f1f5f9; --card:#ffffff;
+    --ink:#0f172a; --ink2:#475569; --ink3:#94a3b8;
+    --line:#e2e8f0;
+    --grad:linear-gradient(135deg,#4f46e5,#7c3aed);
+    --shadow:0 1px 3px rgba(0,0,0,.08);
+    --radius:14px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  a{text-decoration:none}
+  button{font-family:inherit;cursor:pointer}
+
+  /* ---------- 布局: sidebar + main ---------- */
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;background:#0f172a;display:flex;flex-direction:column;overflow-y:auto;z-index:40}
+  .logo{display:flex;align-items:center;gap:10px;padding:18px 16px 14px}
+  .logo-card{width:34px;height:24px;border-radius:5px;background:var(--grad);position:relative;overflow:hidden;flex:none;box-shadow:0 2px 6px rgba(79,70,229,.5)}
+  .logo-card::before{content:'';position:absolute;left:0;right:0;top:8px;height:5px;background:rgba(255,255,255,.38)}
+  .logo-name{color:#fff;font-weight:700;font-size:15px;letter-spacing:.3px}
+  .logo-sub{color:#64748b;font-size:11px;margin-top:1px}
+  .nav{flex:1;padding:4px 0 12px}
+  .nav-cap{font-size:11px;color:#64748b;margin:14px 0 6px 22px;letter-spacing:1px}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;margin:2px 10px;border-radius:8px;color:#94a3b8;font-size:13.5px;transition:all .15s}
+  .nav-item:hover{color:#e2e8f0;background:rgba(255,255,255,.06)}
+  .nav-item.active{color:#fff;background:linear-gradient(135deg,rgba(79,70,229,.5),rgba(124,58,237,.5));box-shadow:inset 0 0 0 1px rgba(129,140,248,.35)}
+  .nav-ic{width:18px;text-align:center;flex:none}
+  .side-foot{border-top:1px solid rgba(255,255,255,.08);padding:14px 20px;display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:12.5px}
+  .side-avatar{width:30px;height:30px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+  .side-ver{color:#475569;font-size:11px;margin-top:2px}
+
+  .main{margin-left:220px;min-height:100vh;display:flex;flex-direction:column}
+  .topbar{position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--line);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 26px}
+  .topbar h1{font-size:17px;font-weight:600}
+  .topbar-user{display:flex;align-items:center;gap:9px;color:var(--ink2);font-size:13.5px}
+  .topbar .avatar{width:34px;height:34px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:16px}
+  .content{flex:1;padding:22px 26px 46px}
+
+  .page{display:none}
+  .page.show{display:block;animation:fadeIn .25s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* ---------- 通用卡片 / 表格 ---------- */
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-bottom:16px}
+  .card-title{font-size:14.5px;font-weight:600;margin-bottom:3px}
+  .card-sub{font-size:12px;color:var(--ink3);margin-bottom:12px}
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{font-size:12px;color:var(--ink3);font-weight:600;text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:9px 12px;border-bottom:1px solid #f1f5f9;white-space:nowrap;vertical-align:middle}
+  tbody tr:nth-child(even){background:#f8fafc}
+  tbody tr:hover{background:#eef2ff}
+  .num{font-variant-numeric:tabular-nums}
+  .dim{color:var(--ink3);font-size:11.5px}
+  .sub-line{font-size:11.5px;color:var(--ink3);margin-top:2px;font-weight:400}
+  .empty{padding:40px 20px;text-align:center;color:var(--ink3);font-size:13px}
+  .toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .toolbar-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .search{width:230px}
+  .notice{display:flex;align-items:center;gap:8px;background:#eef2ff;border:1px solid #c7d2fe;color:#4338ca;border-radius:10px;padding:9px 14px;font-size:12.5px;margin-bottom:14px}
+
+  /* ---------- pill 徽章 ---------- */
+  .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+  .pill-green{background:#dcfce7;color:#15803d}
+  .pill-red{background:#fee2e2;color:#b91c1c}
+  .pill-amber{background:#fef3c7;color:#b45309}
+  .pill-blue{background:#e0f2fe;color:#0369a1}
+  .pill-gray{background:#f1f5f9;color:#475569}
+  .pill-indigo{background:#e0e7ff;color:#4338ca}
+  .pill-gold{background:#fef9c3;color:#a16207}
+
+  /* ---------- 按钮 ---------- */
+  .btn{border:none;border-radius:9px;padding:8px 16px;font-size:13.5px;font-weight:500;color:#fff;background:var(--grad);box-shadow:0 1px 3px rgba(79,70,229,.35);transition:filter .15s}
+  .btn:hover{filter:brightness(1.08)}
+  .btn-outline{border:1px solid var(--line);background:#fff;color:var(--ink2);border-radius:9px;padding:8px 16px;font-size:13.5px;transition:all .15s}
+  .btn-outline:hover{border-color:var(--pri);color:var(--pri)}
+  .btn-sm{padding:4px 11px;font-size:12px;border-radius:7px}
+  .btn-danger{border:1px solid #fecaca;background:#fff;color:var(--bad);border-radius:7px;padding:4px 11px;font-size:12px;transition:all .15s}
+  .btn-danger:hover{background:#fee2e2}
+  .btn-ok-sm{border:1px solid #bbf7d0;background:#fff;color:var(--ok);border-radius:7px;padding:4px 11px;font-size:12px;transition:all .15s}
+  .btn-ok-sm:hover{background:#dcfce7}
+  .btn-link{border:none;background:none;color:var(--pri);font-size:12px;padding:4px 6px}
+  .btn-link:hover{text-decoration:underline}
+
+  /* ---------- 表单 ---------- */
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12.5px;color:var(--ink2);margin-bottom:5px;font-weight:500}
+  .input,.select,.textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:13.5px;font-family:inherit;background:#fff;color:var(--ink);transition:all .15s}
+  .input:focus,.select:focus,.textarea:focus{outline:none;border-color:var(--pri);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+  .textarea{resize:vertical;min-height:64px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+  .form-err{display:none;background:#fee2e2;color:#b91c1c;border-radius:8px;padding:8px 12px;font-size:12.5px;margin-bottom:12px}
+  .form-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:6px}
+
+  /* ---------- toast ---------- */
+  #toasts{position:fixed;top:16px;right:16px;z-index:120;display:flex;flex-direction:column;gap:10px}
+  .toast{background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.16);padding:11px 16px 11px 13px;display:flex;gap:9px;align-items:center;min-width:230px;max-width:380px;border-left:4px solid var(--ok);font-size:13.5px;animation:slideIn .3s ease}
+  .toast.err{border-left-color:var(--bad)}
+  .toast.warn{border-left-color:var(--warn)}
+  .toast.out{animation:slideOut .25s forwards}
+  @keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
+  @keyframes slideOut{to{transform:translateX(110%);opacity:0}}
+
+  /* ---------- modal ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;animation:fade .18s}
+  @keyframes fade{from{opacity:0}}
+  .modal{background:#fff;border-radius:14px;width:460px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;animation:pop .22s;box-shadow:0 20px 50px rgba(15,23,42,.25);overflow:hidden}
+  @keyframes pop{from{transform:scale(.94);opacity:0}}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;border-bottom:1px solid var(--line)}
+  .modal-head h3{font-size:15px;font-weight:600}
+  .modal-x{border:none;background:none;font-size:15px;color:var(--ink3);padding:4px 6px;border-radius:6px}
+  .modal-x:hover{background:#f1f5f9;color:var(--ink)}
+  .modal-body{padding:20px;overflow-y:auto}
+
+  /* ---------- drawer ---------- */
+  .drawer-mask{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:90;animation:fade .18s}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:94vw;background:#fff;z-index:95;display:flex;flex-direction:column;box-shadow:-12px 0 40px rgba(15,23,42,.18);animation:slideL .25s ease}
+  @keyframes slideL{from{transform:translateX(100%)}}
+  .drawer-head{display:flex;justify-content:space-between;align-items:center;padding:15px 20px;border-bottom:1px solid var(--line)}
+  .drawer-head h3{font-size:15px;font-weight:600}
+  .drawer-body{flex:1;overflow-y:auto;padding:18px 20px}
+  .drawer-foot{border-top:1px solid var(--line);padding:16px 20px;background:#f8fafc}
+
+  /* ---------- 驾驶舱 stat 卡 ---------- */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:14px;margin-bottom:16px}
+  .stat{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:15px 16px;position:relative}
+  .stat-ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:10px}
+  .stat .lab{font-size:12.5px;color:var(--ink2)}
+  .stat .val{font-size:22px;font-weight:600;margin-top:3px}
+  .stat .sub{font-size:11.5px;color:var(--ink3);margin-top:5px}
+  .corner-badge{position:absolute;top:12px;right:12px;background:#fee2e2;color:#b91c1c;font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600}
+  .dash-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+
+  /* ---------- 图表 ---------- */
+  .chart-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+  .legend{display:flex;gap:14px;padding-top:2px}
+  .legend .lg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2)}
+  .legend .lg i{width:10px;height:10px;border-radius:3px;display:inline-block}
+  svg .ax{fill:#94a3b8;font-size:10px}
+  svg .bar{transition:opacity .15s}
+  svg .bar:hover{opacity:.78}
+
+  /* ---------- 进度条 ---------- */
+  .prog-wrap{display:flex;align-items:center;gap:8px;min-width:130px}
+  .prog{flex:1;height:8px;background:#e0e7ff;border-radius:99px;overflow:hidden}
+  .prog-fill{height:100%;border-radius:99px;background:var(--grad)}
+  .prog-txt{font-size:12px;color:var(--ink2);min-width:40px;text-align:right}
+
+  /* ---------- tabs ---------- */
+  .tabs{display:inline-flex;background:#e9edf3;padding:3px;border-radius:9px;gap:2px}
+  .tab{padding:6px 15px;border-radius:7px;font-size:13px;color:var(--ink2);border:none;background:transparent}
+  .tab.active{background:#fff;color:var(--pri);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+  /* ---------- KYC ---------- */
+  .kyc-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+  .kyc-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+  .kyc-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .kyc-name{font-size:14.5px;font-weight:600}
+  .kyc-meta{font-size:12px;color:var(--ink2);line-height:1.9}
+  .kyc-meta b{color:var(--ink);font-weight:600}
+  .doc-chip{display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border-radius:6px;padding:3px 8px;font-size:11.5px;color:var(--ink2);margin:6px 6px 0 0}
+  .kyc-actions{display:flex;gap:8px;margin-top:12px}
+
+  /* ---------- CRM ---------- */
+  .funnel{display:flex;height:38px;border-radius:10px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:6px}
+  .funnel .seg{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11.5px;font-weight:600;min-width:48px;white-space:nowrap;overflow:hidden;transition:filter .15s;cursor:default}
+  .funnel .seg:hover{filter:brightness(1.12)}
+  .funnel-cap{font-size:11.5px;color:var(--ink3);margin-bottom:14px}
+  .stage-select{border:1px solid var(--line);background:#f8fafc;padding:4px 8px;border-radius:8px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer}
+  .stage-select:focus{outline:none;border-color:var(--pri)}
+  .overdue{color:var(--bad);font-weight:600}
+  .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:16px}
+  .info-item .k{font-size:11.5px;color:var(--ink3);margin-bottom:2px}
+  .info-item .v{font-size:13px;font-weight:500;word-break:break-all}
+  .tl{position:relative;padding-left:18px;margin-top:4px}
+  .tl::before{content:'';position:absolute;left:4px;top:6px;bottom:10px;width:2px;background:#e2e8f0}
+  .tl-item{position:relative;padding-bottom:16px}
+  .tl-item::before{content:'';position:absolute;left:-17.5px;top:4px;width:9px;height:9px;border-radius:50%;background:var(--pri);box-shadow:0 0 0 2px #e0e7ff}
+  .tl-head{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink3);margin-bottom:3px}
+  .tl-type{background:#eef2ff;color:#4338ca;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:600}
+  .tl-content{font-size:13px;line-height:1.6;color:var(--ink)}
+  .tl-plan{font-size:12px;color:var(--info);margin-top:3px}
+
+  /* ---------- 汇总小卡 ---------- */
+  .sum-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:16px}
+  .sum-card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 16px;display:flex;align-items:center;gap:12px}
+  .sum-card .ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+  .sum-card .v{font-size:19px;font-weight:600}
+  .sum-card .k{font-size:12px;color:var(--ink2)}
+
+  /* ---------- 积分规则 ---------- */
+  .points-grid{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}
+  .rule-block{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+  .rule-block h4{font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .rule-line{display:flex;justify-content:space-between;flex-wrap:wrap;gap:2px 10px;font-size:12.5px;color:var(--ink2);padding:3.5px 0}
+  .rule-line b{color:var(--ink);font-weight:600}
+
+  /* ---------- 登录页 ---------- */
+  .login-screen{position:fixed;inset:0;background:linear-gradient(160deg,#eef2ff 0%,#f1f5f9 45%,#f5f3ff 100%);z-index:200;display:none;overflow-y:auto;padding:44px 22px}
+  body.login-mode .login-screen{display:block}
+  body.login-mode .sidebar,body.login-mode .main{display:none}
+  .login-box{max-width:900px;margin:0 auto}
+  .login-head{text-align:center;margin-bottom:24px}
+  .login-card{width:56px;height:38px;border-radius:8px;background:var(--grad);position:relative;overflow:hidden;box-shadow:0 8px 20px rgba(79,70,229,.35);display:inline-block}
+  .login-card::before{content:'';position:absolute;left:0;right:0;top:13px;height:8px;background:rgba(255,255,255,.38)}
+  .login-title{font-size:21px;font-weight:700;margin-top:12px}
+  .login-sub{color:var(--ink2);font-size:13px;margin-top:6px}
+  .login-panel{background:#fff;border-radius:16px;box-shadow:0 8px 30px rgba(15,23,42,.1);padding:22px 24px}
+  .acct-cap{font-size:12.5px;color:var(--ink2);font-weight:600;margin:16px 0 8px}
+  .login-panel .acct-cap:first-child{margin-top:0}
+  .acct-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .acct-card{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .15s;background:#fff;text-align:left;font-family:inherit}
+  .acct-card:hover{border-color:var(--pri);box-shadow:0 6px 16px rgba(79,70,229,.16);transform:translateY(-2px)}
+  .acct-name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .acct-meta{font-size:11.5px;color:var(--ink3);margin-top:7px}
+  .role-pill{display:inline-flex;align-items:center;padding:1px 9px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+  .role-0{background:var(--grad);color:#fff}
+  .role-1{background:#e0e7ff;color:#4338ca}
+  .role-2{background:#e0f2fe;color:#0369a1}
+  .role-3{background:#f1f5f9;color:#475569}
+  .topbar-user{gap:9px}
+
+  /* ---------- 分销链路 ---------- */
+  .tier-rules{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .tier-rule{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .tier-rule h4{font-size:13px;margin-bottom:8px}
+  .tier-rule .row{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2);padding:3px 0}
+  .tier-rule .row b{margin-left:auto;color:var(--ink)}
+  .org-node{display:flex;align-items:stretch;background:#fff;border:1px solid var(--line);border-radius:12px;margin:6px 0;overflow:hidden;box-shadow:var(--shadow)}
+  .org-bar{width:5px;flex:none}
+  .org-body{padding:10px 14px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;flex:1}
+  .org-main{min-width:180px}
+  .org-num{text-align:right;margin-left:auto}
+  .org-children{margin-left:30px;border-left:2px dashed #d8dee9;padding-left:8px}
+  .chain{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+  .chain-tx{min-width:220px;padding-right:12px;border-right:1px dashed #e2e8f0}
+  .chain-arrow{color:#a5b4fc;font-weight:700;font-size:15px;flex:none}
+  .chain-node{border:1.5px solid var(--line);border-radius:10px;padding:6px 11px;text-align:center;flex:none}
+  .chain-node .nm{font-size:12.5px;font-weight:600;white-space:nowrap}
+  .chain-node .amt{font-size:14px;font-weight:700;margin-top:2px}
+  .chain-node.max{border-color:var(--pri);background:#eef2ff;box-shadow:0 0 0 3px rgba(79,70,229,.14)}
+  .chain-node.max .amt{color:var(--pri)}
+
+  @media (max-width:1080px){
+    .dash-grid,.points-grid{grid-template-columns:1fr}
+    .tier-rules{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- 登录页(demo 免密选账号) -->
+<div class="login-screen">
+  <div class="login-box">
+    <div class="login-head">
+      <div class="login-card"></div>
+      <div class="login-title">U-Card 优卡 · 运营与销售工作台</div>
+      <div class="login-sub">选择账号登录 (demo 免密) · 不同身份看到不同的数据范围与菜单</div>
+    </div>
+    <div class="login-panel" id="acctPanel"><div class="empty">⏳ 加载账号列表…</div></div>
+  </div>
+</div>
+
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-card"></div>
+    <div>
+      <div class="logo-name">U-Card</div>
+      <div class="logo-sub">优卡运营后台</div>
+    </div>
+  </div>
+  <nav class="nav" id="nav"></nav>
+  <div class="side-foot" id="sideFoot"></div>
+</div>
+
+<div class="main">
+  <header class="topbar">
+    <h1 id="pageTitle">驾驶舱</h1>
+    <div class="topbar-user" id="topbarUser"></div>
+  </header>
+  <div class="content">
+
+    <!-- 1. 驾驶舱 -->
+    <section class="page" id="page-dashboard">
+      <div id="dashStats" class="stats"></div>
+      <div class="dash-grid">
+        <div class="card" id="dashTrend"></div>
+        <div class="card" id="dashPerf"></div>
+      </div>
+      <div class="card" id="dashRecent"></div>
+    </section>
+
+    <!-- 2. U卡管理 -->
+    <section class="page" id="page-cards">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input class="input search" id="cardSearch" placeholder="🔍 搜索卡号 / 持卡人 / 销售" oninput="renderCards()">
+        </div>
+        <button class="btn" onclick="openIssue()">➕ 发卡</button>
+      </div>
+      <div class="card"><div class="tbl-wrap" id="cardsBody"></div></div>
+    </section>
+
+    <!-- 3. KYC 审核 -->
+    <section class="page" id="page-kyc">
+      <div id="kycBody"></div>
+      <div class="card">
+        <div class="card-title">KYC 等级限额说明</div>
+        <div class="card-sub">等级越高, 单笔 / 单日交易限额越高; 升级审核通过将触发 200 积分奖励</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>等级</th><th>单笔限额</th><th>日累计限额</th><th>说明</th></tr></thead>
+            <tbody>
+              <tr><td><span class="pill pill-gray">L0 基础</span></td><td class="num">$100.00</td><td class="num">$300.00</td><td class="dim">注册即有, 仅可小额体验</td></tr>
+              <tr><td><span class="pill pill-blue">L1 初级认证</span></td><td class="num">$1,000.00</td><td class="num">$3,000.00</td><td class="dim">提交身份证件 + 自拍</td></tr>
+              <tr><td><span class="pill pill-gold">L2 高级认证</span></td><td class="num">$10,000.00</td><td class="num">$50,000.00</td><td class="dim">补充地址证明, 可开白金卡</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 交易流水 -->
+    <section class="page" id="page-tx">
+      <div class="toolbar">
+        <div class="tabs" id="txTabs">
+          <button class="tab active" data-t="" onclick="switchTx('')">全部</button>
+          <button class="tab" data-t="topup" onclick="switchTx('topup')">充值</button>
+          <button class="tab" data-t="consume" onclick="switchTx('consume')">消费</button>
+          <button class="tab" data-t="adjust" onclick="switchTx('adjust')">调账</button>
+        </div>
+      </div>
+      <div class="card"><div class="tbl-wrap" id="txBody"></div></div>
+    </section>
+
+    <!-- 5. 客户管理 CRM -->
+    <section class="page" id="page-crm">
+      <div class="card">
+        <div class="funnel" id="crmFunnel"></div>
+        <div class="funnel-cap">线索 → 意向 → 方案 → 开卡 → 充值 → 活跃 → 沉睡 · 阶段客户分布</div>
+      </div>
+      <div class="toolbar">
+        <div class="toolbar-left"><span class="dim">共 <b id="crmCount">0</b> 个客户 · 阶段可直接下拉切换</span></div>
+        <button class="btn" onclick="openCustNew()">➕ 新增客户</button>
+      </div>
+      <div class="card"><div class="tbl-wrap" id="crmBody"></div></div>
+    </section>
+
+    <!-- 6. 业绩排行 -->
+    <section class="page" id="page-perf">
+      <div class="notice">🔐 数据权限: 总监看全组织, 一级/二级/三级销售看自己团队 · 登录身份: <b id="perfWho">—</b></div>
+      <div class="card">
+        <div class="card-title">销售业绩排行</div>
+        <div class="card-sub">按总 GMV(充值+消费) 降序 · 目标完成度 = 总 GMV / 月度目标</div>
+        <div class="tbl-wrap" id="perfBody"></div>
+      </div>
+    </section>
+
+    <!-- 7. 佣金管理 -->
+    <section class="page" id="page-commission">
+      <div id="comSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">佣金流水</div>
+        <div class="card-sub">充值/消费: 直属 1% · 上级 2% · 上上级 0.5% · 发卡: $5/$1/$1 · 满 3 天自动可结算</div>
+        <div class="tbl-wrap" id="comBody"></div>
+      </div>
+    </section>
+
+    <!-- 8. 积分管理 -->
+    <section class="page" id="page-points">
+      <div class="points-grid">
+        <div class="card" id="pointsRules"></div>
+        <div>
+          <div class="toolbar">
+            <div class="toolbar-left"><span class="dim">积分流水 (最近 200 条)</span></div>
+            <button class="btn" onclick="openGrant()">🎁 运营发放</button>
+          </div>
+          <div class="card"><div class="tbl-wrap" id="pointsBody"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. 商城管理 -->
+    <section class="page" id="page-shop">
+      <div class="card">
+        <div class="card-title">商品列表</div>
+        <div class="card-sub">积分价 + 现金加价 · 库存为 0 时标红, 用户端不可兑换</div>
+        <div class="tbl-wrap" id="shopBody"></div>
+      </div>
+    </section>
+
+    <!-- 10. 兑换订单 -->
+    <section class="page" id="page-orders">
+      <div class="card">
+        <div class="card-title">兑换订单</div>
+        <div class="card-sub">实物商品需发货填物流单号; 虚拟商品兑换后直接核销并生成核销码</div>
+        <div class="tbl-wrap" id="ordersBody"></div>
+      </div>
+    </section>
+
+    <!-- 11. 分销链路 -->
+    <section class="page" id="page-chain">
+      <div class="notice">💡 在用户端 <b><a href="/app" target="_blank" style="color:inherit">http://localhost:5177/app</a></b> 发起一笔消费, 回到此页刷新即可看到新的分佣链路<button class="btn-outline btn-sm" style="margin-left:auto" onclick="LOADERS.chain()">🔄 刷新</button></div>
+      <div class="card" id="chainRules"></div>
+      <div class="card">
+        <div class="card-title">分销组织树</div>
+        <div class="card-sub" id="chainTreeSub"></div>
+        <div id="chainTree"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">实时分佣链路</div>
+        <div class="card-sub">最近 10 笔交易的佣金沿链路分配 · 高亮为该链路中金额最大的一级</div>
+        <div id="chainList"></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<div id="toasts"></div>
+<div id="modalRoot"></div>
+<div id="drawerRoot"></div>
+
+<script>
+/* ================= 基础工具 ================= */
+// 同源部署时直接走相对路径; file:// 打开时回落到本地服务地址
+var API = location.protocol.indexOf('http') === 0 ? '' : 'http://localhost:5177';
+
+function $(s, el){ return (el || document).querySelector(s); }
+function $$(s, el){ return Array.prototype.slice.call((el || document).querySelectorAll(s)); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+function fmtMoney(n){ return '$' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function fmtMoney0(n){ return '$' + Math.round(Number(n || 0)).toLocaleString('en-US'); }
+function fmtPts(n){ return Number(n || 0).toLocaleString('en-US'); }
+function fmtTime(ts){ return ts ? new Date(ts).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'; }
+function maskCard(no){ var d = String(no || '').replace(/\s/g, ''); return d.slice(0,4) + ' ' + d.slice(4,6) + '** **** ' + d.slice(-4); }
+function shortHash(h){ return String(h || '').slice(0,6) + '…' + String(h || '').slice(-4); }
+
+var loadingBox = function(t){ return '<div class="empty">⏳ ' + (t || '加载中…') + '</div>'; };
+var emptyBox  = function(t){ return '<div class="empty">📭 ' + (t || '暂无数据') + '</div>'; };
+var errBox = function(e){ return '<div class="empty">⚠️ 加载失败: ' + esc(e && e.message) + ' <button class="btn btn-sm" onclick="navigate()">重试</button></div>'; };
+
+function api(path, opts){
+  opts = opts || {};
+  if (opts.body) opts.body = JSON.stringify(opts.body);
+  // 所有后台请求带销售身份头, 后端按身份过滤数据范围
+  opts.headers = {'Content-Type': 'application/json', 'x-sales': String(ME ? ME.id : 0)};
+  return fetch(API + path, opts).then(function(res){
+    return res.json().catch(function(){ return {}; }).then(function(data){
+      if (!res.ok) { var e = new Error(data.error || ('HTTP ' + res.status)); e.status = res.status; throw e; }
+      return data;
+    });
+  });
+}
+function post(path, body){ return api(path, {method: 'POST', body: body}); }
+function patch(path, body){ return api(path, {method: 'PATCH', body: body}); }
+
+/* ================= 通用组件: toast / modal / drawer ================= */
+function toast(msg, type){
+  var box = document.createElement('div');
+  box.className = 'toast ' + (type === 'err' ? 'err' : type === 'warn' ? 'warn' : '');
+  box.innerHTML = '<span>' + (type === 'err' ? '❌' : type === 'warn' ? '⚠️' : '✅') + '</span><span>' + esc(msg) + '</span>';
+  $('#toasts').appendChild(box);
+  setTimeout(function(){ box.classList.add('out'); setTimeout(function(){ box.remove(); }, 260); }, 3000);
+}
+function showModal(title, bodyHTML){
+  $('#modalRoot').innerHTML =
+    '<div class="overlay" onclick="if(event.target===this)closeModal()">' +
+      '<div class="modal"><div class="modal-head"><h3>' + title + '</h3>' +
+      '<button class="modal-x" onclick="closeModal()">✕</button></div>' +
+      '<div class="modal-body">' + bodyHTML + '</div></div></div>';
+}
+function closeModal(){ $('#modalRoot').innerHTML = ''; }
+function showDrawer(title, bodyHTML, footHTML){
+  $('#drawerRoot').innerHTML =
+    '<div class="drawer-mask" onclick="closeDrawer()"></div>' +
+    '<div class="drawer"><div class="drawer-head"><h3>' + title + '</h3>' +
+    '<button class="modal-x" onclick="closeDrawer()">✕</button></div>' +
+    '<div class="drawer-body">' + bodyHTML + '</div>' +
+    (footHTML ? '<div class="drawer-foot">' + footHTML + '</div>' : '') + '</div>';
+}
+function closeDrawer(){ $('#drawerRoot').innerHTML = ''; }
+
+/* ================= hash 路由 ================= */
+var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'交易流水', crm:'客户管理',
+             perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路'};
+var LOADERS = {};
+/* ================= 角色菜单 ================= */
+// 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台五页
+var SALES_PAGES = ['dashboard', 'crm', 'perf', 'commission', 'chain'];
+var MENU = [
+  {cap:'概览', items:[['dashboard','📊','驾驶舱']]},
+  {cap:'U卡支付运营', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核'],['tx','💸','交易流水']]},
+  {cap:'CRM 销售', items:[['crm','👥','客户管理'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
+  {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]}
+];
+function allowedPage(key){
+  if (!ME) return false;
+  if (ME.level === 0) return !!PAGES[key];
+  return SALES_PAGES.indexOf(key) >= 0;
+}
+function navigate(){
+  if (!ME) return; // 未登录(登录页展示中)不渲染任何页面
+  var key = (location.hash || '#dashboard').slice(1);
+  if (!PAGES[key] || !allowedPage(key)) key = 'dashboard';
+  $$('.nav-item').forEach(function(a){ a.classList.toggle('active', a.dataset.page === key); });
+  $$('.page').forEach(function(s){ s.classList.toggle('show', s.id === 'page-' + key); });
+  $('#pageTitle').textContent = PAGES[key];
+  closeDrawer(); closeModal();
+  if (LOADERS[key]) LOADERS[key]();
+}
+window.addEventListener('hashchange', navigate);
+
+/* ================= 页面级数据缓存 / 身份 ================= */
+var CARDS = [], USERS = [], SALES = [], CRM = [], TXL = [];
+var ME = null, ACCOUNTS = []; // 当前登录销售(账号), 全部可登录账号
+var TIER_LABELS = ['直属', '上级', '上上级'];
+function tierPill(t, label){
+  var cls = t === 0 ? 'pill-blue' : t === 1 ? 'pill-indigo' : 'pill-gray';
+  return '<span class="pill ' + cls + '">' + esc(label || TIER_LABELS[t] || ('T' + t)) + '</span>';
+}
+function tierRateText(rule, v){
+  if (rule.mode === 'fixed') return '$' + v;
+  var pc = v * 100;
+  return (pc % 1 ? pc.toFixed(1) : pc) + '%';
+}
+var STAGES = ['线索','意向','方案','开卡','充值','活跃','沉睡'];
+var STAGE_COLOR = {'线索':'#64748b','意向':'#7c3aed','方案':'#7c3aed','开卡':'#4f46e5','充值':'#4338ca','活跃':'#16a34a','沉睡':'#f59e0b'};
+var FUNNEL_COLORS = ['#8b5cf6','#7c3aed','#6d28d9','#4f46e5','#4338ca','#3730a3','#94a3b8'];
+var LEVEL_PILL = {standard:'pill-gray', gold:'pill-gold', platinum:'pill-blue'};
+
+function fetchUsers(force){
+  if (USERS.length && !force) return Promise.resolve(USERS);
+  return api('/api/admin/users').then(function(l){ USERS = l; return l; });
+}
+function fetchSales(force){
+  if (SALES.length && !force) return Promise.resolve(SALES);
+  return api('/api/admin/performance').then(function(l){ SALES = l; return l; });
+}
+
+/* ================= 1. 驾驶舱 ================= */
+LOADERS.dashboard = function(){
+  var els = [$('#dashStats'), $('#dashTrend'), $('#dashPerf'), $('#dashRecent')];
+  els.forEach(function(el){ el.innerHTML = loadingBox(); });
+  api('/api/admin/dashboard').then(function(d){
+    renderDashStats(d.stats);
+    renderTrend(d.trend);
+    renderDashPerf(d.perf);
+    renderRecent(d.recentTx);
+  }).catch(function(e){ els.forEach(function(el){ el.innerHTML = errBox(e); }); });
+};
+
+function renderDashStats(s){
+  var my = ME && ME.level > 0; // 销售登录: 卡片标题切换为「我的」口径
+  var L = function(a, b){ return my ? a : b; };
+  var ic = function(bg, emoji){ return '<div class="stat-ic" style="background:' + bg + '">' + emoji + '</div>'; };
+  $('#dashStats').innerHTML = [
+    '<div class="stat">' + ic('#e0e7ff','💳') + '<div class="lab">' + L('我的发卡','累计发卡') + '</div><div class="val num">' + s.totalCards + '</div><div class="sub">活跃卡 ' + s.activeCards + '/' + s.totalCards + '</div></div>',
+    '<div class="stat">' + ic('#dcfce7','⬆️') + '<div class="lab">' + L('我的今日充值','今日充值额') + '</div><div class="val num">' + fmtMoney(s.todayTopup) + '</div><div class="sub">USDT / 法币入金</div></div>',
+    '<div class="stat">' + ic('#e0f2fe','🛍️') + '<div class="lab">' + L('我的今日交易','今日交易额') + '</div><div class="val num">' + fmtMoney(s.todayConsume) + '</div><div class="sub">累计发放积分 ' + fmtPts(s.pointsIssued) + '</div></div>',
+    '<div class="stat">' + ic('#fef3c7','👛') + '<div class="lab">' + L('我的在途余额','在途余额总额') + '</div><div class="val num">' + fmtMoney(s.totalBalance) + '</div><div class="sub">活跃卡 ' + s.activeCards + '/' + s.totalCards + '</div></div>',
+    '<div class="stat">' + ic('#fee2e2','🛡️') + '<div class="lab">' + L('我的待审 KYC','待审 KYC') + '</div><div class="val num" style="color:var(--bad)">' + s.pendingKyc + '</div><div class="sub">请尽快处理</div>' + (s.pendingKyc > 0 ? '<span class="corner-badge">待处理</span>' : '') + '</div>',
+    '<div class="stat">' + ic('#f3e8ff','💰') + '<div class="lab">' + L('我的待结算佣金','待结算佣金') + '</div><div class="val num">' + fmtMoney(s.pendingCommission) + '</div><div class="sub">待发货订单 ' + s.pendingOrders + ' · 客户 ' + s.customers + '</div></div>'
+  ].join('');
+}
+
+// 14 天充值 vs 消费 · 双序列柱状图(内联 SVG)
+// 序列色经校验: #4f46e5 与 #7c3aed 视觉不可分, 改用主色+信息蓝
+function renderTrend(trend){
+  var W = 780, H = 252, padL = 48, padR = 10, padT = 18, padB = 28;
+  var iw = W - padL - padR, ih = H - padT - padB;
+  var maxV = 10;
+  trend.forEach(function(d){ maxV = Math.max(maxV, d.topup, d.consume); });
+  var step = niceCeil(maxV);
+  var y = function(v){ return padT + ih - (v / step) * ih; };
+  var gw = iw / trend.length;
+  var bw = Math.min(15, gw * 0.26);
+  var C_TOPUP = '#4f46e5', C_CONSUME = '#0ea5e9';
+
+  var grid = '', bars = '', labels = '';
+  [0, 0.25, 0.5, 0.75, 1].forEach(function(f){
+    var v = step * f;
+    grid += '<line x1="' + padL + '" y1="' + y(v) + '" x2="' + (W - padR) + '" y2="' + y(v) + '" stroke="#e2e8f0" stroke-width="1"/>' +
+            '<text x="' + (padL - 7) + '" y="' + (y(v) + 3.5) + '" text-anchor="end" class="ax">$' + Math.round(v).toLocaleString('en-US') + '</text>';
+  });
+  var iTop = 0, iCon = 0;
+  trend.forEach(function(d, i){ if (d.topup > trend[iTop].topup) iTop = i; if (d.consume > trend[iCon].consume) iCon = i; });
+  trend.forEach(function(d, i){
+    var cx = padL + gw * i + gw / 2;
+    bars += '<path class="bar" d="' + barPath(cx - bw - 1.5, y(d.topup), bw, padT + ih - y(d.topup)) + '" fill="' + C_TOPUP + '"><title>' + d.date + ' 充值 ' + fmtMoney0(d.topup) + '</title></path>';
+    bars += '<path class="bar" d="' + barPath(cx + 1.5, y(d.consume), bw, padT + ih - y(d.consume)) + '" fill="' + C_CONSUME + '"><title>' + d.date + ' 消费 ' + fmtMoney0(d.consume) + '</title></path>';
+    if (i % 2 === 0) labels += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" class="ax">' + d.date + '</text>';
+  });
+  // 极值直接标注(选择性标注, 不逐点标数)
+  if (trend[iTop].topup > 0)  labels += '<text x="' + (padL + gw * iTop + gw / 2 - bw / 2 - 1.5) + '" y="' + (y(trend[iTop].topup) - 5) + '" text-anchor="middle" style="fill:#334155;font-size:10px;font-weight:600">' + fmtMoney0(trend[iTop].topup) + '</text>';
+  if (trend[iCon].consume > 0) labels += '<text x="' + (padL + gw * iCon + gw / 2 + bw / 2 + 1.5) + '" y="' + (y(trend[iCon].consume) - 5) + '" text-anchor="middle" style="fill:#334155;font-size:10px;font-weight:600">' + fmtMoney0(trend[iCon].consume) + '</text>';
+
+  $('#dashTrend').innerHTML =
+    '<div class="chart-head"><div><div class="card-title">近 14 天充值 vs 消费趋势</div><div class="card-sub">单位: USD · 悬停柱体查看数值</div></div>' +
+    '<div class="legend"><span class="lg"><i style="background:' + C_TOPUP + '"></i>充值</span><span class="lg"><i style="background:' + C_CONSUME + '"></i>消费</span></div></div>' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block">' + grid + bars + labels + '</svg>';
+}
+function niceCeil(v){
+  if (v <= 0) return 100;
+  var p = Math.pow(10, Math.floor(Math.log10(v)));
+  var mults = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+  for (var i = 0; i < mults.length; i++) if (mults[i] * p >= v) return mults[i] * p;
+  return 10 * p;
+}
+// 柱: 数据端 4px 圆角, 基线端直角
+function barPath(x, yTop, w, h){
+  var r = Math.min(4, w / 2, Math.max(h, 0.5));
+  if (h < 1) h = 1;
+  var x2 = x + w;
+  return 'M' + x + ',' + (yTop + h) + ' L' + x + ',' + (yTop + r) + ' Q' + x + ',' + yTop + ' ' + (x + r) + ',' + yTop +
+         ' L' + (x2 - r) + ',' + yTop + ' Q' + x2 + ',' + yTop + ' ' + x2 + ',' + (yTop + r) + ' L' + x2 + ',' + (yTop + h) + ' Z';
+}
+function progBar(pct){
+  var w = Math.max(0, Math.min(100, pct));
+  return '<div class="prog-wrap"><div class="prog"><div class="prog-fill" style="width:' + w + '%"></div></div><span class="prog-txt num">' + pct.toFixed(0) + '%</span></div>';
+}
+function renderDashPerf(perf){
+  var medals = ['🥇','🥈','🥉'];
+  var rows = perf.map(function(p, i){
+    var pct = p.target ? p.gmv / p.target * 100 : 0;
+    return '<tr><td>' + (medals[i] || '#' + (i + 1)) + '</td><td><b>' + esc(p.name) + '</b>' + (p.teamSize > 0 ? ' <span class="pill pill-indigo">👥 ' + p.teamSize + '</span>' : '') + '<div class="sub-line">' + esc(p.region) + ' · ' + p.cards + ' 卡</div></td>' +
+      '<td class="num"><b>' + fmtMoney0(p.gmv) + '</b></td><td style="min-width:130px">' + progBar(pct) + '</td></tr>';
+  }).join('');
+  $('#dashPerf').innerHTML = '<div class="card-title">销售业绩榜</div><div class="card-sub">按总 GMV 排序 · 完成度 = GMV / 目标</div>' +
+    '<div class="tbl-wrap"><table><thead><tr><th>排名</th><th>销售</th><th>GMV</th><th>目标完成度</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function txTypePill(t){
+  if (t === 'topup') return '<span class="pill pill-green">⬆️ 充值</span>';
+  if (t === 'consume') return '<span class="pill pill-indigo">🛍️ 消费</span>';
+  return '<span class="pill pill-gray">⚙️ 调账</span>';
+}
+function txStatusPill(s){ return s === 'refunded' ? '<span class="pill pill-red">已退款</span>' : '<span class="pill pill-green">成功</span>'; }
+function txAmountCell(t){
+  var sign = t.type === 'consume' ? '-' : (t.amount < 0 ? '' : '+');
+  var color = t.type === 'consume' ? 'var(--ink)' : 'var(--ok)';
+  return '<span class="num" style="color:' + color + ';font-weight:600">' + sign + fmtMoney(Math.abs(t.amount)) + '</span>';
+}
+function txMethodCell(t){
+  if (t.method === 'usdt') return '🪙 USDT <span class="dim">' + shortHash(t.ref) + '</span>';
+  if (t.method === 'fiat') return '🏦 银行转账';
+  if (t.method === 'card') return '💳 U卡支付';
+  return '⚙️ 运营调账';
+}
+function renderRecent(list){
+  var rows = list.map(function(t){
+    return '<tr><td>' + txTypePill(t.type) + '</td><td><b>' + esc(t.user) + '</b><div class="sub-line">' + esc(t.merchant || maskCard(t.cardNo)) + '</div></td>' +
+      '<td>' + txAmountCell(t) + '</td><td>' + txStatusPill(t.status) + '</td><td class="dim num">' + fmtTime(t.createdAt) + '</td></tr>';
+  }).join('');
+  $('#dashRecent').innerHTML = '<div class="card-title">最近交易</div><div class="card-sub">最新 8 笔</div>' +
+    '<div class="tbl-wrap"><table><thead><tr><th>类型</th><th>用户</th><th>金额</th><th>状态</th><th>时间</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+/* ================= 2. U卡管理 ================= */
+LOADERS.cards = function(){
+  $('#cardsBody').innerHTML = loadingBox();
+  api('/api/admin/cards').then(function(l){ CARDS = l; renderCards(); })
+    .catch(function(e){ $('#cardsBody').innerHTML = errBox(e); });
+};
+function renderCards(){
+  var kw = ($('#cardSearch').value || '').trim().toLowerCase();
+  var list = CARDS.filter(function(c){
+    return !kw || (c.cardNo + ' ' + c.user + ' ' + c.salesRep).toLowerCase().indexOf(kw) >= 0;
+  });
+  if (!list.length){ $('#cardsBody').innerHTML = emptyBox('没有匹配的卡'); return; }
+  var rows = list.map(function(c){
+    var frozen = c.status === 'frozen';
+    return '<tr>' +
+      '<td><div class="num" style="font-weight:600;letter-spacing:.5px">' + maskCard(c.cardNo) + '</div><div class="sub-line num">Demo可见 · ' + esc(c.cardNo) + ' · CVV ' + esc(c.cvv) + ' · ' + c.expMonth + '/' + c.expYear + '</div></td>' +
+      '<td><b>' + esc(c.user) + '</b> <span class="pill pill-gray">L' + c.kyc + '</span></td>' +
+      '<td><span class="pill ' + (LEVEL_PILL[c.level] || 'pill-gray') + '">' + esc(c.levelLabel) + '</span></td>' +
+      '<td class="num" style="font-weight:600">' + fmtMoney(c.balance) + '</td>' +
+      '<td>' + (frozen ? '<span class="pill pill-red">❄️ 冻结</span>' : '<span class="pill pill-green">正常</span>') + '</td>' +
+      '<td>' + esc(c.salesRep) + '</td>' +
+      '<td class="dim num">' + fmtTime(c.createdAt) + '</td>' +
+      '<td>' + (frozen
+          ? '<button class="btn-ok-sm" onclick="freezeCard(' + c.id + ')">解冻</button>'
+          : '<button class="btn-danger" onclick="freezeCard(' + c.id + ')">冻结</button>') +
+        ' <button class="btn-outline btn-sm" onclick="openAdjust(' + c.id + ')">调账</button></td></tr>';
+  }).join('');
+  $('#cardsBody').innerHTML = '<table><thead><tr><th>卡号</th><th>持卡人</th><th>等级</th><th>余额</th><th>状态</th><th>归属销售</th><th>开卡时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function freezeCard(id){
+  patch('/api/admin/cards/' + id, {action: 'freeze'}).then(function(r){
+    toast(r.card.status === 'frozen' ? '已冻结该卡, 充值/支付已阻断' : '已解冻该卡');
+    LOADERS.cards();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function openAdjust(id){
+  var c = CARDS.find(function(x){ return x.id === id; });
+  if (!c) return;
+  showModal('💳 卡账户调账', '<div class="notice" style="margin-bottom:14px">' + esc(c.user) + ' · ' + maskCard(c.cardNo) + ' · 当前余额 <b class="num">' + fmtMoney(c.balance) + '</b></div>' +
+    '<div class="field"><label>调账金额 (USD, 正数补足 / 负数扣减)</label><input class="input num" id="adjAmt" type="number" step="0.01" placeholder="如 100 或 -50" required></div>' +
+    '<div class="dim">调账将记入交易流水 (类型: 调账), 可在交易流水页追溯。</div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="submitAdjust(' + id + ')">确认调账</button></div>');
+}
+function submitAdjust(id){
+  var amt = parseFloat($('#adjAmt').value);
+  if (!amt){ toast('请输入调账金额', 'warn'); return; }
+  patch('/api/admin/cards/' + id, {action: 'adjust', amount: amt}).then(function(r){
+    closeModal(); toast('调账成功, 新余额 ' + fmtMoney(r.card.balance)); LOADERS.cards();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function openIssue(){
+  Promise.all([fetchUsers(), fetchSales()]).then(function(rs){
+    var users = rs[0], sales = rs[1];
+    showModal('➕ 发卡', '<form onsubmit="return submitIssue(event)">' +
+      '<div class="field"><label>持卡用户</label><select class="select" id="isUser">' +
+        users.map(function(u){ return '<option value="' + u.id + '">' + esc(u.name) + ' · ' + esc(u.phone) + ' · KYC L' + u.kycLevel + '</option>'; }).join('') + '</select></div>' +
+      '<div class="form-grid">' +
+      '<div class="field"><label>卡等级</label><select class="select" id="isLevel">' +
+        '<option value="standard">Standard 标准卡 (积分 x1)</option><option value="gold">Gold 金卡 (积分 x1.5)</option><option value="platinum">Platinum 白金卡 (积分 x2)</option></select></div>' +
+      '<div class="field"><label>归属销售</label><select class="select" id="isRep">' +
+        sales.map(function(s){ return '<option value="' + s.id + '">' + esc(s.name) + ' · ' + esc(s.region) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="dim">发卡成功将触发销售发卡佣金 $5, 并联动 CRM 阶段推进到「开卡」。</div>' +
+      '<div class="form-foot"><button type="button" class="btn-outline" onclick="closeModal()">取消</button><button type="submit" class="btn">确认发卡</button></div></form>');
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function submitIssue(e){
+  e.preventDefault();
+  post('/api/admin/cards/issue', {
+    userId: +$('#isUser').value, level: $('#isLevel').value, salesRepId: +$('#isRep').value
+  }).then(function(r){
+    var c = r.card;
+    showModal('✅ 发卡成功',
+      '<div style="text-align:center;padding:6px 0 2px">' +
+      '<div style="background:var(--grad);border-radius:12px;padding:22px 18px;color:#fff;box-shadow:0 8px 20px rgba(79,70,229,.35)">' +
+      '<div style="font-size:12px;opacity:.8;margin-bottom:10px;text-align:left">U-Card · ' + $('#isLevel').selectedOptions[0].text.split(' ')[0] + '</div>' +
+      '<div class="num" style="font-size:19px;font-weight:700;letter-spacing:1.5px">' + esc(c.cardNo) + '</div>' +
+      '<div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12.5px;opacity:.9"><span>CVV <b>' + esc(c.cvv) + '</b></span><span>有效期 <b>' + c.expMonth + '/' + c.expYear + '</b></span></div></div>' +
+      '<div class="dim" style="margin-top:12px">初始余额 $0.00 · 已通知销售佣金 $5.00 · CRM 已推进到「开卡」</div></div>' +
+      '<div class="form-foot"><button class="btn" onclick="closeModal();LOADERS.cards()">完成</button></div>');
+    toast('发卡成功: ' + c.cardNo);
+  }).catch(function(e){ toast(e.message, 'err'); });
+  return false;
+}
+
+/* ================= 3. KYC 审核 ================= */
+LOADERS.kyc = function(){
+  $('#kycBody').innerHTML = loadingBox();
+  api('/api/admin/kyc').then(function(list){
+    if (!list.length){ $('#kycBody').innerHTML = '<div class="card">' + emptyBox('暂无待审 KYC 申请') + '</div>'; return; }
+    var cards = list.map(function(k){
+      return '<div class="kyc-card" style="margin-bottom:14px">' +
+        '<div class="kyc-row"><div><div class="kyc-name">' + esc(k.name) + '</div><div class="dim">' + esc(k.country) + ' · ' + esc(k.phone) + '</div></div>' +
+        '<span class="pill pill-amber">L' + k.kycLevel + ' → L' + k.applyLevel + '</span></div>' +
+        '<div class="kyc-meta">证件类型: <b>' + esc(k.idType) + '</b> · 申请等级: <b>L' + k.applyLevel + '</b><br>提交时间: <b class="num">' + fmtTime(k.submitAt) + '</b> · 归属销售: <b>' + esc(k.owner || '—') + '</b></div>' +
+        '<div>' + k.docs.map(function(d){ return '<span class="doc-chip">📎 ' + esc(d) + '</span>'; }).join('') + '</div>' +
+        '<div class="kyc-actions"><button class="btn" style="flex:1" onclick="reviewKyc(' + k.id + ',true,' + k.applyLevel + ')">✓ 通过 (升级 L' + k.applyLevel + ' + 200 积分)</button>' +
+        '<button class="btn-danger" style="padding:8px 16px" onclick="reviewKyc(' + k.id + ',false,0)">驳回</button></div></div>';
+    }).join('');
+    $('#kycBody').innerHTML = '<div class="card"><div class="card-title">待审队列</div><div class="card-sub">共 ' + list.length + ' 条 · 通过后等级 +1 并自动发放 200 积分奖励</div>' +
+      '<div class="kyc-list">' + cards + '</div></div>';
+  }).catch(function(e){ $('#kycBody').innerHTML = errBox(e); });
+};
+function reviewKyc(userId, pass, toLevel){
+  post('/api/admin/kyc/review', {userId: userId, pass: pass, toLevel: toLevel}).then(function(){
+    toast(pass ? '已通过, 用户升级到 L' + toLevel + ', 积分奖励 200 分已发放' : '已驳回该 KYC 申请', pass ? 'success' : 'warn');
+    LOADERS.kyc();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 4. 交易流水 ================= */
+var TXTYPE = '';
+function switchTx(t){
+  TXTYPE = t;
+  $$('#txTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.t === t); });
+  LOADERS.tx();
+}
+LOADERS.tx = function(){
+  $('#txBody').innerHTML = loadingBox();
+  api('/api/admin/transactions' + (TXTYPE ? '?type=' + TXTYPE : '')).then(function(l){
+    TXL = l;
+    if (!l.length){ $('#txBody').innerHTML = emptyBox('暂无交易'); return; }
+    var rows = l.map(function(t){
+      var canRefund = t.type === 'consume' && t.status === 'success';
+      return '<tr>' +
+        '<td class="dim num">#' + t.id + '</td>' +
+        '<td>' + txTypePill(t.type) + '</td>' +
+        '<td><b>' + esc(t.user) + '</b></td>' +
+        '<td class="dim num">' + maskCard(t.cardNo) + '</td>' +
+        '<td>' + txAmountCell(t) + '</td>' +
+        '<td class="dim num">' + fmtMoney(t.fee) + '</td>' +
+        '<td>' + txMethodCell(t) + '</td>' +
+        '<td class="num" style="color:var(--warn)">' + (t.pointsEarned ? '+' + fmtPts(t.pointsEarned) : '—') + '</td>' +
+        '<td>' + txStatusPill(t.status) + '</td>' +
+        '<td class="dim num">' + fmtTime(t.createdAt) + '</td>' +
+        '<td>' + (canRefund ? '<button class="btn-danger" onclick="openRefund(' + t.id + ')">退款</button>' : '') + '</td></tr>';
+    }).join('');
+    $('#txBody').innerHTML = '<table><thead><tr><th>单号</th><th>类型</th><th>用户</th><th>卡号</th><th>金额</th><th>手续费</th><th>方式</th><th>返积分</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#txBody').innerHTML = errBox(e); });
+};
+function openRefund(txId){
+  var t = TXL.find(function(x){ return x.id === txId; });
+  if (!t) return;
+  showModal('↩️ 确认退款',
+    '<div class="notice" style="margin-bottom:14px">退款将原路返还, 卡余额将增加 <b>' + fmtMoney(t.amount) + '</b></div>' +
+    '<div class="kyc-meta">单号 <b>#' + t.id + '</b> · 用户 <b>' + esc(t.user) + '</b> · 商户 <b>' + esc(t.merchant || '—') + '</b> · 金额 <b class="num">' + fmtMoney(t.amount) + '</b></div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" style="background:var(--bad);box-shadow:0 1px 3px rgba(220,38,38,.35)" onclick="doRefund(' + t.id + ')">确认退款</button></div>');
+}
+function doRefund(txId){
+  post('/api/admin/refund', {txId: txId}).then(function(){
+    closeModal(); toast('退款成功, 余额已返还'); LOADERS.tx();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 5. 客户管理 CRM ================= */
+LOADERS.crm = function(cb){
+  $('#crmBody').innerHTML = loadingBox();
+  api('/api/admin/customers').then(function(l){
+    CRM = l;
+    renderFunnel(); renderCrmTable();
+    if (cb) cb();
+  }).catch(function(e){ $('#crmBody').innerHTML = errBox(e); });
+};
+function renderFunnel(){
+  var counts = STAGES.map(function(s){ return CRM.filter(function(c){ return c.stage === s; }).length; });
+  $('#crmFunnel').innerHTML = STAGES.map(function(s, i){
+    return '<div class="seg" style="background:' + FUNNEL_COLORS[i] + ';flex-grow:' + Math.max(counts[i], 0.7) + '" title="' + s + ': ' + counts[i] + ' 个客户">' + s + ' ' + counts[i] + '</div>';
+  }).join('');
+  $('#crmCount').textContent = CRM.length;
+}
+function renderCrmTable(){
+  if (!CRM.length){ $('#crmBody').innerHTML = emptyBox('暂无客户, 点击右上角新增'); return; }
+  var now = Date.now();
+  var rows = CRM.map(function(c){
+    var overdue = c.nextFollowAt && c.nextFollowAt < now;
+    return '<tr>' +
+      '<td><b>' + esc(c.name) + '</b>' + (c.tags && c.tags.length ? '<div class="sub-line">' + c.tags.map(esc).join(' · ') + '</div>' : '') + '</td>' +
+      '<td>' + esc(c.country) + '</td>' +
+      '<td class="dim">' + esc(c.source) + '</td>' +
+      '<td class="dim">' + esc(c.industry) + '</td>' +
+      '<td>' + esc(c.owner) + '</td>' +
+      '<td><select class="stage-select" style="color:' + (STAGE_COLOR[c.stage] || 'var(--ink)') + '" onchange="changeStage(' + c.id + ',this)">' +
+        STAGES.map(function(s){ return '<option' + (s === c.stage ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></td>' +
+      '<td class="num ' + (overdue ? 'overdue' : 'dim') + '">' + (overdue ? '⚠️ ' : '') + fmtTime(c.nextFollowAt) + '</td>' +
+      '<td><button class="btn-link" onclick="openCustDrawer(' + c.id + ')">详情 ›</button></td></tr>';
+  }).join('');
+  $('#crmBody').innerHTML = '<table><thead><tr><th>姓名</th><th>国家</th><th>来源</th><th>行业</th><th>归属销售</th><th>阶段</th><th>下次跟进</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function changeStage(id, sel){
+  var c = CRM.find(function(x){ return x.id === id; });
+  var from = c ? c.stage : '?', to = sel.value;
+  if (from === to) return;
+  post('/api/admin/followups', {
+    customerId: id, salesId: c ? c.ownerSalesId : 1, type: '阶段推进',
+    content: '阶段由「' + from + '」推进到「' + to + '」', nextStage: to
+  }).then(function(){ toast('阶段已推进: ' + from + ' → ' + to); LOADERS.crm(); })
+    .catch(function(e){ toast(e.message, 'err'); LOADERS.crm(); });
+}
+function openCustNew(){
+  fetchSales().then(function(sales){
+    showModal('➕ 新增客户',
+      '<div class="form-err" id="custErr"></div>' +
+      '<form onsubmit="return submitCustNew(event)">' +
+      '<div class="form-grid">' +
+      '<div class="field"><label>姓名 *</label><input class="input" id="cName" required></div>' +
+      '<div class="field"><label>国家</label><select class="select" id="cCountry">' + ['Saudi Arabia','UAE','Qatar','Kuwait','Egypt','Bahrain','Oman'].map(function(c){ return '<option>' + c + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>联系方式 (手机号, 用于查重) *</label><input class="input" id="cContact" placeholder="+966 5x xxx xxxx" required></div>' +
+      '<div class="field"><label>来源</label><select class="select" id="cSource">' + ['自主注册','销售开发','推荐引流','活动导入'].map(function(s){ return '<option>' + s + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>行业</label><select class="select" id="cIndustry">' + ['电商个体户','外贸公司','自由职业','留学家庭','数码零售','物流公司'].map(function(s){ return '<option>' + s + '</option>'; }).join('') + '</select></div>' +
+      '<div class="field"><label>归属销售</label><select class="select" id="cOwner">' + sales.map(function(s){ return '<option value="' + s.id + '">' + esc(s.name) + ' · ' + esc(s.region) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="field"><label>备注</label><textarea class="textarea" id="cRemark" placeholder="客户背景 / 关注点 / 敏感点…"></textarea></div>' +
+      '<div class="dim" style="margin-bottom:12px">新客户默认进入「线索」阶段, 3 天后提醒跟进; 手机号重复将无法录入。</div>' +
+      '<div class="form-foot"><button type="button" class="btn-outline" onclick="closeModal()">取消</button><button type="submit" class="btn">创建客户</button></div></form>');
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function submitCustNew(e){
+  e.preventDefault();
+  var errEl = $('#custErr'); errEl.style.display = 'none';
+  post('/api/admin/customers', {
+    name: $('#cName').value.trim(), country: $('#cCountry').value, contact: $('#cContact').value.trim(),
+    source: $('#cSource').value, industry: $('#cIndustry').value,
+    ownerSalesId: +$('#cOwner').value, remark: $('#cRemark').value.trim()
+  }).then(function(){
+    closeModal(); toast('客户已创建, 进入「线索」阶段'); LOADERS.crm();
+  }).catch(function(e){
+    if (e.status === 409){ errEl.textContent = '🚫 ' + e.message; errEl.style.display = 'block'; }
+    else toast(e.message, 'err');
+  });
+  return false;
+}
+function openCustDrawer(id){
+  var c = CRM.find(function(x){ return x.id === id; });
+  if (!c) return;
+  var fus = (c.followups || []).slice().sort(function(a, b){ return b.createdAt - a.createdAt; });
+  var info = [
+    ['国家', c.country], ['联系方式', c.contact], ['来源', c.source], ['行业', c.industry],
+    ['归属销售', c.owner], ['当前阶段', c.stage], ['关联用户', c.userId ? 'UID ' + c.userId : '未开户'],
+    ['创建时间', fmtTime(c.createdAt)], ['下次跟进', fmtTime(c.nextFollowAt)]
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + esc(x[1]) + '</div></div>'; }).join('');
+  var tl = fus.length ? fus.map(function(f){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + esc(f.type) + '</span><span class="num">' + fmtTime(f.createdAt) + '</span></div>' +
+      '<div class="tl-content">' + esc(f.content) + '</div>' + (f.nextPlan ? '<div class="tl-plan">📌 ' + esc(f.nextPlan) + '</div>' : '') + '</div>';
+  }).join('') : '<div class="empty">暂无跟进记录</div>';
+  var foot =
+    '<form onsubmit="return submitFollowup(event,' + c.id + ')">' +
+    '<div class="form-grid">' +
+    '<div class="field"><label>跟进类型</label><select class="select" id="fType">' + ['电话','面谈','WhatsApp','邮件'].map(function(t){ return '<option>' + t + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>阶段推进</label><select class="select" id="fStage"><option value="">保持不变</option>' + STAGES.map(function(s){ return '<option' + (s === c.stage ? ' disabled' : '') + '>' + s + '</option>'; }).join('') + '</select></div></div>' +
+    '<div class="field" style="margin-bottom:10px"><label>跟进内容 *</label><textarea class="textarea" id="fContent" required placeholder="本次沟通要点…"></textarea></div>' +
+    '<div class="field" style="margin-bottom:12px"><label>下次计划</label><input class="input" id="fPlan" placeholder="如: 3 天内发送报价单"></div>' +
+    '<div class="form-foot" style="margin:0"><button type="submit" class="btn">添加跟进</button></div></form>';
+  showDrawer('👤 ' + esc(c.name) + (c.tags && c.tags.length ? ' <span class="pill pill-indigo">' + c.tags.map(esc).join('/') + '</span>' : ''),
+    (c.remark ? '<div class="notice" style="margin-bottom:14px">📝 ' + esc(c.remark) + '</div>' : '') +
+    '<div class="info-grid">' + info + '</div>' +
+    '<div class="card-title" style="margin-bottom:10px">跟进记录 (' + fus.length + ')</div><div class="tl">' + tl + '</div>',
+    foot);
+}
+function submitFollowup(e, customerId){
+  e.preventDefault();
+  var c = CRM.find(function(x){ return x.id === customerId; });
+  post('/api/admin/followups', {
+    customerId: customerId, salesId: c ? c.ownerSalesId : 1,
+    type: $('#fType').value, content: $('#fContent').value.trim(),
+    nextPlan: $('#fPlan').value.trim(), nextStage: $('#fStage').value || undefined
+  }).then(function(){
+    toast('跟进记录已添加'); LOADERS.crm(function(){ openCustDrawer(customerId); });
+  }).catch(function(e2){ toast(e2.message, 'err'); });
+  return false;
+}
+
+/* ================= 6. 业绩排行 ================= */
+LOADERS.perf = function(){
+  $('#perfWho').textContent = ME.name + ' · ' + ME.role;
+  $('#perfBody').innerHTML = loadingBox();
+  api('/api/admin/performance').then(function(rows){
+    if (!rows.length){ $('#perfBody').innerHTML = emptyBox(); return; }
+    var medals = ['🏆','🥈','🥉'];
+    var html = rows.map(function(r, i){
+      var gmv = r.topup + r.consume, mineGmv = r.mineTopup + r.mineConsume;
+      var targetCell = r.target
+        ? progBar(gmv / r.target * 100) + '<div class="sub-line num">目标 ' + fmtMoney0(r.target) + '</div>'
+        : '<span class="dim">总监不背个人目标</span>';
+      return '<tr>' +
+        '<td style="font-size:16px">' + (medals[i] || '<span class="dim num">#' + (i + 1) + '</span>') + '</td>' +
+        '<td><b>' + esc(r.name) + '</b>' + (r.teamSize > 0 ? ' <span class="pill pill-indigo">👥 ' + r.teamSize + '</span>' : '') + '<div class="sub-line">' + esc(r.role) + ' · ' + esc(r.region) + '</div></td>' +
+        '<td class="num">' + r.cards + ' 张</td>' +
+        '<td class="num"><b>' + fmtMoney(mineGmv) + '</b><div class="sub-line num">充 ' + fmtMoney0(r.mineTopup) + ' · 消 ' + fmtMoney0(r.mineConsume) + '</div></td>' +
+        '<td class="num"><b>' + fmtMoney(gmv) + '</b><div class="sub-line num">充 ' + fmtMoney0(r.topup) + ' · 消 ' + fmtMoney0(r.consume) + '</div></td>' +
+        '<td class="num" style="color:var(--ok);font-weight:600">' + fmtMoney(r.commission) + (r.commissionFromTeam > 0 ? '<div class="sub-line num">含团队分润 ' + fmtMoney(r.commissionFromTeam) + '</div>' : '') + '</td>' +
+        '<td style="min-width:150px">' + targetCell + '</td></tr>';
+    }).join('');
+    $('#perfBody').innerHTML = '<table><thead><tr><th>排名</th><th>销售</th><th>发卡数</th><th>本人直接</th><th>团队合计</th><th>佣金</th><th>目标完成度</th></tr></thead><tbody>' + html + '</tbody></table>';
+  }).catch(function(e){ $('#perfBody').innerHTML = errBox(e); });
+};
+
+/* ================= 7. 佣金管理 ================= */
+LOADERS.commission = function(){
+  $('#comBody').innerHTML = loadingBox(); $('#comSum').innerHTML = '';
+  api('/api/admin/commissions').then(function(list){
+    var sum = function(f){ return list.filter(f).reduce(function(s, c){ return s + c.amount; }, 0); };
+    var mine = list.filter(function(c){ return c.salesId === ME.id; });
+    var direct = mine.filter(function(c){ return c.tier === 0; }).reduce(function(s, c){ return s + c.amount; }, 0);
+    var teamProfit = mine.filter(function(c){ return c.tier > 0; }).reduce(function(s, c){ return s + c.amount; }, 0);
+    var pending = sum(function(c){ return c.status === 'pending'; });
+    $('#comSum').innerHTML =
+      '<div class="sum-card"><div class="ic" style="background:#e0e7ff">🎯</div><div><div class="v num">' + fmtMoney(direct) + '</div><div class="k">我的直销佣金 (tier=直属)</div></div></div>' +
+      '<div class="sum-card"><div class="ic" style="background:#f3e8ff">🪜</div><div><div class="v num">' + fmtMoney(teamProfit) + '</div><div class="k">团队分润 (上级/上上级)</div></div></div>' +
+      '<div class="sum-card"><div class="ic" style="background:#fef3c7">⏳</div><div><div class="v num">' + fmtMoney(pending) + '</div><div class="k">待结算</div></div></div>' +
+      '<div class="sum-card"><div class="ic" style="background:#dcfce7">💰</div><div><div class="v num">' + fmtMoney(sum(function(){ return true; })) + '</div><div class="k">范围内佣金总额 · ' + list.length + ' 笔</div></div></div>';
+    if (!list.length){ $('#comBody').innerHTML = emptyBox('暂无佣金流水'); return; }
+    var rows = list.map(function(c){
+      return '<tr>' +
+        '<td><b>' + esc(c.sales) + '</b></td>' +
+        '<td>' + tierPill(c.tier, c.tierLabel) + '</td>' +
+        '<td>' + esc(c.typeLabel || c.type) + '</td>' +
+        '<td>' + (c.salesId === c.fromSalesId ? '<span class="dim">本人</span>' : esc(c.fromSales)) + '</td>' +
+        '<td class="num">' + fmtMoney(c.baseAmt) + '</td>' +
+        '<td class="dim num">' + esc(c.rate) + '</td>' +
+        '<td class="num" style="font-weight:600;color:var(--ok)">' + fmtMoney(c.amount) + '</td>' +
+        '<td class="dim num">#' + c.refId + '</td>' +
+        '<td>' + (c.status === 'pending' ? '<span class="pill pill-amber">待结算</span>' : '<span class="pill pill-green">已结算</span>') + '</td>' +
+        '<td class="dim num">' + fmtTime(c.createdAt) + '</td>' +
+        '<td>' + (c.status === 'pending' ? '<button class="btn-outline btn-sm" onclick="settleCom(' + c.id + ')">结算</button>' : '') + '</td></tr>';
+    }).join('');
+    $('#comBody').innerHTML = '<table><thead><tr><th>受益销售</th><th>层级</th><th>类型</th><th>佣金来源</th><th>计佣基数</th><th>费率</th><th>佣金额</th><th>关联单号</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#comBody').innerHTML = errBox(e); });
+};
+function settleCom(id){
+  post('/api/admin/commissions/settle', {id: id}).then(function(){ toast('佣金已结算'); LOADERS.commission(); })
+    .catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 7b. 分销链路 ================= */
+LOADERS.chain = function(){
+  $('#chainRules').innerHTML = loadingBox(); $('#chainTree').innerHTML = loadingBox(); $('#chainList').innerHTML = loadingBox();
+  api('/api/admin/commissions/tree').then(function(d){
+    // ---- 分佣规则卡 ----
+    var tls = d.tierLabels || TIER_LABELS;
+    var ruleCard = function(key){
+      var r = d.rules && d.rules[key]; if (!r) return '';
+      return '<div class="tier-rule"><h4>' + esc(r.label) + ' <span class="dim">' + (r.mode === 'fixed' ? '固定金额' : '按交易额比例') + '</span></h4>' +
+        r.tiers.map(function(v, i){ return '<div class="row"><span>' + esc(tls[i]) + '</span><b class="num">' + tierRateText(r, v) + '</b></div>'; }).join('') + '</div>';
+    };
+    $('#chainRules').innerHTML = '<div class="card-title">多级分佣规则</div><div class="card-sub">一笔交易产生佣金后, 沿销售组织链向上最多分润 3 层</div>' +
+      '<div class="tier-rules">' + ruleCard('topup') + ruleCard('consume') + ruleCard('card') + '</div>';
+
+    // ---- 分销组织树 ----
+    var nodes = d.nodes || [];
+    var byId = {}, kids = {};
+    nodes.forEach(function(n){ byId[n.id] = n; });
+    nodes.forEach(function(n){ if (n.parentId && byId[n.parentId]) (kids[n.parentId] = kids[n.parentId] || []).push(n); });
+    var roots = nodes.filter(function(n){ return !n.parentId || !byId[n.parentId]; });
+    var BAR = ['var(--grad)', '#4f46e5', '#818cf8', '#c7d2fe']; // 总监最深, 逐级变浅
+    function orgHtml(n){
+      var html = '<div class="org-node"><div class="org-bar" style="background:' + (BAR[n.level] || '#c7d2fe') + '"></div><div class="org-body">' +
+        '<div class="org-main"><b>' + esc(n.name) + '</b> <span class="role-pill role-' + n.level + '">' + esc(n.role) + '</span>' +
+        (n.teamSize > 0 ? ' <span class="pill pill-indigo">👥 ' + n.teamSize + ' 人</span>' : '') +
+        '<div class="sub-line">🌍 ' + esc(n.region) + ' · 客户 ' + n.customers + ' · 发卡 ' + n.cards + '</div></div>' +
+        '<div class="org-num"><div class="num" style="font-weight:700">' + fmtMoney(n.total) + '</div>' +
+        '<div class="sub-line num">直属 ' + fmtMoney0(n.directTotal) + ' · 下级分润 ' + fmtMoney0(n.uplineTotal) + '</div></div></div></div>';
+      var ch = kids[n.id] || [];
+      if (ch.length) html += '<div class="org-children">' + ch.map(orgHtml).join('') + '</div>';
+      return html;
+    }
+    $('#chainTreeSub').textContent = ME.level === 0 ? '全组织视角 · 总监可看所有销售链路' : '我的团队视角 · 展示本人及全部下级';
+    $('#chainTree').innerHTML = roots.map(orgHtml).join('') || emptyBox();
+
+    // ---- 实时分佣链路 ----
+    var chains = d.chains || [];
+    $('#chainList').innerHTML = chains.length ? chains.map(function(ch){
+      var maxAmt = Math.max.apply(null, ch.path.map(function(p){ return p.amount; }));
+      var pathHtml = ch.path.map(function(p){
+        return '<div class="chain-node' + (maxAmt > 0 && p.amount === maxAmt ? ' max' : '') + '">' +
+          '<div class="nm">' + esc(p.sales) + '</div>' +
+          '<div style="margin:3px 0">' + tierPill(p.tier, p.tierLabel) + '</div>' +
+          '<div class="amt num">' + fmtMoney(p.amount) + '</div>' +
+          '<div class="sub-line num">' + esc(p.rate) + '</div></div>';
+      }).join('<span class="chain-arrow">→</span>');
+      return '<div class="chain"><div class="chain-tx">' + txTypePill(ch.type) + ' <b>' + esc(ch.user) + '</b>' +
+        '<div class="sub-line">' + esc(ch.merchant || '充值入金') + ' · <b class="num">' + fmtMoney(ch.amount) + '</b> · ' + fmtTime(ch.createdAt) + '</div>' +
+        '<div class="sub-line">直属销售: ' + esc(ch.directRep || '—') + '</div></div>' +
+        '<span class="chain-arrow">➜</span>' + pathHtml + '</div>';
+    }).join('') : emptyBox('暂无分佣链路, 去用户端发起一笔消费试试');
+  }).catch(function(e){
+    $('#chainRules').innerHTML = errBox(e); $('#chainTree').innerHTML = ''; $('#chainList').innerHTML = '';
+  });
+};
+
+/* ================= 8. 积分管理 ================= */
+LOADERS.points = function(){
+  $('#pointsBody').innerHTML = loadingBox(); $('#pointsRules').innerHTML = loadingBox();
+  api('/api/admin/points').then(function(d){
+    var lv = d.rules.CARD_LEVELS || {}, cm = d.rules.COMMISSION || {};
+    var rateRow = function(k, name){
+      var l = lv[k] || {};
+      return '<div class="rule-line"><span>' + name + '</span><b>x' + (l.pointRate || 1) + ' 倍</b></div>';
+    };
+    $('#pointsRules').innerHTML =
+      '<div class="card-title">积分规则</div><div class="card-sub">用户端「消费返积分 / 充值奖励」均按此计算</div>' +
+      '<div class="rule-block"><h4>💎 基础规则</h4>' +
+        '<div class="rule-line"><span>消费返积分</span><b>1 USD = ' + d.rules.POINTS_PER_USD + ' 分</b></div>' +
+        '<div class="rule-line"><span>充值额外奖励</span><b>5 分 / USD</b></div>' +
+        '<div class="rule-line"><span>积分抵现</span><b>100 分 = $1 (最多抵 30%)</b></div></div>' +
+      '<div class="rule-block"><h4>💳 卡等级倍率</h4>' +
+        rateRow('standard','Standard 标准卡') + rateRow('gold','Gold 金卡') + rateRow('platinum','Platinum 白金卡') + '</div>' +
+      '<div class="rule-block"><h4>💼 销售佣金规则 (多级分润)</h4>' +
+        Object.keys(cm).filter(function(k){ return cm[k] && cm[k].tiers; }).map(function(k){
+          var r = cm[k];
+          return '<div class="rule-line"><span>' + esc(r.label) + '</span><b>' +
+            r.tiers.map(function(v, i){ return TIER_LABELS[i] + ' ' + tierRateText(r, v); }).join(' · ') + '</b></div>';
+        }).join('') + '</div>';
+    var logs = d.logs || [];
+    if (!logs.length){ $('#pointsBody').innerHTML = emptyBox('暂无积分流水'); return; }
+    var rows = logs.map(function(l){
+      var pos = l.delta > 0;
+      return '<tr>' +
+        '<td><b>' + esc(l.user) + '</b></td>' +
+        '<td class="num" style="font-weight:600;color:' + (pos ? 'var(--ok)' : 'var(--bad)') + '">' + (pos ? '+' : '') + fmtPts(l.delta) + '</td>' +
+        '<td>' + esc(l.source) + (l.refNo ? ' <span class="dim">#' + esc(l.refNo) + '</span>' : '') + '</td>' +
+        '<td class="num">' + fmtPts(l.balanceAfter) + '</td>' +
+        '<td class="dim num">' + fmtTime(l.createdAt) + '</td></tr>';
+    }).join('');
+    $('#pointsBody').innerHTML = '<table><thead><tr><th>用户</th><th>积分变动</th><th>来源</th><th>余额快照</th><th>时间</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#pointsBody').innerHTML = errBox(e); $('#pointsRules').innerHTML = errBox(e); });
+};
+function openGrant(){
+  fetchUsers().then(function(users){
+    showModal('🎁 运营发放积分',
+      '<form onsubmit="return submitGrant(event)">' +
+      '<div class="field"><label>用户</label><select class="select" id="gUser">' +
+        users.map(function(u){ return '<option value="' + u.id + '">' + esc(u.name) + ' · 当前 ' + fmtPts(u.points) + ' 分</option>'; }).join('') + '</select></div>' +
+      '<div class="form-grid">' +
+      '<div class="field"><label>积分变动 (正数发放 / 负数扣减)</label><input class="input num" id="gDelta" type="number" step="1" placeholder="如 500 或 -200" required></div>' +
+      '<div class="field"><label>备注 (来源)</label><input class="input" id="gSource" placeholder="运营发放"></div></div>' +
+      '<div class="form-foot"><button type="button" class="btn-outline" onclick="closeModal()">取消</button><button type="submit" class="btn">确认发放</button></div></form>');
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function submitGrant(e){
+  e.preventDefault();
+  var delta = parseInt($('#gDelta').value, 10);
+  if (!delta){ toast('请输入非零积分值', 'warn'); return; }
+  post('/api/admin/points/grant', {userId: +$('#gUser').value, delta: delta, source: $('#gSource').value.trim() || '运营发放'})
+    .then(function(){ closeModal(); toast('积分已' + (delta > 0 ? '发放' : '扣减') + ' ' + fmtPts(Math.abs(delta)) + ' 分'); LOADERS.points(); })
+    .catch(function(e2){ toast(e2.message, 'err'); });
+  return false;
+}
+
+/* ================= 9. 商城管理 ================= */
+LOADERS.shop = function(){
+  $('#shopBody').innerHTML = loadingBox();
+  api('/api/admin/products').then(function(list){
+    if (!list.length){ $('#shopBody').innerHTML = emptyBox('暂无商品'); return; }
+    var catPill = {'充值券':'pill-green','卡券':'pill-blue','实物':'pill-amber','权益':'pill-indigo','周边':'pill-gray'};
+    var rows = list.map(function(p){
+      return '<tr>' +
+        '<td style="font-size:22px;text-align:center;width:52px">' + p.icon + '</td>' +
+        '<td><b>' + esc(p.name) + '</b><div class="sub-line">' + esc(p.desc) + '</div></td>' +
+        '<td><span class="pill ' + (catPill[p.category] || 'pill-gray') + '">' + esc(p.category) + '</span></td>' +
+        '<td class="num"><b>' + fmtPts(p.points) + ' 分</b>' + (p.cash ? ' <span class="dim">+ $' + p.cash + '</span>' : '') + '</td>' +
+        '<td class="num" style="' + (p.stock === 0 ? 'color:var(--bad);font-weight:700' : '') + '">' + (p.stock === 0 ? '⚠️ 0' : p.stock) + '</td>' +
+        '<td>' + (p.status === 'on' ? '<span class="pill pill-green">上架</span>' : '<span class="pill pill-gray">下架</span>') + '</td>' +
+        '<td><button class="' + (p.status === 'on' ? 'btn-danger' : 'btn-ok-sm') + '" onclick="toggleProduct(' + p.id + ',' + (p.status === 'on') + ')">' + (p.status === 'on' ? '下架' : '上架') + '</button></td></tr>';
+    }).join('');
+    $('#shopBody').innerHTML = '<table><thead><tr><th></th><th>商品</th><th>分类</th><th>积分价</th><th>库存</th><th>状态</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#shopBody').innerHTML = errBox(e); });
+};
+function toggleProduct(id, wasOn){
+  patch('/api/admin/products/' + id, {}).then(function(){
+    toast(wasOn ? '商品已下架, 用户端不再展示' : '商品已上架'); LOADERS.shop();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 10. 兑换订单 ================= */
+LOADERS.orders = function(){
+  $('#ordersBody').innerHTML = loadingBox();
+  api('/api/admin/orders').then(function(list){
+    if (!list.length){ $('#ordersBody').innerHTML = emptyBox('暂无兑换订单'); return; }
+    var stPill = {pending:'<span class="pill pill-amber">📦 待发货</span>', shipped:'<span class="pill pill-blue">🚚 已发货</span>', redeemed:'<span class="pill pill-green">✔️ 已核销</span>'};
+    var rows = list.map(function(o){
+      var code = o.redeemCode ? '<span class="num" style="font-weight:600">' + esc(o.redeemCode) + '</span>'
+                : o.trackingNo ? '<span class="num">' + esc(o.trackingNo) + '</span>' : '<span class="dim">—</span>';
+      return '<tr>' +
+        '<td class="dim num">#' + o.id + '</td>' +
+        '<td><b>' + esc(o.user) + '</b></td>' +
+        '<td>' + (o.product ? o.product.icon + ' ' + esc(o.product.name) : '—') + '<div class="sub-line">' + (o.product ? esc(o.product.category) : '') + '</div></td>' +
+        '<td class="num" style="color:var(--warn);font-weight:600">-' + fmtPts(o.pointsCost) + '</td>' +
+        '<td>' + (stPill[o.status] || esc(o.status)) + '</td>' +
+        '<td>' + code + '</td>' +
+        '<td class="dim num">' + fmtTime(o.createdAt) + '</td>' +
+        '<td>' + (o.status === 'pending' ? '<button class="btn-outline btn-sm" onclick="openShip(' + o.id + ')">发货</button>' : '') + '</td></tr>';
+    }).join('');
+    $('#ordersBody').innerHTML = '<table><thead><tr><th>订单号</th><th>用户</th><th>商品</th><th>消耗积分</th><th>状态</th><th>核销码 / 物流单号</th><th>时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#ordersBody').innerHTML = errBox(e); });
+};
+function openShip(id){
+  showModal('🚚 订单发货',
+    '<div class="dim" style="margin-bottom:14px">订单 <b class="num">#' + id + '</b> · 发货后状态变为「已发货」, 用户端可查看物流单号。</div>' +
+    '<div class="field"><label>物流单号</label><input class="input num" id="shipNo" placeholder="如 SF123456789SA" required></div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="submitShip(' + id + ')">确认发货</button></div>');
+}
+function submitShip(id){
+  var no = $('#shipNo').value.trim();
+  if (!no){ toast('请填写物流单号', 'warn'); return; }
+  post('/api/admin/orders/ship', {id: id, trackingNo: no}).then(function(){
+    closeModal(); toast('已发货, 物流单号 ' + no); LOADERS.orders();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 登录 / 身份 ================= */
+function renderAccounts(list){
+  var groups = {};
+  list.forEach(function(a){ (groups[a.role] = groups[a.role] || []).push(a); });
+  var roles = Object.keys(groups).sort(function(a, b){ return groups[a][0].level - groups[b][0].level; });
+  $('#acctPanel').innerHTML = roles.map(function(r){
+    var g = groups[r];
+    return '<div class="acct-cap"><span class="role-pill role-' + g[0].level + '">' + esc(r) + ' · ' + g.length + ' 个账号</span></div>' +
+      '<div class="acct-grid">' + g.map(function(a){
+        return '<button class="acct-card" onclick="loginAs(' + a.id + ')">' +
+          '<div class="acct-name">' + esc(a.name) + '</div>' +
+          '<div class="acct-meta">🌍 ' + esc(a.region) + ' · 上级 ' + esc(a.parentName || '—') + ' · 团队 ' + a.teamSize + ' 人</div></button>';
+      }).join('') + '</div>';
+  }).join('');
+}
+function loginAs(id){
+  localStorage.setItem('salesId', String(id));
+  location.reload(); // 重载以清空缓存, 保证数据范围随身份切换
+}
+function logout(){
+  localStorage.removeItem('salesId');
+  location.reload();
+}
+function applyIdentity(){
+  document.body.classList.remove('login-mode');
+  $('#sideFoot').innerHTML = '<div class="side-avatar">👤</div><div><div>' + esc(ME.name) + '</div><div class="side-ver">' + esc(ME.role) + ' · ' + esc(ME.region) + '</div></div>';
+  $('#topbarUser').innerHTML = '<span class="avatar">👤</span><span>' + esc(ME.name) + '</span>' +
+    '<span class="role-pill role-' + ME.level + '">' + esc(ME.role) + '</span>' +
+    '<button class="btn-outline btn-sm" onclick="logout()">切换账号</button>';
+  $('#nav').innerHTML = MENU.filter(function(g){ return ME.level === 0 || !g.lv0; }).map(function(g){
+    return '<div class="nav-cap">' + g.cap + '</div>' + g.items.map(function(it){
+      return '<a class="nav-item" href="#' + it[0] + '" data-page="' + it[0] + '"><span class="nav-ic">' + it[1] + '</span>' + it[2] + '</a>';
+    }).join('');
+  }).join('');
+}
+
+/* ================= 启动 ================= */
+function boot(){
+  api('/api/admin/accounts').then(function(list){
+    ACCOUNTS = list;
+    var sid = parseInt(localStorage.getItem('salesId') || '0', 10);
+    ME = null;
+    list.forEach(function(a){ if (a.id === sid) ME = a; });
+    if (!ME){ document.body.classList.add('login-mode'); renderAccounts(list); return; }
+    applyIdentity();
+    navigate();
+  }).catch(function(e){
+    document.body.classList.add('login-mode');
+    $('#acctPanel').innerHTML = '<div class="empty">⚠️ 无法加载账号列表: ' + esc(e && e.message) + '</div>';
+  });
+}
+boot();
+</script>
+</body>
+</html>
