@@ -469,6 +469,30 @@
       </div>
     </section>
 
+    <!-- 12. 目标管理 -->
+    <section class="page" id="page-goals">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="tabs" id="goalDim">
+            <button class="tab active" data-d="personal" onclick="switchGoalDim('personal')">👤 个人</button>
+            <button class="tab" data-d="team" onclick="switchGoalDim('team')">👥 团队</button>
+          </div>
+          <div class="tabs" id="goalPeriod">
+            <button class="tab active" data-p="month" onclick="switchGoalPeriod('month')">本月</button>
+            <button class="tab" data-p="quarter" onclick="switchGoalPeriod('quarter')">本季</button>
+            <button class="tab" data-p="year" onclick="switchGoalPeriod('year')">本年</button>
+          </div>
+        </div>
+        <span class="dim" id="goalWho"></span>
+      </div>
+      <div id="goalSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">销售目标完成榜</div>
+        <div class="card-sub" id="goalsCap"></div>
+        <div class="tbl-wrap" id="goalBody"></div>
+      </div>
+    </section>
+
   </div>
 </div>
 
@@ -540,13 +564,14 @@ function closeDrawer(){ $('#drawerRoot').innerHTML = ''; }
 
 /* ================= hash 路由 ================= */
 var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'交易流水', crm:'客户管理',
-             perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路'};
+             perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路', goals:'目标管理'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
-var SALES_PAGES = ['dashboard', 'crm', 'perf', 'commission', 'chain', 'tx'];
+var SALES_PAGES = ['dashboard', 'crm', 'perf', 'commission', 'chain', 'tx', 'goals'];
 var MENU = [
   {cap:'概览', items:[['dashboard','📊','驾驶舱']]},
+  {cap:'经营管理', lv0:true, items:[['goals','🎯','目标管理']]},
   {cap:'U卡支付运营', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核']]},
   {cap:'CRM 销售', items:[['crm','👥','客户管理'],['tx','💸','客户交易'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
   {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]}
@@ -1003,16 +1028,16 @@ function renderCrmTable(){
   var now = Date.now();
   var rows = CRM.map(function(c){
     var overdue = c.nextFollowAt && c.nextFollowAt < now;
-    return '<tr>' +
+    return '<tr style="cursor:pointer" onclick="openCustDrawer(' + c.id + ')" title="点击查看客户全景">' +
       '<td><b>' + esc(c.name) + '</b>' + (c.tags && c.tags.length ? '<div class="sub-line">' + c.tags.map(esc).join(' · ') + '</div>' : '') + '</td>' +
       '<td>' + esc(c.country) + '</td>' +
       '<td class="dim">' + esc(c.source) + '</td>' +
       '<td class="dim">' + esc(c.industry) + '</td>' +
       '<td>' + esc(c.owner) + '</td>' +
-      '<td><select class="stage-select" style="color:' + (STAGE_COLOR[c.stage] || 'var(--ink)') + '" onchange="changeStage(' + c.id + ',this)">' +
+      '<td onclick="event.stopPropagation()"><select class="stage-select" style="color:' + (STAGE_COLOR[c.stage] || 'var(--ink)') + '" onchange="changeStage(' + c.id + ',this)">' +
         STAGES.map(function(s){ return '<option' + (s === c.stage ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></td>' +
       '<td class="num ' + (overdue ? 'overdue' : 'dim') + '">' + (overdue ? '⚠️ ' : '') + fmtTime(c.nextFollowAt) + '</td>' +
-      '<td><button class="btn-link" onclick="openCustDrawer(' + c.id + ')">详情 ›</button></td></tr>';
+      '<td onclick="event.stopPropagation()"><button class="btn-link" onclick="openCustDrawer(' + c.id + ')">全景 ›</button></td></tr>';
   }).join('');
   $('#crmBody').innerHTML = '<table><thead><tr><th>姓名</th><th>国家</th><th>来源</th><th>行业</th><th>归属销售</th><th>阶段</th><th>下次跟进</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
 }
@@ -1058,19 +1083,90 @@ function submitCustNew(e){
   });
   return false;
 }
+/* 客户全景抽屉: 聚合基础资料/关联卡/充值消费/积分/KYC/佣金贡献/跟进时间轴 (P1.2) */
 function openCustDrawer(id){
-  var c = CRM.find(function(x){ return x.id === id; });
-  if (!c) return;
-  var fus = (c.followups || []).slice().sort(function(a, b){ return b.createdAt - a.createdAt; });
+  showDrawer('⏳ 客户全景', loadingBox('正在聚合客户全景数据…'));
+  api('/api/admin/customers/' + id + '/overview').then(renderCustOverview)
+    .catch(function(e){ showDrawer('⚠️ 加载失败', '<div class="empty">' + esc(e.message) + '</div>'); });
+}
+function kycBadge(u){
+  if (!u) return '<span class="pill pill-gray">未开户</span>';
+  var st = u.kycStatus === 'approved' ? '<span class="pill pill-green">已认证</span>'
+    : u.kycStatus === 'rejected' ? '<span class="pill pill-red">已驳回</span>'
+    : '<span class="pill pill-amber">升级审核中</span>';
+  return '<span class="pill pill-blue">KYC L' + u.kycLevel + '</span> ' + st;
+}
+function cardStatusBadge(st){
+  return st === 'active' ? '<span class="pill pill-green">正常</span>'
+    : st === 'lost' ? '<span class="pill pill-red">🚨 挂失</span>' : '<span class="pill pill-red">❄️ 冻结</span>';
+}
+function ovSection(title, inner){
+  return '<div style="margin-bottom:18px"><div class="card-title" style="margin-bottom:8px">' + title + '</div>' + inner + '</div>';
+}
+function renderCustOverview(d){
+  var c = d.customer, u = d.user;
+  var overdue = c.nextFollowAt && c.nextFollowAt < Date.now();
+  var stagePill = '<span class="pill" style="background:' + (STAGE_COLOR[c.stage] || '#64748b') + ';color:#fff">' + esc(c.stage) + '</span>';
   var info = [
-    ['国家', c.country], ['联系方式', c.contact], ['来源', c.source], ['行业', c.industry],
-    ['归属销售', c.owner], ['当前阶段', c.stage], ['关联用户', c.userId ? 'UID ' + c.userId : '未开户'],
-    ['创建时间', fmtTime(c.createdAt)], ['下次跟进', fmtTime(c.nextFollowAt)]
-  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + esc(x[1]) + '</div></div>'; }).join('');
-  var tl = fus.length ? fus.map(function(f){
-    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + esc(f.type) + '</span><span class="num">' + fmtTime(f.createdAt) + '</span></div>' +
+    ['国家', esc(c.country)], ['联系方式', '<span class="num">' + esc(c.contact) + '</span>'],
+    ['来源', esc(c.source)], ['行业', esc(c.industry)],
+    ['归属销售', esc(c.owner || '—')], ['当前阶段', stagePill],
+    ['下次跟进', '<span class="' + (overdue ? 'overdue' : 'num') + '">' + (overdue ? '⚠️ ' : '') + fmtTime(c.nextFollowAt) + '</span>'],
+    ['创建时间', '<span class="num">' + fmtTime(c.createdAt) + '</span>'],
+    ['关联用户', u ? '<b>' + esc(u.name) + '</b> <span class="dim num">UID ' + u.id + '</span>' : '<span class="dim">未开户</span>'],
+    ['KYC 状态', kycBadge(u)]
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+
+  var cardsHtml = (d.cards && d.cards.length)
+    ? '<div class="tbl-wrap"><table><thead><tr><th>卡号</th><th>等级</th><th>余额</th><th>状态</th></tr></thead><tbody>' +
+      d.cards.map(function(k){
+        return '<tr><td class="num" style="font-weight:600;letter-spacing:.5px">' + maskCard(k.cardNo) + '</td>' +
+          '<td><span class="pill ' + (LEVEL_PILL[k.level] || 'pill-gray') + '">' + esc(k.levelLabel) + '</span></td>' +
+          '<td class="num" style="font-weight:600">' + fmtMoney(k.balance) + '</td><td>' + cardStatusBadge(k.status) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : emptyBox('暂未关联卡片(客户未开户)');
+
+  var topupHtml = (d.topup && d.topup.list.length)
+    ? '<div class="tbl-wrap"><table><thead><tr><th>时间</th><th>金额</th><th>方式</th><th>状态</th></tr></thead><tbody>' +
+      d.topup.list.map(function(t){
+        return '<tr><td class="dim num">' + fmtTime(t.createdAt) + '</td><td>' + txAmountCell(t) + '</td>' +
+          '<td class="dim">' + (t.method === 'usdt' ? '🪙 USDT' : '🏦 银行转账') + '</td><td>' + txStatusPill(t.status) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : emptyBox('暂无充值记录');
+
+  var consumeHtml = (d.consume && d.consume.list.length)
+    ? '<div class="tbl-wrap"><table><thead><tr><th>时间</th><th>金额</th><th>商户</th><th>返积分</th></tr></thead><tbody>' +
+      d.consume.list.map(function(t){
+        return '<tr><td class="dim num">' + fmtTime(t.createdAt) + '</td><td>' + txAmountCell(t) + '</td>' +
+          '<td>' + esc(t.merchant || '—') + '</td><td class="num" style="color:var(--warn)">' + (t.pointsEarned ? '+' + fmtPts(t.pointsEarned) : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : emptyBox('暂无消费记录');
+
+  var pointsHtml = (d.points && d.points.list.length)
+    ? '<div class="tbl-wrap"><table><thead><tr><th>时间</th><th>变动</th><th>来源</th></tr></thead><tbody>' +
+      d.points.list.map(function(l){
+        var pos = l.delta > 0;
+        return '<tr><td class="dim num">' + fmtTime(l.createdAt) + '</td>' +
+          '<td class="num" style="font-weight:600;color:' + (pos ? 'var(--ok)' : 'var(--bad)') + '">' + (pos ? '+' : '') + fmtPts(l.delta) + '</td>' +
+          '<td>' + esc(l.source) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : emptyBox('暂无积分流水');
+
+  var comHtml = (d.commission && d.commission.list.length)
+    ? '<div class="tbl-wrap"><table><thead><tr><th>层级</th><th>受益销售</th><th>类型</th><th>金额</th></tr></thead><tbody>' +
+      d.commission.list.map(function(cm){
+        return '<tr><td>' + tierPill(cm.tier, cm.tierLabel) + '</td><td><b>' + esc(cm.sales) + '</b></td>' +
+          '<td class="dim">' + esc(cm.typeLabel || cm.type) + '</td>' +
+          '<td class="num" style="font-weight:600;color:var(--ok)">' + fmtMoney(cm.amount) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : emptyBox('暂无佣金贡献');
+
+  var fus = d.followups || [];
+  var tlHtml = fus.length ? '<div class="tl">' + fus.map(function(f){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + esc(f.type) + '</span><span class="num">' + fmtTime(f.createdAt) + '</span>' + (f.sales ? '<span class="dim">· ' + esc(f.sales) + '</span>' : '') + '</div>' +
       '<div class="tl-content">' + esc(f.content) + '</div>' + (f.nextPlan ? '<div class="tl-plan">📌 ' + esc(f.nextPlan) + '</div>' : '') + '</div>';
-  }).join('') : '<div class="empty">暂无跟进记录</div>';
+  }).join('') + '</div>' : emptyBox('暂无跟进记录');
+
   var foot =
     '<form onsubmit="return submitFollowup(event,' + c.id + ')">' +
     '<div class="form-grid">' +
@@ -1079,10 +1175,16 @@ function openCustDrawer(id){
     '<div class="field" style="margin-bottom:10px"><label>跟进内容 *</label><textarea class="textarea" id="fContent" required placeholder="本次沟通要点…"></textarea></div>' +
     '<div class="field" style="margin-bottom:12px"><label>下次计划</label><input class="input" id="fPlan" placeholder="如: 3 天内发送报价单"></div>' +
     '<div class="form-foot" style="margin:0"><button type="submit" class="btn">添加跟进</button></div></form>';
-  showDrawer('👤 ' + esc(c.name) + (c.tags && c.tags.length ? ' <span class="pill pill-indigo">' + c.tags.map(esc).join('/') + '</span>' : ''),
+
+  showDrawer('👤 ' + esc(c.name) + ' ' + stagePill + (c.tags && c.tags.length ? ' <span class="pill pill-indigo">' + c.tags.map(esc).join('/') + '</span>' : ''),
     (c.remark ? '<div class="notice" style="margin-bottom:14px">📝 ' + esc(c.remark) + '</div>' : '') +
     '<div class="info-grid">' + info + '</div>' +
-    '<div class="card-title" style="margin-bottom:10px">跟进记录 (' + fus.length + ')</div><div class="tl">' + tl + '</div>',
+    ovSection('💳 关联卡片 (' + (d.cards || []).length + ')', cardsHtml) +
+    ovSection('⬆️ 充值记录 · 合计 <span class="num" style="color:var(--ok)">' + fmtMoney(d.topup.total) + '</span> / ' + d.topup.count + ' 笔 <span class="dim">(最近 10 笔)</span>', topupHtml) +
+    ovSection('🛍️ 消费记录 · 合计 <span class="num">' + fmtMoney(d.consume.total) + '</span> / ' + d.consume.count + ' 笔 <span class="dim">(最近 10 笔)</span>', consumeHtml) +
+    ovSection('⭐ 积分流水 · 当前 <span class="num" style="color:var(--warn)">' + fmtPts(d.points.current) + ' 分</span> <span class="dim">(最近 10 笔)</span>', pointsHtml) +
+    ovSection('💰 佣金贡献 · 合计 <span class="num" style="color:var(--ok)">' + fmtMoney(d.commission.total) + '</span> / ' + d.commission.count + ' 笔 <span class="dim">(最近 5 笔明细)</span>', comHtml) +
+    ovSection('📞 跟进记录 (' + fus.length + ')', tlHtml),
     foot);
 }
 function submitFollowup(e, customerId){
@@ -1122,6 +1224,65 @@ LOADERS.perf = function(){
     $('#perfBody').innerHTML = '<table><thead><tr><th>排名</th><th>销售</th><th>发卡数</th><th>本人直接</th><th>团队合计</th><th>佣金</th><th>目标完成度</th></tr></thead><tbody>' + html + '</tbody></table>';
   }).catch(function(e){ $('#perfBody').innerHTML = errBox(e); });
 };
+
+/* ================= 6b. 目标管理 (P1.3) ================= */
+var GOAL_DIM = 'personal', GOAL_PERIOD = 'month';
+var GOAL_PERIOD_LAB = {month:'本月', quarter:'本季', year:'本年'};
+function switchGoalDim(d){
+  GOAL_DIM = d;
+  $$('#goalDim .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.d === d); });
+  LOADERS.goals();
+}
+function switchGoalPeriod(pd){
+  GOAL_PERIOD = pd;
+  $$('#goalPeriod .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.p === pd); });
+  LOADERS.goals();
+}
+LOADERS.goals = function(){
+  $('#goalWho').textContent = ME.name + ' · ' + ME.role;
+  $('#goalBody').innerHTML = loadingBox();
+  api('/api/admin/goals?dim=' + GOAL_DIM + '&period=' + GOAL_PERIOD).then(function(d){
+    renderGoalSum(d); renderGoalTable(d);
+  }).catch(function(e){ $('#goalSum').innerHTML = ''; $('#goalBody').innerHTML = errBox(e); });
+};
+function goalRatePill(r){
+  var cls = r >= 100 ? 'pill-green' : r >= 60 ? 'pill-blue' : r >= 30 ? 'pill-amber' : 'pill-red';
+  return '<span class="pill ' + cls + '" style="font-weight:700">' + r.toFixed(0) + '%</span>';
+}
+function goalMetric(done, target, fmt){
+  var pct = target ? done / target * 100 : 0;
+  return progBar(pct) + '<div class="sub-line num">' + fmt(done) + ' / ' + fmt(target) + '</div>';
+}
+function renderGoalSum(d){
+  var s = d.summary || {};
+  var dimLab = d.dim === 'team' ? '团队(子树合计)口径' : '个人口径';
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#goalSum').innerHTML =
+    sc('🎯', '#e0e7ff', (s.overall || 0).toFixed(1) + '%', dimLab + ' · ' + (GOAL_PERIOD_LAB[d.period] || '本月') + '综合完成率 · ' + (s.repCount || 0) + ' 人') +
+    sc('💳', '#dcfce7', (s.done.cards || 0) + ' / ' + (s.targets.cards || 0) + ' 张', '发卡量 完成/目标 (' + (s.rates.cards || 0).toFixed(0) + '%)') +
+    sc('⬆️', '#e0f2fe', fmtMoney0(s.done.topup), '充值额 · 目标 ' + fmtMoney0(s.targets.topup) + ' (' + (s.rates.topup || 0).toFixed(0) + '%)') +
+    sc('🛍️', '#fef3c7', fmtMoney0(s.done.consume), '消费额 · 目标 ' + fmtMoney0(s.targets.consume) + ' (' + (s.rates.consume || 0).toFixed(0) + '%)') +
+    sc('⭐', '#f3e8ff', fmtPts(s.done.points), '积分发放 · 目标 ' + fmtPts(s.targets.points) + ' (' + (s.rates.points || 0).toFixed(0) + '%)') +
+    (s.top ? sc('🥇', '#fef9c3', s.top.overall.toFixed(0) + '%', '标杆 · ' + esc(s.top.name)) : '');
+}
+function renderGoalTable(d){
+  var rows = d.rows || [];
+  $('#goalsCap').textContent = '综合完成率 = 四类指标完成率均值 · 目标派生: 充值=月度目标×70% · 消费=月度目标×30% · 发卡量按级别 20/12/6 · 积分=消费目标×10 · ' +
+    (GOAL_PERIOD_LAB[d.period] || '本月') + '目标已 ×' + d.mult + ' 放大, 完成值按周期内实际统计' + (d.dim === 'team' ? ' · 团队口径=本人+全部下级子树合计' : '');
+  if (!rows.length){ $('#goalBody').innerHTML = emptyBox('暂无销售目标数据'); return; }
+  var medals = ['🥇', '🥈', '🥉'];
+  var html = rows.map(function(r){
+    return '<tr>' +
+      '<td style="font-size:15px;width:46px">' + (medals[r.rank - 1] || '<span class="dim num">#' + r.rank + '</span>') + '</td>' +
+      '<td><b>' + esc(r.name) + '</b>' + (r.teamSize > 0 ? ' <span class="pill pill-indigo">👥 ' + r.teamSize + '</span>' : '') + '<div class="sub-line">' + esc(r.role) + ' · ' + esc(r.region) + '</div></td>' +
+      '<td style="min-width:118px">' + goalMetric(r.done.cards, r.targets.cards, function(v){ return v + ' 张'; }) + '</td>' +
+      '<td style="min-width:128px">' + goalMetric(r.done.topup, r.targets.topup, fmtMoney0) + '</td>' +
+      '<td style="min-width:128px">' + goalMetric(r.done.consume, r.targets.consume, fmtMoney0) + '</td>' +
+      '<td style="min-width:118px">' + goalMetric(r.done.points, r.targets.points, fmtPts) + '</td>' +
+      '<td style="text-align:center">' + goalRatePill(r.overall) + '</td></tr>';
+  }).join('');
+  $('#goalBody').innerHTML = '<table><thead><tr><th>排名</th><th>销售</th><th>发卡量</th><th>充值额</th><th>消费额</th><th>积分发放</th><th>综合完成率</th></tr></thead><tbody>' + html + '</tbody></table>';
+}
 
 /* ================= 7. 佣金管理 ================= */
 LOADERS.commission = function(silent){
