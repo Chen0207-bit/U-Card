@@ -922,6 +922,273 @@
       <div class="card"><div class="tbl-wrap" id="engineBody"></div></div>
     </section>
 
+    <!-- 41. 适配器注册 (P5.1 支付编排) -->
+    <section class="page" id="page-orchAdapters">
+      <div class="notice">🔌 六类 Mock 适配器注册表: 法币收单 / 加密网关 / 发卡机构 / KYC / 换汇 / 结算。人工标记 <b>宕机/降级</b> 后, 「渠道路由」页实时重算并自动故障切换; 人工标记的状态不会被自动探测覆盖。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:180px" id="orchAdaKindSel" onchange="renderOrchAdapters()"><option value="">全部适配器类型</option></select>
+        </div>
+        <span class="dim">标记 IssueCo (mock) 宕机 → 去「渠道路由」看 pay 场景自动切换到 CardWorks</span>
+      </div>
+      <div id="orchAdaSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="orchAdaBody"></div></div>
+    </section>
+
+    <!-- 42. 渠道路由 -->
+    <section class="page" id="page-orchRoutes">
+      <div class="notice">🧭 路由实时计算: 场景 × 币种 → 按「有效优先级(降级渠道降权 100)→ 费率」选出首选与备选渠道。每次刷新重新决策, 渠道状态变化立即体现。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:150px" id="orchRouteSceneSel" onchange="renderOrchRoutes()"><option value="">全部场景</option></select>
+          <select class="select" style="width:120px" id="orchRouteCurSel" onchange="renderOrchRoutes()"><option value="">全部币种</option></select>
+        </div>
+        <span class="dim">首选 = 当前路由决策 · 备选 = 故障切换目标</span>
+      </div>
+      <div class="card">
+        <div class="card-title">路由表(6 场景 × USD/AED/SAR)</div>
+        <div class="tbl-wrap" id="orchRouteBody"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">🧪 路由模拟器(不下单)</div>
+        <div class="card-sub">输入场景 / 币种 / 金额, 实时查看本次请求会路由到哪个渠道、预估手续费与全部候选</div>
+        <div class="form-grid" style="grid-template-columns:1.4fr .8fr .8fr auto;gap:8px;align-items:end">
+          <div class="field"><label>场景</label><select class="select" id="orSimScene"></select></div>
+          <div class="field"><label>币种</label><input class="input" id="orSimCur" value="USD" maxlength="4"></div>
+          <div class="field"><label>金额</label><input class="input num" id="orSimAmt" type="number" value="1000" min="1"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn" onclick="orchSimRoute()">🧪 模拟路由</button></div>
+        </div>
+        <div id="orSimOut" style="margin-top:12px"></div>
+      </div>
+    </section>
+
+    <!-- 43. 健康检查 -->
+    <section class="page" id="page-orchHealth">
+      <div class="notice">🩺 渠道健康探测: 降级渠道探活成功<b>自动解除降级</b>; 人工标记的宕机/降级不被探测覆盖(需人工恢复健康)。事件全量留痕。</div>
+      <div class="toolbar">
+        <div class="toolbar-left"><button class="btn" onclick="orchFullCheck()">🩺 一键全量探测</button></div>
+        <span class="dim">探测会更新延迟/成功率指标, 并按需恢复降级渠道</span>
+      </div>
+      <div id="orchHltSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">当前健康总览</div>
+        <div class="tbl-wrap" id="orchHltBody"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">健康事件时间线(探测 / 人工标记)</div>
+        <div class="card-sub">最近 100 条 · from → to 为状态变化</div>
+        <div class="tbl-wrap" id="orchHltLog"></div>
+      </div>
+    </section>
+
+    <!-- 44. 费率比较 -->
+    <section class="page" id="page-orchCompare">
+      <div class="notice">💰 按场景分组比较各渠道「费率 + 固定费用」: 以样本金额计算总成本从低到高排序, 绿色标记 = 当前路由实际选中的渠道。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="field" style="margin:0"><label>样本金额(USD)</label></div>
+          <input class="input num" id="ocAmt" type="number" value="1000" min="1" style="width:120px">
+          <button class="btn" onclick="LOADERS.orchCompare()">🔄 重新计算</button>
+        </div>
+        <span class="dim">费率结构: feeRate × 金额 + feeFixed</span>
+      </div>
+      <div id="orchCmpBody"></div>
+    </section>
+
+    <!-- 45. 交易状态机 -->
+    <section class="page" id="page-orchTx">
+      <div class="notice">⚙️ 编排单状态机: <code>created → pending → processing → success</code>, 分支 <code>failed / reversed / refunded</code>; failed 可重放回 pending。点击行查看完整时间轴 / 渠道尝试 / 回调记录并执行操作。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:150px" id="otSceneSel" onchange="LOADERS.orchTx()"><option value="">全部场景</option></select>
+          <select class="select" style="width:150px" id="otStateSel" onchange="LOADERS.orchTx()"><option value="">全部状态</option></select>
+        </div>
+        <span class="dim" id="otHint"></span>
+      </div>
+      <div id="orchTxSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="orchTxBody"></div></div>
+    </section>
+
+    <!-- 46. 幂等控制 -->
+    <section class="page" id="page-orchIdem">
+      <div class="notice">🛡️ 幂等控制: 相同 <code>idempotencyKey</code> 的下单请求只向渠道提交<b>一次</b>, 重复请求直接返回同一编排单, 不产生重复扣款。试试用同一 Key 连续提交两次。</div>
+      <div class="card">
+        <div class="card-title">幂等模拟器</div>
+        <div class="card-sub">预置 Key「DEMO-IDEM-KEY-001」已对应一笔种子订单 — 直接点「相同 Key 重复提交」可看到幂等命中</div>
+        <div class="form-grid" style="grid-template-columns:1.2fr .7fr .7fr 1.4fr auto;gap:8px;align-items:end">
+          <div class="field"><label>场景</label><select class="select" id="oiScene"></select></div>
+          <div class="field"><label>币种</label><input class="input" id="oiCur" value="USD" maxlength="4"></div>
+          <div class="field"><label>金额</label><input class="input num" id="oiAmt" type="number" value="120" min="1"></div>
+          <div class="field"><label>idempotencyKey</label><input class="input" id="oiKey" value="DEMO-IDEM-KEY-001"></div>
+          <div class="field"><label>&nbsp;</label><button class="btn" onclick="orchIdemSubmit()">🚀 提交(演示幂等)</button></div>
+        </div>
+        <div id="oiOut" style="margin-top:12px"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">幂等键登记表(有 Key 的编排单)</div>
+        <div class="tbl-wrap" id="orchIdemBody"></div>
+      </div>
+    </section>
+
+    <!-- 47. 异步回调 -->
+    <section class="page" id="page-orchCallback">
+      <div class="notice">📨 渠道异步回调驱动状态机进入终态; 每次终态流转自动向业务方发出站 <b>webhook 通知</b>(下方可查通知记录与 payload)。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:320px" id="ochTxSel"></select>
+          <button class="btn-outline" onclick="orchSendCallback('fail')">❌ 模拟失败回执</button>
+          <button class="btn" onclick="orchSendCallback('success')">✅ 模拟成功回执</button>
+        </div>
+        <span class="dim">仅「待受理 / 处理中」的编排单可接收回调</span>
+      </div>
+      <div id="ochSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">出站 Webhook 通知记录</div>
+        <div class="card-sub">最近 50 条 · 终态流转自动推送, 200 = 业务方已接收</div>
+        <div class="tbl-wrap" id="ochBody"></div>
+      </div>
+    </section>
+
+    <!-- 48. 对账差异 -->
+    <section class="page" id="page-orchRecon">
+      <div class="notice">🧮 三方对账: <b>编排单(渠道口径) × 交易流水(本地口径) × 资金账本(记账口径)</b>。差异可一键补单 — 补录流水 / 记入账本 / 关闭在途单, 处理后进入「已处理」清单。</div>
+      <div class="toolbar">
+        <div class="toolbar-left"><button class="btn" onclick="LOADERS.orchRecon()">🔁 立即对账</button></div>
+        <span class="dim" id="orchRecAt"></span>
+      </div>
+      <div id="orchRecSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">未平差异</div>
+        <div class="tbl-wrap" id="orchRecBody"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="card-title">已处理(补单记录)</div>
+        <div class="tbl-wrap" id="orchRecFixed"></div>
+      </div>
+    </section>
+
+    <!-- 49. C端KYC案例 (P5.2 合规中心) -->
+    <section class="page" id="page-compKyc">
+      <div class="notice">🛡️ 持卡人 KYC 档案: 等级 / 限额 / 证件 / 审核轨迹。升级申请在「审批中心 → KYC 升级」流程处理, 通过后等级与限额自动生效。点击行查看全景。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:150px" id="ckLevelSel" onchange="renderCompKyc()">
+            <option value="">全部等级</option><option value="0">L0 基础档</option><option value="1">L1 初级</option><option value="2">L2 高级</option>
+          </select>
+        </div>
+        <span class="dim">筛查标记联动「AML 筛查」页命中结果</span>
+      </div>
+      <div id="ckSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="ckBody"></div></div>
+    </section>
+
+    <!-- 50. 企业KYB -->
+    <section class="page" id="page-compKyb">
+      <div class="notice">🏢 B 端企业 KYB 尽调: 营业执照 / 章程 / 银行账户 + <b>UBO 实际受益人</b>持股与 PEP 标记。UBO 自动进入 AML 筛查名单。点击行查看详情并审核。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:150px" id="kbStatusSel" onchange="renderCompKyb()">
+            <option value="">全部状态</option><option value="pending">待审核</option><option value="info_required">需补充材料</option><option value="approved">已通过</option><option value="rejected">已驳回</option>
+          </select>
+        </div>
+        <span class="dim">驳回 / 要求补充材料需填写原因</span>
+      </div>
+      <div id="kbSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="kbBody"></div></div>
+    </section>
+
+    <!-- 51. AML筛查 -->
+    <section class="page" id="page-compScreen">
+      <div class="notice">🔍 AML 模糊筛查: 精确 / 包含 / 别名匹配 + 同国家加成, 同时比对<b>制裁名单与 PEP 名单</b>。上方即时筛查任意姓名, 下方为全量筛查结果(12 持卡人 + 全部 KYB UBO)。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input class="input" id="csName" placeholder="筛查姓名, 如 Ali Al-Mansouri" style="width:260px">
+          <input class="input" id="csCountry" placeholder="国家码(可选), 如 AE" maxlength="2" style="width:170px">
+          <button class="btn" onclick="compDoScreen()">🔍 立即筛查</button>
+        </div>
+        <span class="dim">评分 ≥60 高风险 · ≥30 中风险 · 命中即低风险起</span>
+      </div>
+      <div id="csOut"></div>
+      <div id="csSum" class="sum-row" style="margin-top:8px"></div>
+      <div class="card"><div class="tbl-wrap" id="csBody"></div></div>
+    </section>
+
+    <!-- 52. 制裁名单 -->
+    <section class="page" id="page-compSanctions">
+      <div class="notice">⛔ 制裁名单库(OFAC / EU / UN): 支持按姓名、别名、国家码、名单来源检索; AML 筛查实时比对。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input class="input" id="sanKw" placeholder="姓名 / 别名 / 国家码 / OFAC" style="width:280px">
+          <button class="btn" onclick="LOADERS.compSanctions()">🔎 检索</button>
+        </div>
+        <span class="dim">演示名单, 非真实监管数据</span>
+      </div>
+      <div id="sanSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="sanBody"></div></div>
+    </section>
+
+    <!-- 53. PEP名单 -->
+    <section class="page" id="page-compPeps">
+      <div class="notice">👥 PEP 政治公众人物名单: 按敏感级高/中/低管理; AML 筛查命中 PEP 自动纳入可疑报告线索。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input class="input" id="pepKw" placeholder="姓名 / 职位 / 国家码" style="width:280px">
+          <button class="btn" onclick="LOADERS.compPeps()">🔎 检索</button>
+        </div>
+        <span class="dim">演示名单, 非真实监管数据</span>
+      </div>
+      <div id="pepSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="pepBody"></div></div>
+    </section>
+
+    <!-- 54. 可疑报告 -->
+    <section class="page" id="page-compStr">
+      <div class="notice">📋 STR 可疑交易报告: 可<b>一键从风险事件生成草稿</b>(联动风控中心), 补充分析后一键报送监管门户(模拟)。</div>
+      <div class="toolbar">
+        <div class="toolbar-left"><button class="btn" onclick="openStrCreateModal()">➕ 从风险事件生成</button></div>
+        <span class="dim">仅草稿状态可报送</span>
+      </div>
+      <div id="strSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="strBody"></div></div>
+    </section>
+
+    <!-- 55. 证件管理 -->
+    <section class="page" id="page-compDocs">
+      <div class="notice">🪪 证件有效期管理: <b>90 / 30 / 7 天</b>三档提醒 + 已过期, 临期证件高亮; 证件号掩码显示。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:170px" id="cdTierSel" onchange="renderCompDocs()">
+            <option value="">全部档位</option><option value="expired">已过期</option><option value="d7">7 天内</option><option value="d30">30 天内</option><option value="d90">90 天内</option><option value="ok">有效</option>
+          </select>
+        </div>
+        <span class="dim">按剩余天数升序</span>
+      </div>
+      <div id="cdSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="cdBody"></div></div>
+    </section>
+
+    <!-- 56. 合规案件 -->
+    <section class="page" id="page-compCases">
+      <div class="notice">🗂️ 合规案件: AML / KYC / KYB / STR 四类案件的立案 → 调查 → 结案全流程。点击行查看时间轴并流转。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:150px" id="ccStatusSel" onchange="renderCompCases()">
+            <option value="">全部状态</option><option value="open">待处理</option><option value="investigating">调查中</option><option value="closed">已结案</option>
+          </select>
+        </div>
+        <span class="dim">结案需填写结案说明(可选, 默认自动生成)</span>
+      </div>
+      <div id="ccSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="ccBody"></div></div>
+    </section>
+
+    <!-- 57. 国家政策 -->
+    <section class="page" id="page-compCountries">
+      <div class="notice">🌍 国家/地区政策限制: 允许 / 限制 / 禁止三级清单(演示仅作合规展示, 未接入交易链路)。</div>
+      <div id="cnSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="cnBody"></div></div>
+    </section>
+
   </div>
 </div>
 
@@ -1001,7 +1268,9 @@ var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'�
              tenants:'租户管理', tenantConfig:'租户配置',
              apps:'应用管理', keys:'API 密钥', webhooks:'Webhook', apilogs:'API 日志', docs:'接口文档',
              templates:'通知模板', sends:'发送记录', channels:'渠道配置',
-             approvals:'审批中心', engine:'规则引擎'};
+             approvals:'审批中心', engine:'规则引擎',
+             orchAdapters:'适配器注册', orchRoutes:'渠道路由', orchHealth:'健康检查', orchCompare:'费率比较', orchTx:'交易状态机', orchIdem:'幂等控制', orchCallback:'异步回调', orchRecon:'对账差异',
+             compKyc:'C端KYC案例', compKyb:'企业KYB', compScreen:'AML筛查', compSanctions:'制裁名单', compPeps:'PEP名单', compStr:'可疑报告', compDocs:'证件管理', compCases:'合规案件', compCountries:'国家政策'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
@@ -1019,7 +1288,9 @@ var MENU = [
   {cap:'平台管理', lv0:true, items:[['tenants','🏢','租户管理'],['tenantConfig','🎛️','租户配置']]},
   {cap:'开放平台', lv0:true, items:[['apps','🔌','应用管理'],['keys','🔑','API 密钥'],['webhooks','🪝','Webhook'],['apilogs','📊','API 日志'],['docs','📘','接口文档']]},
   {cap:'消息中心', lv0:true, items:[['templates','📨','通知模板'],['sends','📤','发送记录'],['channels','📻','渠道配置']]},
-  {cap:'审批中心', lv0:true, items:[['approvals','📝','审批中心']]}
+  {cap:'审批中心', lv0:true, items:[['approvals','📝','审批中心']]},
+  {cap:'支付编排', lv0:true, items:[['orchAdapters','🔌','适配器注册'],['orchRoutes','🧭','渠道路由'],['orchHealth','🩺','健康检查'],['orchCompare','💰','费率比较'],['orchTx','⚙️','交易状态机'],['orchIdem','🛡️','幂等控制'],['orchCallback','📨','异步回调'],['orchRecon','🧮','对账差异']]},
+  {cap:'合规中心', lv0:true, items:[['compKyc','🪪','C端KYC案例'],['compKyb','🏢','企业KYB'],['compScreen','🔍','AML筛查'],['compSanctions','⛔','制裁名单'],['compPeps','👥','PEP名单'],['compStr','📋','可疑报告'],['compDocs','📇','证件管理'],['compCases','🗂️','合规案件'],['compCountries','🌍','国家政策']]}
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -3822,6 +4093,882 @@ function submitEngineRule(e, id){
   }).catch(function(e2){ toast(e2.message, 'err'); });
   return false;
 }
+
+/* ================= 41-48. 支付编排 (P5.1) ================= */
+var ORCH_SCENES = [['topup_fiat','法币充值'],['topup_crypto','加密充值'],['pay','卡消费授权'],['issue_card','发卡'],['fx','换汇'],['settle','结算打款']];
+var ORCH_STATES = [['created','已创建'],['pending','待受理'],['processing','处理中'],['success','成功'],['failed','失败'],['reversed','已冲正'],['refunded','已退款']];
+var ORCH_ADA_PILL = {
+  healthy: '<span class="pill pill-green">● 健康</span>',
+  degraded: '<span class="pill pill-amber">◐ 降级</span>',
+  down: '<span class="pill pill-red">✕ 宕机</span>'
+};
+var ORCH_STATE_PILL = {
+  created: '<span class="pill pill-gray">已创建</span>',
+  pending: '<span class="pill pill-blue">待受理</span>',
+  processing: '<span class="pill pill-indigo">处理中</span>',
+  success: '<span class="pill pill-green">成功</span>',
+  failed: '<span class="pill pill-red">失败</span>',
+  reversed: '<span class="pill pill-amber">已冲正</span>',
+  refunded: '<span class="pill pill-gold">已退款</span>'
+};
+var ORCH_HLT_LABEL = { healthy: '健康', degraded: '降级', down: '宕机' };
+var ORCH_ADA = [], ORCH_ROUTES = [], ORCH_TX = [], ORCH_TX_SUM = {}, ORCH_HLT = {};
+function orchSceneLabel(key){ var f = ORCH_SCENES.filter(function(x){ return x[0] === key; })[0]; return f ? f[1] : key; }
+function orchSceneOptions(){ return ORCH_SCENES.map(function(x){ return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join(''); }
+/* ---- 41. 适配器注册 ---- */
+LOADERS.orchAdapters = function(){
+  $('#orchAdaBody').innerHTML = loadingBox();
+  api('/api/admin/orch/adapters').then(function(d){
+    ORCH_ADA = d.list || [];
+    var sel = $('#orchAdaKindSel'), cur = sel.value;
+    sel.innerHTML = '<option value="">全部适配器类型</option>' + (d.kinds || []).map(function(k){ return '<option value="' + k.key + '">' + esc(k.label) + '</option>'; }).join('');
+    sel.value = cur;
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#orchAdaSum').innerHTML =
+      sc('🔌', '#e0f2fe', s.total, '适配器') + sc('🟢', '#dcfce7', s.healthy, '健康') +
+      sc('🟡', '#fef3c7', s.degraded, '降级') + sc('🔴', '#fee2e2', s.down, '宕机') + sc('⏸️', '#f1f5f9', s.disabled, '已停用');
+    renderOrchAdapters();
+  }).catch(function(e){ $('#orchAdaSum').innerHTML = ''; $('#orchAdaBody').innerHTML = errBox(e); });
+};
+function renderOrchAdapters(){
+  var kind = $('#orchAdaKindSel') ? $('#orchAdaKindSel').value : '';
+  var list = ORCH_ADA.filter(function(a){ return !kind || a.kind === kind; });
+  if (!list.length){ $('#orchAdaBody').innerHTML = emptyBox('该类型暂无适配器'); return; }
+  var rows = list.map(function(a){
+    var ops = '';
+    if (a.status !== 'healthy') ops += '<button class="btn-outline btn-sm" onclick="orchMark(' + a.id + ',\'healthy\')">💚 恢复健康</button> ';
+    else ops += '<button class="btn-outline btn-sm" onclick="orchMark(' + a.id + ',\'degraded\')">◐ 标记降级</button> <button class="btn-outline btn-sm" onclick="orchMark(' + a.id + ',\'down\')">✕ 标记宕机</button> ';
+    ops += '<button class="btn-outline btn-sm" onclick="orchToggleAda(' + a.id + ',' + (a.enabled === false) + ')">' + (a.enabled === false ? '▶️ 启用' : '⏸️ 停用') + '</button>';
+    return '<tr' + (a.enabled === false ? ' style="opacity:.55"' : '') + '>' +
+      '<td class="num dim">#' + nz(a.id) + '</td>' +
+      '<td><span class="pill pill-gray">' + esc(a.kindLabel) + '</span></td>' +
+      '<td><b>' + esc(a.name) + '</b><div class="sub-line dim">' + esc((a.caps && a.caps.note) || '') + '</div></td>' +
+      '<td>' + (ORCH_ADA_PILL[a.status] || esc(a.status)) + (a.manual ? ' <span class="pill pill-amber">人工标记</span>' : '') + '</td>' +
+      '<td class="num"><b>' + nz(a.priority) + '</b></td>' +
+      '<td class="num">' + (a.feeRate ? (a.feeRate * 100).toFixed(1) + '% + ' + fmtMoney(a.feeFixed) : '固定 ' + fmtMoney(a.feeFixed)) + '<div class="sub-line dim">$1000 样本 ' + fmtMoney(a.fee1000) + '</div></td>' +
+      '<td class="num">' + nz(a.latencyMs) + ' ms</td>' +
+      '<td class="num">' + nz(a.successRate) + '%</td>' +
+      '<td style="max-width:200px;white-space:normal;font-size:12px"><span class="dim num">' + esc(((a.caps && a.caps.currencies) || []).join(' / ')) + '</span><div class="sub-line dim">' + esc((((a.caps && a.caps.scenes) || []).map(function(s){ return orchSceneLabel(s); })).join(' / ')) + '</div></td>' +
+      '<td style="white-space:nowrap">' + ops + '</td></tr>';
+  }).join('');
+  $('#orchAdaBody').innerHTML = '<table><thead><tr><th>ID</th><th>类型</th><th>适配器</th><th>状态</th><th>优先级</th><th>费率</th><th>延迟</th><th>成功率</th><th>币种 / 场景</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function orchMark(id, status){
+  patch('/api/admin/orch/adapters/' + id, { status: status }).then(function(r){
+    toast('适配器 #' + id + ': ' + (r.changes || []).join(' · ') + (status === 'down' ? ' — 去渠道路由页可看自动切换' : ''));
+    LOADERS.orchAdapters();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function orchToggleAda(id, toEnable){
+  patch('/api/admin/orch/adapters/' + id, { enabled: toEnable }).then(function(r){
+    toast(toEnable ? '适配器已启用, 重新参与路由' : '适配器已停用, 路由不再选中');
+    LOADERS.orchAdapters();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 42. 渠道路由 ---- */
+LOADERS.orchRoutes = function(){
+  $('#orchRouteBody').innerHTML = loadingBox();
+  api('/api/admin/orch/routes').then(function(d){
+    ORCH_ROUTES = d.table || [];
+    var ss = $('#orchRouteSceneSel'), cs2 = $('#orchRouteCurSel');
+    var sv = ss.value, cv = cs2.value;
+    ss.innerHTML = '<option value="">全部场景</option>' + (d.scenes || []).map(function(x){ return '<option value="' + x.key + '">' + esc(x.label) + '</option>'; }).join('');
+    cs2.innerHTML = '<option value="">全部币种</option>' + (d.currencies || []).map(function(c){ return '<option value="' + c + '">' + c + '</option>'; }).join('');
+    ss.value = sv; cs2.value = cv;
+    if ($('#orSimScene') && !$('#orSimScene').options.length) $('#orSimScene').innerHTML = orchSceneOptions();
+    renderOrchRoutes();
+  }).catch(function(e){ $('#orchRouteBody').innerHTML = errBox(e); });
+};
+function renderOrchRoutes(){
+  var sc = $('#orchRouteSceneSel') ? $('#orchRouteSceneSel').value : '';
+  var cu = $('#orchRouteCurSel') ? $('#orchRouteCurSel').value : '';
+  var list = ORCH_ROUTES.filter(function(r){ return (!sc || r.scene === sc) && (!cu || r.currency === cu); });
+  if (!list.length){ $('#orchRouteBody').innerHTML = emptyBox('无匹配路由'); return; }
+  var briefCell = function(a){
+    if (!a) return '<span class="dim">—</span>';
+    return '<b>' + esc(a.name) + '</b> <span class="dim num">#' + nz(a.id) + '</span><div class="sub-line dim">有效优先级 ' + nz(a.effPriority) + ' · $100 手续费 ' + fmtMoney(a.fee100) + ' · ' + nz(a.latencyMs) + 'ms / ' + nz(a.successRate) + '%</div>';
+  };
+  var rows = list.map(function(r){
+    return '<tr>' +
+      '<td>' + esc(r.sceneLabel) + '</td><td class="num"><b>' + esc(r.currency) + '</b></td>' +
+      '<td style="min-width:220px">' + (r.adapter ? '<span class="pill pill-green">首选</span> ' + briefCell(r.adapter) : '<span class="pill pill-red">无可路由</span>') + '</td>' +
+      '<td style="min-width:220px">' + (r.backup ? '<span class="pill pill-blue">备选</span> ' + briefCell(r.backup) : '<span class="dim">—</span>') + '</td>' +
+      '<td style="max-width:300px;white-space:normal;font-size:12.5px" class="dim">' + esc(r.reason || '') + '</td></tr>';
+  }).join('');
+  $('#orchRouteBody').innerHTML = '<table><thead><tr><th>场景</th><th>币种</th><th>首选渠道</th><th>备选渠道</th><th>决策原因</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function orchSimRoute(){
+  var scene = $('#orSimScene').value, cur = $('#orSimCur').value.trim().toUpperCase(), amt = Math.max(1, +$('#orSimAmt').value || 1000);
+  $('#orSimOut').innerHTML = loadingBox('路由决策中…');
+  api('/api/admin/orch/routes/simulate?scene=' + encodeURIComponent(scene) + '&currency=' + encodeURIComponent(cur) + '&amount=' + amt).then(function(r){
+    var d = r.decision || {};
+    var candRows = (r.candidates || []).map(function(c, i){
+      return '<tr><td class="num">' + (i + 1) + '</td><td><b>' + esc(c.name) + '</b> <span class="dim num">#' + nz(c.id) + '</span></td><td>' + (ORCH_ADA_PILL[c.status] || esc(c.status)) + '</td><td class="num">' + nz(c.effPriority) + '</td><td class="num">' + fmtMoney(c.estimatedFee) + '</td></tr>';
+    }).join('');
+    $('#orSimOut').innerHTML =
+      '<div class="notice" style="margin-bottom:10px">✅ 路由决策: <b>' + esc(d.adapterName || '—') + '</b> · 预估手续费 <b class="num">' + fmtMoney(d.estimatedFee) + '</b> · 总成本 <b class="num">' + fmtMoney(d.totalCost) + '</b>' +
+      '<div class="sub-line dim" style="margin-top:4px">' + esc(r.reason || '') + (r.backup ? ' · 备选: ' + esc(r.backup.name) + '(' + fmtMoney(r.backup.estimatedFee) + ')' : '') + '</div></div>' +
+      '<div class="tbl-wrap"><table><thead><tr><th>#</th><th>候选渠道</th><th>状态</th><th>有效优先级</th><th>预估手续费</th></tr></thead><tbody>' + candRows + '</tbody></table></div>';
+  }).catch(function(e){ $('#orSimOut').innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+/* ---- 43. 健康检查 ---- */
+LOADERS.orchHealth = function(){
+  $('#orchHltBody').innerHTML = loadingBox(); $('#orchHltLog').innerHTML = loadingBox();
+  api('/api/admin/orch/health').then(function(d){
+    ORCH_HLT = d;
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#orchHltSum').innerHTML =
+      sc('🟢', '#dcfce7', s.healthy, '健康') + sc('🟡', '#fef3c7', s.degraded, '降级') + sc('🔴', '#fee2e2', s.down, '宕机') +
+      sc('🩺', '#e0f2fe', s.probes, '探测记录') + sc('✋', '#f1f5f9', s.manual, '人工标记记录');
+    var adaRows = (d.adapters || []).map(function(a){
+      return '<tr><td><b>' + esc(a.name) + '</b> <span class="dim num">#' + nz(a.id) + '</span></td>' +
+        '<td><span class="pill pill-gray">' + esc(a.kindLabel) + '</span></td>' +
+        '<td>' + (ORCH_ADA_PILL[a.status] || esc(a.status)) + (a.manual ? ' <span class="pill pill-amber">人工标记</span>' : '') + '</td>' +
+        '<td class="num">' + nz(a.latencyMs) + ' ms</td><td class="num">' + nz(a.successRate) + '%</td>' +
+        '<td class="num">' + (nz(a.mttdMs) / 1000) + 's</td></tr>';
+    }).join('');
+    $('#orchHltBody').innerHTML = '<table><thead><tr><th>适配器</th><th>类型</th><th>状态</th><th>延迟</th><th>成功率</th><th>平均恢复 MTTR</th></tr></thead><tbody>' + adaRows + '</tbody></table>';
+    var logRows = (d.list || []).map(function(l){
+      var ada = (d.adapters || []).filter(function(a){ return a.id === l.adapterId; })[0];
+      return '<tr><td class="dim num" style="white-space:nowrap">' + fmtTime(l.at) + '</td>' +
+        '<td><b>' + esc(ada ? ada.name : '#' + nz(l.adapterId)) + '</b></td>' +
+        '<td>' + (l.type === 'manual' ? '<span class="pill pill-amber">✋ 人工</span>' : '<span class="pill pill-blue">🩺 探测</span>') + '</td>' +
+        '<td class="num">' + (ORCH_HLT_LABEL[l.from] || l.from || '—') + ' → <b>' + (ORCH_HLT_LABEL[l.to] || l.to) + '</b></td>' +
+        '<td class="num">' + nz(l.latencyMs) + 'ms / ' + nz(l.successRate) + '%</td>' +
+        '<td style="max-width:320px;white-space:normal;font-size:12.5px" class="dim">' + esc(l.note || '') + '</td></tr>';
+    }).join('');
+    $('#orchHltLog').innerHTML = logRows ? '<table><thead><tr><th>时间</th><th>适配器</th><th>类型</th><th>状态变化</th><th>延迟/成功率</th><th>说明</th></tr></thead><tbody>' + logRows + '</tbody></table>' : emptyBox('暂无健康事件 — 点击「一键全量探测」');
+  }).catch(function(e){ $('#orchHltSum').innerHTML = ''; $('#orchHltBody').innerHTML = errBox(e); $('#orchHltLog').innerHTML = ''; });
+};
+function orchFullCheck(){
+  $('#orchHltLog').innerHTML = loadingBox('全量探测中…');
+  post('/api/admin/orch/health/check').then(function(r){
+    toast(r.note || '全量探测完成');
+    var rt = r.routing || {};
+    if (rt.adapter) toast('探测后 pay/USD 路由 → ' + rt.adapter + ' (' + rt.reason + ')');
+    LOADERS.orchHealth();
+  }).catch(function(e){ toast(e.message, 'err'); LOADERS.orchHealth(); });
+}
+/* ---- 44. 费率比较 ---- */
+LOADERS.orchCompare = function(){
+  var amt = Math.max(1, +(($('#ocAmt') ? $('#ocAmt').value : 0)) || 1000);
+  $('#orchCmpBody').innerHTML = loadingBox('按场景计算费率…');
+  api('/api/admin/orch/compare?amount=' + amt).then(function(d){
+    var html = (d.groups || []).map(function(g){
+      var rows = (g.list || []).map(function(a, i){
+        var isRouted = g.routed === a.id;
+        return '<tr' + (isRouted ? ' style="background:#f0fdf4"' : '') + '>' +
+          '<td class="num">' + (i + 1) + '</td>' +
+          '<td><b>' + esc(a.name) + '</b> <span class="dim num">#' + nz(a.id) + '</span>' + (isRouted ? ' <span class="pill pill-green">当前路由</span>' : '') + (a.enabled === false ? ' <span class="pill pill-red">已停用</span>' : '') + '</td>' +
+          '<td>' + (ORCH_ADA_PILL[a.status] || esc(a.status)) + '</td>' +
+          '<td class="num">' + nz(a.priority) + '</td>' +
+          '<td class="num">' + (a.feeRate ? (a.feeRate * 100).toFixed(1) + '% + ' + fmtMoney(a.feeFixed) : '固定 ' + fmtMoney(a.feeFixed)) + '</td>' +
+          '<td class="num">' + fmtMoney(a.fee1000) + '</td>' +
+          '<td class="num"><b>' + fmtMoney(a.total) + '</b></td></tr>';
+      }).join('');
+      return '<div class="card" style="margin-top:14px"><div class="card-title">' + esc(g.sceneLabel) + ' <span class="dim" style="font-weight:400">· ' + esc(g.kindLabel) + ' · 样本 ' + fmtMoney(d.amount) + '</span></div>' +
+        (rows ? '<div class="tbl-wrap"><table><thead><tr><th>#</th><th>渠道</th><th>状态</th><th>优先级</th><th>费率结构</th><th>$1000 成本</th><th>样本成本</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : emptyBox('该场景暂无适配器')) + '</div>';
+    }).join('');
+    $('#orchCmpBody').innerHTML = html || emptyBox('暂无费率数据');
+  }).catch(function(e){ $('#orchCmpBody').innerHTML = errBox(e); });
+};
+/* ---- 45. 交易状态机 ---- */
+LOADERS.orchTx = function(){
+  $('#orchTxBody').innerHTML = loadingBox();
+  var st = $('#otStateSel'), sn = $('#otSceneSel');
+  if (sn && !sn.options.length) sn.innerHTML = '<option value="">全部场景</option>' + orchSceneOptions();
+  if (st && !st.options.length) st.innerHTML = '<option value="">全部状态</option>' + ORCH_STATES.map(function(x){ return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('');
+  var qs = [];
+  if (sn.value) qs.push('scene=' + sn.value);
+  if (st.value) qs.push('state=' + st.value);
+  api('/api/admin/orch/txs' + (qs.length ? '?' + qs.join('&') : '')).then(function(d){
+    ORCH_TX = d.list || []; ORCH_TX_SUM = d.summary || {};
+    var s = ORCH_TX_SUM;
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#orchTxSum').innerHTML =
+      sc('⚙️', '#e0f2fe', s.total, '编排单') + sc('🟢', '#dcfce7', s.success, '成功') + sc('🔴', '#fee2e2', s.failed, '失败') +
+      sc('⏳', '#fef3c7', nz(s.created) + nz(s.pending) + nz(s.processing), '在途') +
+      sc('↩️', '#f1f5f9', nz(s.reversed) + nz(s.refunded), '冲正/退款') + sc('📨', '#e0e7ff', s.callbacks, '回调次数');
+    $('#otHint').textContent = '共 ' + nz(s.total) + ' 单 · 点击行查看时间轴与操作';
+    renderOrchTx();
+  }).catch(function(e){ $('#orchTxSum').innerHTML = ''; $('#orchTxBody').innerHTML = errBox(e); });
+};
+function renderOrchTx(){
+  if (!ORCH_TX.length){ $('#orchTxBody').innerHTML = emptyBox('暂无编排单'); return; }
+  var rows = ORCH_TX.map(function(t){
+    return '<tr style="cursor:pointer" onclick="openOrchTxDrawer(' + t.id + ')">' +
+      '<td class="num"><b>#' + nz(t.id) + '</b></td>' +
+      '<td>' + esc(t.sceneLabel) + '</td>' +
+      '<td class="num"><b>' + fmtMoney(t.amount) + '</b> ' + esc(t.currency) + '</td>' +
+      '<td>' + esc(t.adapterName) + '<div class="sub-line dim">' + esc(t.kindLabel) + '</div></td>' +
+      '<td>' + (ORCH_STATE_PILL[t.state] || esc(t.stateLabel)) + '</td>' +
+      '<td>' + (t.idempotencyKey ? '<code class="num" style="background:#f1f5f9;border-radius:6px;padding:2px 7px;font-size:12px">' + esc(t.idempotencyKey) + '</code>' : '<span class="dim">—</span>') + '</td>' +
+      '<td>' + (t.channelStatus ? esc(t.channelStatus) : '<span class="dim">未回执</span>') + '</td>' +
+      '<td>' + (t.localRef != null ? '<span class="num">交易 #' + nz(t.localRef) + '</span>' : '<span class="dim">未关联</span>') + '</td>' +
+      '<td class="dim num">' + fmtTime(t.createdAt) + '</td></tr>';
+  }).join('');
+  $('#orchTxBody').innerHTML = '<table><thead><tr><th>编排单</th><th>场景</th><th>金额</th><th>渠道</th><th>状态</th><th>幂等键</th><th>渠道回执</th><th>本地流水</th><th>创建时间</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function openOrchTxDrawer(id){
+  api('/api/admin/orch/tx/' + id).then(function(d){
+    var t = d.tx, ad = d.adapter, lt = d.localTx;
+    var info = [
+      ['编排单号', '<b class="num">#' + nz(t.id) + '</b>'],
+      ['当前状态', ORCH_STATE_PILL[t.state] || esc(t.stateLabel)],
+      ['场景', esc(t.sceneLabel)],
+      ['金额', '<b class="num">' + fmtMoney(t.amount) + ' ' + esc(t.currency) + '</b>'],
+      ['路由渠道', ad ? esc(ad.name) + ' <span class="dim num">#' + nz(ad.id) + '</span>' : '—'],
+      ['渠道类型', ad ? esc(ad.kindLabel) : '—'],
+      ['幂等键', t.idempotencyKey ? '<code class="num" style="font-size:12px">' + esc(t.idempotencyKey) + '</code>' : '—'],
+      ['超时阈值', '<span class="num">' + (nz(t.timeoutMs) / 1000) + 's</span>'],
+      ['渠道回执', t.channelStatus ? esc(t.channelStatus) : '未回执'],
+      ['本地流水', lt ? '<b class="num">交易 #' + nz(lt.id) + '</b> <span class="dim">' + esc(lt.type) + ' · ' + esc(lt.status) + ' · ' + fmtTime(lt.createdAt) + '</span>' : '未关联'],
+      ['关联用户', t.userId ? '用户 #' + nz(t.userId) : '—'],
+      ['创建时间', '<span class="num">' + fmtTime(t.createdAt) + '</span>']
+    ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+    var tlHtml = '<div class="tl">' + (t.timeline || []).map(function(x){
+      return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + (x.from ? esc(x.from) + ' → ' + esc(x.to) : '〇 ' + esc(x.to)) + '</span><span class="num">' + fmtTime(x.ts) + '</span></div>' +
+        '<div class="tl-content">' + esc(x.note || '') + '</div></div>';
+    }).join('') + '</div>';
+    var atHtml = (t.attempts || []).length ? '<table><thead><tr><th>#</th><th>渠道</th><th>提交时间</th><th>延迟</th><th>结果</th><th>说明</th></tr></thead><tbody>' + (t.attempts || []).map(function(a){
+      return '<tr><td class="num">' + nz(a.no) + '</td><td><span class="dim num">#' + nz(a.adapterId) + '</span></td><td class="num">' + fmtTime(a.at) + '</td><td class="num">' + nz(a.latencyMs) + 'ms</td>' +
+        '<td>' + (a.result === 'accepted' ? '<span class="pill pill-blue">已受理</span>' : a.result === 'success' ? '<span class="pill pill-green">成功</span>' : '<span class="pill pill-red">失败</span>') + '</td>' +
+        '<td class="dim" style="font-size:12.5px">' + esc(a.note || '') + '</td></tr>';
+    }).join('') + '</tbody></table>' : emptyBox('尚未向渠道发起尝试');
+    var cbHtml = (t.callbacks || []).length ? '<table><thead><tr><th>时间</th><th>回执类型</th><th>凭证号</th><th>来源</th><th>说明</th></tr></thead><tbody>' + (t.callbacks || []).map(function(c){
+      return '<tr><td class="num dim">' + fmtTime(c.at) + '</td><td>' + (c.type === 'success' ? '<span class="pill pill-green">success</span>' : '<span class="pill pill-red">fail</span>') + '</td>' +
+        '<td class="num">' + esc(c.receipt) + '</td><td class="dim">' + esc(c.source) + '</td><td class="dim" style="font-size:12.5px">' + esc(c.note || '') + '</td></tr>';
+    }).join('') + '</tbody></table>' : emptyBox('暂无渠道回调');
+    var foot = '';
+    if (t.state === 'pending' || t.state === 'processing') {
+      foot = '<button class="btn-outline" onclick="orchTxAction(' + t.id + ',\'compensate\')">⏱️ 超时补偿</button>' +
+        '<button class="btn-outline" style="color:var(--bad)" onclick="orchTxAction(' + t.id + ',\'callback\',\'fail\')">❌ 模拟失败回调</button>' +
+        '<button class="btn" onclick="orchTxAction(' + t.id + ',\'callback\',\'success\')">✅ 模拟成功回调</button>';
+    } else if (t.state === 'failed' || t.state === 'created') {
+      foot = '<button class="btn" onclick="orchTxAction(' + t.id + ',\'replay\')">🔁 重放(重新路由)</button>';
+    } else if (t.state === 'success') {
+      foot = '<button class="btn-outline" onclick="orchTxAction(' + t.id + ',\'reverse\')">↩️ 冲正演示</button>' +
+        '<button class="btn-outline" onclick="orchTxAction(' + t.id + ',\'refund\')">💰 退款演示</button>';
+    } else {
+      foot = '<span class="dim" style="align-self:center">终态(' + esc(t.stateLabel) + ') · ' + ((d.nextStates || []).length ? '允许迁移: ' + d.nextStates.join(' / ') : '无后续迁移') + '</span>';
+    }
+    showDrawer('⚙️ 编排单 #' + t.id + ' ' + (ORCH_STATE_PILL[t.state] || ''),
+      '<div class="info-grid">' + info + '</div>' +
+      ovSection('🕒 状态机时间轴', tlHtml) +
+      ovSection('📡 渠道尝试', atHtml) +
+      ovSection('📨 异步回调记录', cbHtml),
+      '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">' + foot + '<button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function orchTxAction(id, act, result){
+  var bodies = { callback: { result: result || 'success' }, compensate: { force: true }, replay: {}, reverse: {}, refund: {} };
+  post('/api/admin/orch/tx/' + id + '/' + act, bodies[act] || {}).then(function(r){
+    toast(r.note || '操作成功');
+    openOrchTxDrawer(id); // 重开抽屉刷新
+    LOADERS.orchTx();
+  }).catch(function(e){ toast(e.message, 'err'); openOrchTxDrawer(id); });
+}
+/* ---- 46. 幂等控制 ---- */
+LOADERS.orchIdem = function(){
+  $('#orchIdemBody').innerHTML = loadingBox();
+  if ($('#oiScene') && !$('#oiScene').options.length) $('#oiScene').innerHTML = orchSceneOptions();
+  api('/api/admin/orch/txs').then(function(d){
+    var list = (d.list || []).filter(function(t){ return t.idempotencyKey; });
+    if (!list.length){ $('#orchIdemBody').innerHTML = emptyBox('暂无带幂等键的编排单 — 用上方模拟器提交一笔'); return; }
+    var rows = list.map(function(t){
+      return '<tr>' +
+        '<td><code class="num" style="background:#f1f5f9;border-radius:6px;padding:2px 7px;font-size:12px">' + esc(t.idempotencyKey) + '</code></td>' +
+        '<td class="num"><b>#' + nz(t.id) + '</b></td>' +
+        '<td>' + esc(t.sceneLabel) + '</td>' +
+        '<td class="num"><b>' + fmtMoney(t.amount) + '</b> ' + esc(t.currency) + '</td>' +
+        '<td>' + esc(t.adapterName) + '</td>' +
+        '<td>' + (ORCH_STATE_PILL[t.state] || esc(t.stateLabel)) + '</td>' +
+        '<td class="dim num">' + fmtTime(t.createdAt) + '</td></tr>';
+    }).join('');
+    $('#orchIdemBody').innerHTML = '<table><thead><tr><th>idempotencyKey</th><th>编排单</th><th>场景</th><th>金额</th><th>渠道</th><th>状态</th><th>创建时间</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#orchIdemBody').innerHTML = errBox(e); });
+};
+function orchIdemSubmit(){
+  var scene = $('#oiScene').value, cur = $('#oiCur').value.trim().toUpperCase() || 'USD';
+  var amt = +$('#oiAmt').value, key = $('#oiKey').value.trim();
+  if (!(amt > 0)){ toast('金额必须大于 0', 'warn'); return; }
+  $('#oiOut').innerHTML = loadingBox('提交中…');
+  post('/api/admin/orch/txs', { scene: scene, currency: cur, amount: amt, idempotencyKey: key }).then(function(r){
+    var t = r.tx || {};
+    $('#oiOut').innerHTML =
+      '<div class="notice" style="margin-bottom:10px;background:' + (r.idempotent ? '#fef9c3' : '#f0fdf4') + '">' +
+      (r.idempotent ? '🛡️ <b>幂等命中</b>: 相同 Key 不重复向渠道下单, 直接返回既有编排单 <b class="num">#' + nz(t.id) + '</b>' : '🆕 <b>新订单已创建并提交渠道</b>: 编排单 <b class="num">#' + nz(t.id) + '</b>') +
+      '<div class="sub-line dim" style="margin-top:4px">' + esc(r.note || '') + '</div></div>' +
+      '<div class="tbl-wrap"><table><thead><tr><th>编排单</th><th>场景</th><th>金额</th><th>渠道</th><th>状态</th><th>幂等键</th></tr></thead><tbody>' +
+      '<tr><td class="num"><b>#' + nz(t.id) + '</b></td><td>' + esc(t.sceneLabel) + '</td><td class="num"><b>' + fmtMoney(t.amount) + '</b> ' + esc(t.currency) + '</td><td>' + esc(t.adapterName) + '</td>' +
+      '<td>' + (ORCH_STATE_PILL[t.state] || esc(t.stateLabel)) + '</td><td><code class="num" style="font-size:12px">' + esc(t.idempotencyKey || '—') + '</code></td></tr></tbody></table></div>' +
+      '<div class="dim" style="margin-top:8px">💡 再点一次「提交」用同一 Key 验证幂等命中</div>';
+    LOADERS.orchIdem();
+  }).catch(function(e){ $('#oiOut').innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+/* ---- 47. 异步回调 ---- */
+LOADERS.orchCallback = function(){
+  $('#ochBody').innerHTML = loadingBox();
+  api('/api/admin/orch/txs').then(function(d){
+    var pend = (d.list || []).filter(function(t){ return t.state === 'pending' || t.state === 'processing'; });
+    var sel = $('#ochTxSel'), cur = sel.value;
+    sel.innerHTML = pend.length ? pend.map(function(t){ return '<option value="' + t.id + '">#' + t.id + ' · ' + esc(t.sceneLabel) + ' · ' + fmtMoney(t.amount) + ' ' + esc(t.currency) + ' · ' + esc(t.stateLabel) + '</option>'; }).join('')
+      : '<option value="">(无待回调编排单 — 可在幂等控制页新建)</option>';
+    if (cur && pend.some(function(t){ return String(t.id) === cur; })) sel.value = cur;
+    var s = d.summary || {};
+    var hooks = d.webhooks || [];
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#ochSum').innerHTML =
+      sc('⏳', '#fef3c7', nz(s.pending) + nz(s.processing), '待回调单') + sc('📨', '#e0f2fe', s.callbacks, '累计回调') +
+      sc('🪝', '#e0e7ff', hooks.length, 'webhook 记录') + sc('❤️', '#dcfce7', hooks.filter(function(w){ return w.event === 'heartbeat'; }).length, '心跳');
+    var rows = hooks.map(function(w){
+      return '<tr><td class="dim num" style="white-space:nowrap">' + fmtTime(w.at) + '</td>' +
+        '<td>' + (w.event === 'heartbeat' ? '<span class="pill pill-gray">heartbeat</span>' : '<span class="pill pill-indigo">' + esc(w.event) + '</span>') + '</td>' +
+        '<td>' + (w.orchTxId ? '<b class="num">#' + nz(w.orchTxId) + '</b>' : '<span class="dim">—</span>') + '</td>' +
+        '<td><code class="num" style="font-size:12px">' + esc(JSON.stringify(w.payload)) + '</code></td>' +
+        '<td class="num">' + esc(w.url) + '</td>' +
+        '<td>' + (nz(w.status) === 200 ? '<span class="pill pill-green">200</span>' : '<span class="pill pill-red">' + nz(w.status) + '</span>') + (w.ms != null ? ' <span class="dim num">' + nz(w.ms) + 'ms</span>' : '') + '</td></tr>';
+    }).join('');
+    $('#ochBody').innerHTML = rows ? '<table><thead><tr><th>时间</th><th>事件</th><th>编排单</th><th>payload</th><th>回调 URL</th><th>结果</th></tr></thead><tbody>' + rows + '</tbody></table>' : emptyBox('暂无 webhook 记录 — 在上方模拟一次回调');
+  }).catch(function(e){ $('#ochSum').innerHTML = ''; $('#ochBody').innerHTML = errBox(e); });
+};
+function orchSendCallback(result){
+  var id = $('#ochTxSel').value;
+  if (!id){ toast('没有可回调的编排单', 'warn'); return; }
+  post('/api/admin/orch/tx/' + id + '/callback', { result: result }).then(function(r){
+    toast(r.note || '回调已受理');
+    LOADERS.orchCallback();
+  }).catch(function(e){ toast(e.message, 'err'); LOADERS.orchCallback(); });
+}
+/* ---- 48. 对账差异 ---- */
+var ORCH_REC = {};
+LOADERS.orchRecon = function(){
+  $('#orchRecBody').innerHTML = loadingBox('三方比对中…');
+  api('/api/admin/orch/recon').then(function(d){
+    ORCH_REC = d;
+    $('#orchRecAt').textContent = '对账时间: ' + fmtTime(d.ranAt);
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#orchRecSum').innerHTML =
+      sc('🧮', '#e0f2fe', s.checked, '比对编排单') + sc('✅', '#dcfce7', s.matched, '三方一致') +
+      sc('⚠️', '#fee2e2', s.open, '未平差异') + sc('🔧', '#e0e7ff', s.fixedCount, '已补单');
+    var sevPill = function(x){ return x === 'high' ? '<span class="pill pill-red">高</span>' : '<span class="pill pill-amber">中</span>'; };
+    var rows = (d.diffs || []).map(function(x){
+      return '<tr>' +
+        '<td class="num"><b>#' + nz(x.id) + '</b></td>' +
+        '<td><b>' + esc(x.typeLabel) + '</b> ' + sevPill(x.severity) + '</td>' +
+        '<td>' + esc(x.sceneLabel) + '<div class="sub-line dim">编排单 <span class="num">#' + nz(x.orchTxId) + '</span></div></td>' +
+        '<td class="num"><b>' + fmtMoney(x.amount) + '</b> ' + esc(x.currency) + '</td>' +
+        '<td class="num">' + esc(x.channelStatus) + '</td><td class="num">' + esc(x.localStatus) + '</td><td class="num">' + esc(x.ledgerStatus) + '</td>' +
+        '<td style="max-width:220px;white-space:normal;font-size:12.5px" class="dim">' + esc(x.suggest || '') + '</td>' +
+        '<td><button class="btn btn-sm" onclick="orchFix(' + x.id + ')">🔧 补单</button></td></tr>';
+    }).join('');
+    $('#orchRecBody').innerHTML = rows ? '<table><thead><tr><th>差异号</th><th>类型</th><th>场景</th><th>金额</th><th>渠道口径</th><th>本地口径</th><th>账本口径</th><th>处理建议</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>' : emptyBox('🎉 三方全部一致, 无未平差异');
+    var frows = (d.fixed || []).map(function(x){
+      return '<tr><td class="num">#' + nz(x.id) + '</td><td>' + esc(x.typeLabel) + '</td>' +
+        '<td class="num">' + fmtMoney(x.amount) + ' ' + esc(x.currency) + '</td>' +
+        '<td>' + esc(x.by) + '</td><td class="dim num">' + fmtTime(x.fixedAt) + '</td>' +
+        '<td style="max-width:360px;white-space:normal;font-size:12.5px" class="dim">' + esc(x.fixNote || '') + '</td></tr>';
+    }).join('');
+    $('#orchRecFixed').innerHTML = frows ? '<table><thead><tr><th>差异号</th><th>类型</th><th>金额</th><th>处理人</th><th>处理时间</th><th>补单说明</th></tr></thead><tbody>' + frows + '</tbody></table>' : emptyBox('暂无补单记录');
+  }).catch(function(e){ $('#orchRecSum').innerHTML = ''; $('#orchRecBody').innerHTML = errBox(e); $('#orchRecFixed').innerHTML = ''; });
+};
+function orchFix(id){
+  var d = ORCH_REC.diffs || [];
+  var x = d.filter(function(y){ return y.id === id; })[0];
+  if (!x) return;
+  showModal('🔧 补单处理 · 差异 #' + id,
+    '<div class="notice" style="margin-bottom:12px"><b>' + esc(x.typeLabel) + '</b> · ' + esc(x.sceneLabel) + ' · <b class="num">' + fmtMoney(x.amount) + ' ' + esc(x.currency) + '</b><div class="sub-line dim" style="margin-top:4px">渠道: ' + esc(x.channelStatus) + ' · 本地: ' + esc(x.localStatus) + ' · 账本: ' + esc(x.ledgerStatus) + '</div></div>' +
+    '<div class="dim" style="margin-bottom:12px">' + esc(x.suggest || '') + ' — 补单会补录交易流水、写入资金账本并关闭在途编排单, 可在「资金账本 → 账户总览」追溯。</div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="orchFixDo(' + id + ')">🔧 确认补单</button></div>');
+}
+function orchFixDo(id){
+  post('/api/admin/orch/diff/' + id + '/fix').then(function(r){
+    closeModal();
+    toast(r.note + ' · 剩余未平差异 ' + nz(r.remaining));
+    LOADERS.orchRecon();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 49-57. 合规中心 (P5.2) ================= */
+var KYB_PILL = {
+  pending: '<span class="pill pill-amber">⏳ 待审核</span>',
+  approved: '<span class="pill pill-green">✅ 已通过</span>',
+  rejected: '<span class="pill pill-red">❌ 已驳回</span>',
+  info_required: '<span class="pill pill-blue">📩 需补充材料</span>'
+};
+var STR_PILL = {
+  draft: '<span class="pill pill-amber">📝 草稿</span>',
+  submitted: '<span class="pill pill-green">📤 已报送</span>',
+  closed: '<span class="pill pill-gray">🗄️ 已结案</span>'
+};
+var DOC_TIER_PILL = {
+  expired: '<span class="pill pill-red">⛔ 已过期</span>',
+  d7: '<span class="pill pill-red">🚨 7 天内</span>',
+  d30: '<span class="pill pill-amber">⚠️ 30 天内</span>',
+  d90: '<span class="pill pill-amber">🕒 90 天内</span>',
+  ok: '<span class="pill pill-green">✅ 有效</span>'
+};
+var CC_PILL = {
+  open: '<span class="pill pill-blue">📮 待处理</span>',
+  investigating: '<span class="pill pill-amber">🔍 调查中</span>',
+  closed: '<span class="pill pill-gray">🗄️ 已结案</span>'
+};
+var CN_PILL = {
+  prohibited: '<span class="pill pill-red">⛔ 禁止</span>',
+  restricted: '<span class="pill pill-amber">⚠️ 限制</span>',
+  allowed: '<span class="pill pill-green">✅ 允许</span>'
+};
+var GRADE_PILL = {
+  high: '<span class="pill pill-red">🔴 高风险</span>',
+  mid: '<span class="pill pill-amber">🟡 中风险</span>',
+  low: '<span class="pill pill-blue">🔵 低风险</span>',
+  clean: '<span class="pill pill-green">🟢 无命中</span>'
+};
+var KYC_LEVEL_PILL = {
+  0: '<span class="pill pill-gray">L0 基础档</span>',
+  1: '<span class="pill pill-blue">L1 初级</span>',
+  2: '<span class="pill pill-green">L2 高级</span>'
+};
+var CS_LIST = [], CK_LIST = [], KB_LIST = [], STR_EVENTS = [];
+function compHitPills(hits){
+  return (hits || []).map(function(h){
+    return '<span class="pill ' + (h.kind === 'sanction' ? 'pill-red' : 'pill-amber') + '" style="margin:1px 3px 1px 0">' + (h.kind === 'sanction' ? '⛔' : '👥') + ' ' + esc(h.listLabel) + ' · ' + esc(h.target) + ' · ' + nz(h.score) + '分</span>';
+  }).join('') || '<span class="dim">—</span>';
+}
+/* ---- 49. C端KYC案例 ---- */
+LOADERS.compKyc = function(){
+  $('#ckBody').innerHTML = loadingBox();
+  Promise.all([
+    api('/api/admin/compliance/kyc'),
+    CS_LIST.length ? Promise.resolve({ list: CS_LIST }) : api('/api/admin/compliance/screenings')
+  ]).then(function(rs){
+    CK_LIST = rs[0].list || [];
+    CS_LIST = rs[1].list || CS_LIST;
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#ckSum').innerHTML =
+      sc('🛡️', '#e0f2fe', s.total, '持卡人档案') + sc('⚪', '#f1f5f9', s.low, 'L0 基础档') + sc('🔵', '#dbeafe', s.mid, 'L1 初级') +
+      sc('🟢', '#dcfce7', s.high, 'L2 高级') + sc('⏳', '#fef3c7', s.pendingUpgrade, '升级审核中');
+    renderCompKyc();
+  }).catch(function(e){ $('#ckSum').innerHTML = ''; $('#ckBody').innerHTML = errBox(e); });
+};
+function renderCompKyc(){
+  var lv = $('#ckLevelSel') ? $('#ckLevelSel').value : '';
+  var screenHit = {};
+  CS_LIST.forEach(function(x){ if (x.hits && x.hits.length) screenHit[x.subject] = x.grade; });
+  var list = CK_LIST.filter(function(x){ return lv === '' || String(x.kycLevel) === lv; });
+  if (!list.length){ $('#ckBody').innerHTML = emptyBox('暂无该等级档案'); return; }
+  var rows = list.map(function(x){
+    var expDocs = (x.docs || []).filter(function(d){ return d.tier === 'expired' || d.tier === 'd7' || d.tier === 'd30'; });
+    return '<tr style="cursor:pointer" onclick="openCompKycDrawer(' + x.userId + ')">' +
+      '<td><b>' + esc(x.name) + '</b><div class="sub-line dim">UID ' + nz(x.userId) + '</div></td>' +
+      '<td>' + esc(x.country) + '</td>' +
+      '<td>' + (KYC_LEVEL_PILL[x.kycLevel] || esc(x.kycLevelLabel)) + '</td>' +
+      '<td>' + (x.kycStatus === 'approved' ? '<span class="pill pill-green">已认证</span>' : '<span class="pill pill-amber">升级审核中</span>') + '</td>' +
+      '<td class="num">' + fmtMoney0(x.perTxLimit) + ' / 笔<div class="sub-line dim">' + fmtMoney0(x.perDayLimit) + ' / 日</div></td>' +
+      '<td class="num">' + (x.docs || []).length + ' 件' + (expDocs.length ? ' <span class="pill pill-red">' + expDocs.length + ' 临期</span>' : '') + '</td>' +
+      '<td>' + (screenHit[x.name] ? (GRADE_PILL[screenHit[x.name]] || '') : '<span class="dim">—</span>') + '</td></tr>';
+  }).join('');
+  $('#ckBody').innerHTML = '<table><thead><tr><th>用户</th><th>国家</th><th>KYC 等级</th><th>状态</th><th>限额(单笔/日)</th><th>证件</th><th>AML 筛查</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function openCompKycDrawer(uid){
+  var x = CK_LIST.filter(function(y){ return y.userId === uid; })[0];
+  if (!x) return;
+  var info = [
+    ['用户', '<b>' + esc(x.name) + '</b> <span class="dim num">UID ' + nz(x.userId) + '</span>'],
+    ['国家/城市', esc(x.country) + ' · ' + esc(x.city)],
+    ['KYC 等级', KYC_LEVEL_PILL[x.kycLevel] || esc(x.kycLevelLabel)],
+    ['认证状态', x.kycStatus === 'approved' ? '<span class="pill pill-green">已认证</span>' : '<span class="pill pill-amber">升级审核中(审批中心联动)</span>'],
+    ['单笔限额', '<b class="num">' + fmtMoney(x.perTxLimit) + '</b>'],
+    ['日累计限额', '<b class="num">' + fmtMoney(x.perDayLimit) + '</b>'],
+    ['证件数量', '<span class="num">' + (x.docs || []).length + ' 件</span>'],
+    ['AML 筛查', compHitPills((CS_LIST.filter(function(y){ return y.subject === x.name; })[0] || {}).hits)]
+  ].map(function(y){ return '<div class="info-item"><div class="k">' + y[0] + '</div><div class="v">' + y[1] + '</div></div>'; }).join('');
+  var docsHtml = (x.docs || []).length ? '<table><thead><tr><th>证件</th><th>号码</th><th>有效期至</th><th>剩余</th><th>档位</th></tr></thead><tbody>' + (x.docs || []).map(function(d){
+    return '<tr><td>' + esc(d.typeLabel) + '</td><td class="num">' + esc(d.number) + '</td><td class="num">' + esc(d.expiryDay) + '</td>' +
+      '<td class="num">' + nz(d.daysLeft) + ' 天</td><td>' + (DOC_TIER_PILL[d.tier] || esc(d.tierLabel)) + '</td></tr>';
+  }).join('') + '</tbody></table>' : emptyBox('L0 基础档未提交证件');
+  var tlHtml = '<div class="tl">' + (x.trail || []).map(function(t){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + esc(t.node) + '</span><span class="num">' + fmtTime(t.ts) + '</span><span class="dim">· ' + esc(t.operator) + '</span></div>' +
+      '<div class="tl-content">' + esc(t.note || '') + '</div></div>';
+  }).join('') + '</div>';
+  var apHtml = (x.linkedApprovals || []).length ? '<table><thead><tr><th>审批单</th><th>标题</th><th>状态</th><th>发起时间</th></tr></thead><tbody>' + (x.linkedApprovals || []).map(function(a){
+    return '<tr><td class="num">#' + nz(a.id) + '</td><td>' + esc(a.title) + '</td><td>' + esc(a.statusLabel) + '</td><td class="dim num">' + fmtTime(a.createdAt) + '</td></tr>';
+  }).join('') + '</tbody></table>' : emptyBox('暂无关联审批单');
+  showDrawer('🛡️ KYC 案例 · ' + esc(x.name),
+    '<div class="info-grid">' + info + '</div>' +
+    ovSection('🪪 证件清单', docsHtml) +
+    ovSection('🕒 审核轨迹', tlHtml) +
+    ovSection('📝 关联审批单(KYC 升级流程)', apHtml),
+    '<div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+}
+/* ---- 50. 企业KYB ---- */
+LOADERS.compKyb = function(){
+  $('#kbBody').innerHTML = loadingBox();
+  Promise.all([
+    api('/api/admin/compliance/kyb'),
+    CS_LIST.length ? Promise.resolve({ list: CS_LIST }) : api('/api/admin/compliance/screenings')
+  ]).then(function(rs){
+    KB_LIST = rs[0].list || [];
+    CS_LIST = rs[1].list || CS_LIST;
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#kbSum').innerHTML =
+      sc('🏢', '#e0f2fe', s.total, 'KYB 案件') + sc('⏳', '#fef3c7', s.pending, '待审核') +
+      sc('📩', '#dbeafe', s.info_required, '需补充') + sc('✅', '#dcfce7', s.approved, '已通过') +
+      sc('❌', '#fee2e2', s.rejected, '已驳回') + sc('👥', '#e0e7ff', s.ubos, 'UBO / PEP ' + nz(s.pepUbos));
+    renderCompKyb();
+  }).catch(function(e){ $('#kbSum').innerHTML = ''; $('#kbBody').innerHTML = errBox(e); });
+};
+function renderCompKyb(){
+  var st = $('#kbStatusSel') ? $('#kbStatusSel').value : '';
+  var list = KB_LIST.filter(function(k){ return !st || k.status === st; });
+  if (!list.length){ $('#kbBody').innerHTML = emptyBox('暂无该状态案件'); return; }
+  var rows = list.map(function(k){
+    return '<tr style="cursor:pointer" onclick="openKybDrawer(' + k.id + ')">' +
+      '<td class="num dim">#' + nz(k.id) + '</td>' +
+      '<td><b>' + esc(k.company) + '</b><div class="sub-line dim">' + esc(k.regNo) + '</div></td>' +
+      '<td>' + esc(k.country) + '</td>' +
+      '<td>' + (KYB_PILL[k.status] || esc(k.statusLabel)) + '</td>' +
+      '<td class="num">' + nz(k.uboCount) + ' 人' + ((k.ubos || []).some(function(u){ return u.pep; }) ? ' <span class="pill pill-red">含 PEP</span>' : '') + '</td>' +
+      '<td>' + (k.articles ? '<span class="pill pill-green">已核验</span>' : '<span class="pill pill-red">缺失</span>') + '</td>' +
+      '<td class="dim num">' + fmtTime(k.createdAt) + '</td></tr>';
+  }).join('');
+  $('#kbBody').innerHTML = '<table><thead><tr><th>ID</th><th>企业</th><th>国家</th><th>状态</th><th>UBO</th><th>章程</th><th>提交时间</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function openKybDrawer(id){
+  var k = KB_LIST.filter(function(x){ return x.id === id; })[0];
+  if (!k) return;
+  var info = [
+    ['企业', '<b>' + esc(k.company) + '</b>'],
+    ['注册号', '<span class="num">' + esc(k.regNo) + '</span>'],
+    ['国家', esc(k.country)],
+    ['状态', KYB_PILL[k.status] || esc(k.statusLabel)],
+    ['营业执照', esc((k.businessLicense || {}).no) + ' · 有效期至 ' + fmtTime((k.businessLicense || {}).expiry)],
+    ['公司章程', k.articles ? '<span class="pill pill-green">已提交核验</span>' : '<span class="pill pill-red">缺失</span>'],
+    ['银行账户', esc((k.bankAccount || {}).bank) + ' · <span class="num">' + esc((k.bankAccount || {}).iban) + '</span>'],
+    ['提交方式', esc(k.submittedBy)],
+    ['提交时间', '<span class="num">' + fmtTime(k.createdAt) + '</span>'],
+    ['审核时间', k.reviewedAt ? '<span class="num">' + fmtTime(k.reviewedAt) + '</span>' : '—']
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+  var uboRows = (k.ubos || []).map(function(u){
+    var scr = CS_LIST.filter(function(y){ return y.subject === u.name; })[0] || {};
+    return '<tr><td><b>' + esc(u.name) + '</b></td><td class="num">' + nz(u.ownershipPct) + '%</td><td>' + esc(u.nationality) + '</td>' +
+      '<td>' + (u.pep ? '<span class="pill pill-red">PEP 申报</span>' : '<span class="pill pill-green">非 PEP</span>') + '</td>' +
+      '<td>' + compHitPills(scr.hits) + '</td><td>' + (GRADE_PILL[scr.grade] || '<span class="dim">未筛查</span>') + '</td></tr>';
+  }).join('');
+  var tlHtml = '<div class="tl">' + (k.timeline || []).map(function(t){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + esc(t.node) + '</span><span class="num">' + fmtTime(t.ts) + '</span><span class="dim">· ' + esc(t.operator) + '</span></div>' +
+      '<div class="tl-content">' + esc(t.note || '') + '</div></div>';
+  }).join('') + '</div>';
+  var foot = '';
+  if (k.status === 'pending') {
+    foot = '<button class="btn-outline" onclick="kybAction(' + k.id + ',\'request_info\')">📩 要求补充材料</button>' +
+      '<button class="btn-outline" style="color:var(--bad)" onclick="kybAction(' + k.id + ',\'reject\')">❌ 驳回</button>' +
+      '<button class="btn" onclick="kybAction(' + k.id + ',\'approve\')">✅ 终审通过</button>';
+  } else if (k.status === 'info_required') {
+    foot = '<button class="btn-outline" style="color:var(--bad)" onclick="kybAction(' + k.id + ',\'reject\')">❌ 驳回</button>' +
+      '<button class="btn" onclick="kybAction(' + k.id + ',\'approve\')">✅ 终审通过</button>';
+  } else {
+    foot = '<span class="dim" style="align-self:center">该案件已终态(' + esc(k.statusLabel) + ')</span>';
+  }
+  showDrawer('🏢 KYB #' + k.id + ' ' + (KYB_PILL[k.status] || ''),
+    '<div class="info-grid">' + info + '</div>' +
+    ovSection('👥 UBO 实际受益人(持股 ≥ 25%)', '<div class="tbl-wrap"><table><thead><tr><th>姓名</th><th>持股</th><th>国籍</th><th>PEP 申报</th><th>名单命中</th><th>筛查等级</th></tr></thead><tbody>' + uboRows + '</tbody></table></div>') +
+    ovSection('🕒 审核时间轴', tlHtml),
+    '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">' + foot + '<button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+}
+function kybAction(id, action){
+  var LABEL = { approve: '✅ 终审通过', reject: '❌ 驳回', request_info: '📩 要求补充材料' };
+  var needReason = action !== 'approve';
+  showModal(LABEL[action] + ' · KYB #' + id,
+    (needReason
+      ? '<div class="field"><label>原因 * (记入案件时间轴)</label><textarea class="textarea" id="kybReason" rows="3" placeholder="如: UBO 资金来源证明不足 / 营业执照临近过期…"></textarea></div>'
+      : '<div class="notice">确认终审通过? 通过后将开通<b>企业钱包</b>与<b>批量发卡资格</b>(演示)。</div>') +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="kybActionDo(' + id + ',\'' + action + '\')">' + LABEL[action] + '</button></div>');
+}
+function kybActionDo(id, action){
+  var reason = $('#kybReason') ? $('#kybReason').value.trim() : '';
+  post('/api/admin/compliance/kyb/' + id + '/action', { action: action, reason: reason }).then(function(r){
+    closeModal(); closeDrawer();
+    toast('KYB #' + id + ' → ' + ((r.case || {}).statusLabel || '已处理'));
+    LOADERS.compKyb();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 51. AML筛查 ---- */
+LOADERS.compScreen = function(){
+  $('#csBody').innerHTML = loadingBox();
+  api('/api/admin/compliance/screenings').then(function(d){
+    CS_LIST = d.list || [];
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#csSum').innerHTML =
+      sc('👤', '#e0f2fe', s.total, '筛查主体') + sc('⚠️', '#fee2e2', s.hit, '命中') + sc('🟢', '#dcfce7', s.clean, '无命中') +
+      sc('⛔', '#fee2e2', s.sanctionHits, '制裁命中') + sc('👥', '#fef3c7', s.pepHits, 'PEP 命中') + sc('🔴', '#f1f5f9', s.high + ' / ' + nz(s.mid) + ' / ' + nz(s.low), '高/中/低');
+    var rows = CS_LIST.map(function(x){
+      return '<tr' + (x.hits && x.hits.length ? ' style="background:#fff7ed"' : '') + '>' +
+        '<td><b>' + esc(x.subject) + '</b><div class="sub-line dim">' + esc(x.subjectRef) + '</div></td>' +
+        '<td>' + (x.subjectType === 'user' ? '<span class="pill pill-blue">C 端持卡人</span>' : '<span class="pill pill-indigo">KYB UBO</span>') + '</td>' +
+        '<td>' + esc(x.country) + '</td>' +
+        '<td>' + compHitPills(x.hits) + '</td>' +
+        '<td class="num"><b>' + nz(x.riskScore) + '</b></td>' +
+        '<td>' + (GRADE_PILL[x.grade] || esc(x.grade)) + '</td></tr>';
+    }).join('');
+    $('#csBody').innerHTML = '<table><thead><tr><th>筛查主体</th><th>类型</th><th>国家</th><th>名单命中</th><th>风险分</th><th>等级</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#csSum').innerHTML = ''; $('#csBody').innerHTML = errBox(e); });
+};
+function compDoScreen(){
+  var name = $('#csName').value.trim(), country = $('#csCountry').value.trim().toUpperCase();
+  if (!name){ toast('请填写筛查姓名', 'warn'); return; }
+  $('#csOut').innerHTML = loadingBox('筛查中…');
+  post('/api/admin/compliance/screen', { name: name, country: country }).then(function(r){
+    var hits = r.hits || [];
+    var rows = hits.map(function(h){
+      return '<tr><td>' + (h.kind === 'sanction' ? '<span class="pill pill-red">⛔ 制裁</span>' : '<span class="pill pill-amber">👥 PEP</span>') + '</td>' +
+        '<td>' + esc(h.listLabel) + '</td><td><b>' + esc(h.target) + '</b></td>' +
+        '<td>' + (h.type === 'individual' ? '个人' : '实体') + '</td><td>' + esc(h.country) + '</td>' +
+        '<td class="num"><b>' + nz(h.score) + '</b></td>' +
+        '<td style="font-size:12.5px" class="dim">' + esc((h.basis || []).join(' + ')) + '</td>' +
+        '<td style="max-width:200px;white-space:normal;font-size:12.5px" class="dim">' + esc(h.detail || '') + '</td></tr>';
+    }).join('');
+    $('#csOut').innerHTML =
+      '<div class="notice" style="margin-bottom:10px;background:' + (hits.length ? '#fff7ed' : '#f0fdf4') + '">' +
+      (hits.length ? '⚠️ <b>筛查命中</b>' : '🟢 <b>无命中</b>') + ': ' + esc(r.name) + (r.country ? ' (' + esc(r.country) + ')' : '') +
+      ' · 风险分 <b class="num">' + nz(r.riskScore) + '</b> · ' + (GRADE_PILL[r.grade] || esc(r.grade)) +
+      '<div class="sub-line dim" style="margin-top:4px">筛查时间 ' + fmtTime(r.checkedAt) + ' · 口径: 精确 60 / 包含 40 / 别名 35 + 同国家加成(制裁 +15, PEP +10)</div></div>' +
+      (rows ? '<div class="tbl-wrap"><table><thead><tr><th>名单类型</th><th>名单</th><th>命中对象</th><th>类型</th><th>国家</th><th>匹配分</th><th>匹配依据</th><th>备注</th></tr></thead><tbody>' + rows + '</tbody></table></div>' : '');
+  }).catch(function(e){ $('#csOut').innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+/* ---- 52. 制裁名单 ---- */
+LOADERS.compSanctions = function(){
+  $('#sanBody').innerHTML = loadingBox();
+  var kw = ($('#sanKw') ? $('#sanKw').value.trim() : '').toLowerCase();
+  api('/api/admin/compliance/sanctions' + (kw ? '?kw=' + encodeURIComponent(kw) : '')).then(function(d){
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#sanSum').innerHTML =
+      sc('⛔', '#fee2e2', s.total, '名单总量') + sc('👤', '#e0f2fe', s.individual, '个人') + sc('🏢', '#dbeafe', s.entity, '实体') +
+      sc('🇺🇸', '#f1f5f9', s.ofac, 'OFAC') + sc('🇪🇺', '#e0e7ff', s.eu, 'EU') + sc('🇺🇳', '#dcfce7', s.un, 'UN');
+    var list = d.list || [];
+    if (!list.length){ $('#sanBody').innerHTML = emptyBox('无匹配名单条目'); return; }
+    var rows = list.map(function(x){
+      return '<tr><td class="num dim">#' + nz(x.id) + '</td>' +
+        '<td><b>' + esc(x.name) + '</b></td>' +
+        '<td style="max-width:220px;white-space:normal;font-size:12px" class="dim">' + esc((x.aliases || []).join(' / ') || '—') + '</td>' +
+        '<td>' + (x.type === 'individual' ? '<span class="pill pill-blue">个人</span>' : '<span class="pill pill-indigo">实体</span>') + '</td>' +
+        '<td class="num">' + esc(x.country) + '</td>' +
+        '<td><span class="pill pill-red">' + esc(x.listSource) + '</span></td>' +
+        '<td style="max-width:260px;white-space:normal;font-size:12.5px" class="dim">' + esc(x.note || '') + '</td></tr>';
+    }).join('');
+    $('#sanBody').innerHTML = '<table><thead><tr><th>ID</th><th>姓名/实体</th><th>别名</th><th>类型</th><th>国家</th><th>名单来源</th><th>说明</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#sanSum').innerHTML = ''; $('#sanBody').innerHTML = errBox(e); });
+};
+/* ---- 53. PEP名单 ---- */
+LOADERS.compPeps = function(){
+  $('#pepBody').innerHTML = loadingBox();
+  var kw = ($('#pepKw') ? $('#pepKw').value.trim() : '').toLowerCase();
+  api('/api/admin/compliance/peps' + (kw ? '?kw=' + encodeURIComponent(kw) : '')).then(function(d){
+    var s = d.summary || {};
+    var lvlPill = { high: '<span class="pill pill-red">🔴 高敏感</span>', medium: '<span class="pill pill-amber">🟡 中敏感</span>', low: '<span class="pill pill-blue">🔵 低敏感</span>' };
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#pepSum').innerHTML =
+      sc('👥', '#e0f2fe', s.total, 'PEP 总数') + sc('🔴', '#fee2e2', s.high, '高敏感') + sc('🟡', '#fef3c7', s.medium, '中敏感') + sc('🔵', '#dbeafe', s.low, '低敏感');
+    var list = d.list || [];
+    if (!list.length){ $('#pepBody').innerHTML = emptyBox('无匹配 PEP 条目'); return; }
+    var rows = list.map(function(x){
+      return '<tr><td class="num dim">#' + nz(x.id) + '</td><td><b>' + esc(x.name) + '</b></td>' +
+        '<td>' + esc(x.position) + '</td><td class="num">' + esc(x.country) + '</td><td>' + (lvlPill[x.level] || esc(x.level)) + '</td></tr>';
+    }).join('');
+    $('#pepBody').innerHTML = '<table><thead><tr><th>ID</th><th>姓名</th><th>职位</th><th>国家</th><th>敏感级</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#pepSum').innerHTML = ''; $('#pepBody').innerHTML = errBox(e); });
+};
+/* ---- 54. 可疑报告 ---- */
+LOADERS.compStr = function(){
+  $('#strBody').innerHTML = loadingBox();
+  api('/api/admin/compliance/str').then(function(d){
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#strSum').innerHTML =
+      sc('📋', '#e0f2fe', s.total, 'STR 总数') + sc('📝', '#fef3c7', s.draft, '草稿') + sc('📤', '#dcfce7', s.submitted, '已报送') + sc('🗄️', '#f1f5f9', s.closed, '已结案');
+    var list = d.list || [];
+    if (!list.length){ $('#strBody').innerHTML = emptyBox('暂无 STR — 点击右上角从风险事件生成'); return; }
+    var rows = list.map(function(r){
+      return '<tr>' +
+        '<td><b class="num">' + esc(r.refNo) + '</b><div class="sub-line dim">#' + nz(r.id) + '</div></td>' +
+        '<td><b>' + esc(r.userName) + '</b><div class="sub-line dim">' + esc(r.userCountry) + '</div></td>' +
+        '<td>' + esc(r.triggerRule) + (r.triggerEventId ? '<div class="sub-line dim">风险事件 #' + nz(r.triggerEventId) + '</div>' : '') + '</td>' +
+        '<td class="num"><b>' + fmtMoney(r.amount) + '</b></td>' +
+        '<td>' + (STR_PILL[r.status] || esc(r.statusLabel)) + '</td>' +
+        '<td style="max-width:280px;white-space:normal;font-size:12.5px" class="dim">' + esc(r.note || '') + '</td>' +
+        '<td class="dim num">' + fmtTime(r.createdAt) + '<div class="sub-line">' + (r.submittedAt ? fmtTime(r.submittedAt) : '—') + '</div></td>' +
+        '<td>' + (r.status === 'draft' ? '<button class="btn btn-sm" onclick="strSubmit(' + r.id + ')">📤 一键报送</button>' : '<span class="dim">—</span>') + '</td></tr>';
+    }).join('');
+    $('#strBody').innerHTML = '<table><thead><tr><th>编号</th><th>用户</th><th>触发规则</th><th>金额</th><th>状态</th><th>说明</th><th>生成 / 报送时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#strSum').innerHTML = ''; $('#strBody').innerHTML = errBox(e); });
+};
+function openStrCreateModal(){
+  api('/api/admin/risk').then(function(d){
+    var list = (d.list || []).slice(0, 40);
+    STR_EVENTS = list;
+    if (!list.length){
+      showModal('➕ 从风险事件生成 STR', '<div class="notice">当前没有风险事件 — 在「风控中心 → 风险事件」或用户端触发规则后可生成。</div>' +
+        '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">知道了</button></div>');
+      return;
+    }
+    showModal('➕ 从风险事件生成 STR 草稿',
+      '<form onsubmit="return strCreateDo(event)">' +
+      '<div class="field"><label>选择风险事件 *</label><select class="select" id="strEventSel">' +
+      list.map(function(ev){ return '<option value="' + ev.id + '">#' + ev.id + ' · ' + esc(ev.user) + ' · ' + esc(ev.levelLabel || ev.level) + ' · ' + fmtMoney(ev.amount) + ' · ' + esc(String(ev.reason || '').slice(0, 40)) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="dim" style="margin:8px 0 12px">生成后为<b>草稿</b>状态, 补充分析说明后可一键报送监管门户(模拟)。</div>' +
+      '<div class="form-foot"><button type="button" class="btn-outline" onclick="closeModal()">取消</button><button type="submit" class="btn">生成草稿</button></div></form>');
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function strCreateDo(e){
+  e.preventDefault();
+  var evId = +$('#strEventSel').value;
+  post('/api/admin/compliance/str', { riskEventId: evId }).then(function(r){
+    closeModal();
+    toast(r.note || 'STR 草稿已生成');
+    LOADERS.compStr();
+  }).catch(function(e2){ toast(e2.message, 'err'); });
+  return false;
+}
+function strSubmit(id){
+  post('/api/admin/compliance/str/' + id + '/submit').then(function(r){
+    toast(r.note || '已报送');
+    LOADERS.compStr();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 55. 证件管理 ---- */
+LOADERS.compDocs = function(){
+  $('#cdBody').innerHTML = loadingBox();
+  api('/api/admin/compliance/docs').then(function(d){
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#cdSum').innerHTML =
+      sc('🪪', '#e0f2fe', s.total, '证件总数') + sc('⛔', '#fee2e2', s.expired, '已过期') + sc('🚨', '#fee2e2', s.d7, '7 天内') +
+      sc('⚠️', '#fef3c7', s.d30, '30 天内') + sc('🕒', '#f1f5f9', s.d90, '90 天内') + sc('✅', '#dcfce7', s.ok, '有效');
+    var list = d.list || [];
+    CD_LIST = list;
+    renderCompDocs();
+  }).catch(function(e){ $('#cdSum').innerHTML = ''; $('#cdBody').innerHTML = errBox(e); });
+};
+var CD_LIST = [];
+function renderCompDocs(){
+  var tier = $('#cdTierSel') ? $('#cdTierSel').value : '';
+  var list = CD_LIST.filter(function(d){ return !tier || d.tier === tier; });
+  if (!list.length){ $('#cdBody').innerHTML = emptyBox('暂无该档位证件'); return; }
+  var rows = list.map(function(d){
+    return '<tr' + (d.tier === 'expired' || d.tier === 'd7' || d.tier === 'd30' ? ' style="background:#fff7ed"' : '') + '>' +
+      '<td class="num dim">#' + nz(d.id) + '</td>' +
+      '<td><b>' + esc(d.userName) + '</b><div class="sub-line dim">UID ' + nz(d.userId) + '</div></td>' +
+      '<td>' + esc(d.country) + '</td>' +
+      '<td>' + esc(d.typeLabel) + '</td>' +
+      '<td class="num">' + esc(d.number) + '</td>' +
+      '<td class="num">' + esc(d.expiryDay) + '</td>' +
+      '<td class="num"><b>' + nz(d.daysLeft) + '</b> 天</td>' +
+      '<td>' + (DOC_TIER_PILL[d.tier] || esc(d.tierLabel)) + '</td></tr>';
+  }).join('');
+  $('#cdBody').innerHTML = '<table><thead><tr><th>ID</th><th>用户</th><th>国家</th><th>类型</th><th>号码</th><th>有效期至</th><th>剩余</th><th>档位</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+/* ---- 56. 合规案件 ---- */
+var CC_LIST = [];
+LOADERS.compCases = function(){
+  $('#ccBody').innerHTML = loadingBox();
+  api('/api/admin/compliance/cases').then(function(d){
+    CC_LIST = d.list || [];
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#ccSum').innerHTML =
+      sc('🗂️', '#e0f2fe', s.total, '案件总数') + sc('📮', '#dbeafe', s.open, '待处理') + sc('🔍', '#fef3c7', s.investigating, '调查中') + sc('🗄️', '#f1f5f9', s.closed, '已结案');
+    renderCompCases();
+  }).catch(function(e){ $('#ccSum').innerHTML = ''; $('#ccBody').innerHTML = errBox(e); });
+};
+function renderCompCases(){
+  var st = $('#ccStatusSel') ? $('#ccStatusSel').value : '';
+  var typePill = { aml: '<span class="pill pill-red">AML</span>', kyc: '<span class="pill pill-blue">KYC</span>', kyb: '<span class="pill pill-indigo">KYB</span>', str: '<span class="pill pill-amber">STR</span>' };
+  var list = CC_LIST.filter(function(c){ return !st || c.status === st; });
+  if (!list.length){ $('#ccBody').innerHTML = emptyBox('暂无该状态案件'); return; }
+  var rows = list.map(function(c){
+    return '<tr style="cursor:pointer" onclick="openCaseDrawer(' + c.id + ')">' +
+      '<td class="num"><b>#' + nz(c.id) + '</b></td>' +
+      '<td>' + (typePill[c.type] || esc(c.typeLabel)) + '</td>' +
+      '<td><b>' + esc(c.title) + '</b><div class="sub-line dim">' + esc(c.linkedRef || '') + '</div></td>' +
+      '<td>' + (CC_PILL[c.status] || esc(c.status)) + '</td>' +
+      '<td>' + esc(c.owner) + '</td>' +
+      '<td class="dim num">' + fmtTime(c.createdAt) + '</td></tr>';
+  }).join('');
+  $('#ccBody').innerHTML = '<table><thead><tr><th>案件号</th><th>类型</th><th>标题 / 关联</th><th>状态</th><th>负责人</th><th>立案时间</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function openCaseDrawer(id){
+  var c = CC_LIST.filter(function(x){ return x.id === id; })[0];
+  if (!c) return;
+  var typePill = { aml: '<span class="pill pill-red">AML 反洗钱</span>', kyc: '<span class="pill pill-blue">KYC 尽调</span>', kyb: '<span class="pill pill-indigo">KYB 企业尽调</span>', str: '<span class="pill pill-amber">STR 报送跟进</span>' };
+  var info = [
+    ['案件号', '<b class="num">#' + nz(c.id) + '</b>'],
+    ['类型', typePill[c.type] || esc(c.typeLabel)],
+    ['标题', '<b>' + esc(c.title) + '</b>'],
+    ['关联对象', esc(c.linkedRef || '—')],
+    ['状态', CC_PILL[c.status] || esc(c.status)],
+    ['负责人', esc(c.owner)],
+    ['立案时间', '<span class="num">' + fmtTime(c.createdAt) + '</span>']
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+  var tlHtml = '<div class="tl">' + (c.timeline || []).map(function(t){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + esc(t.node) + '</span><span class="num">' + fmtTime(t.ts) + '</span><span class="dim">· ' + esc(t.operator) + '</span></div>' +
+      '<div class="tl-content">' + esc(t.note || '') + '</div></div>';
+  }).join('') + '</div>';
+  var foot = '';
+  if (c.status === 'open') {
+    foot = '<button class="btn-outline" onclick="caseAction(' + c.id + ',\'close\')">🗄️ 直接结案</button>' +
+      '<button class="btn" onclick="caseAction(' + c.id + ',\'investigate\')">🔍 开始调查</button>';
+  } else if (c.status === 'investigating') {
+    foot = '<button class="btn" onclick="caseAction(' + c.id + ',\'close\')">🗄️ 结案归档</button>';
+  } else {
+    foot = '<button class="btn-outline" onclick="caseAction(' + c.id + ',\'reopen\')">🔁 重新立案</button>';
+  }
+  showDrawer('🗂️ 合规案件 #' + c.id + ' ' + (CC_PILL[c.status] || ''),
+    '<div class="info-grid">' + info + '</div>' +
+    ovSection('🕒 案件时间轴(立案 → 调查 → 结案)', tlHtml),
+    '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">' + foot + '<button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+}
+function caseAction(id, action){
+  var LABEL = { investigate: '🔍 开始调查', close: '🗄️ 结案归档', reopen: '🔁 重新立案' };
+  var DEF = { investigate: '调取关联 KYC / 交易 / 筛查记录, 进入调查', close: '调查完毕, 结案归档', reopen: '有新线索, 重新立案调查' };
+  showModal(LABEL[action] + ' · 案件 #' + id,
+    '<div class="field"><label>处理说明(可选)</label><textarea class="textarea" id="ccNote" rows="2" placeholder="留空使用默认: ' + esc(DEF[action]) + '"></textarea></div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="caseActionDo(' + id + ',\'' + action + '\')">' + LABEL[action] + '</button></div>');
+}
+function caseActionDo(id, action){
+  var note = $('#ccNote') ? $('#ccNote').value.trim() : '';
+  post('/api/admin/compliance/cases/' + id + '/action', { action: action, note: note }).then(function(r){
+    closeModal(); closeDrawer();
+    toast('案件 #' + id + ' → ' + (r.case ? r.case.status : '已处理'));
+    LOADERS.compCases();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 57. 国家政策 ---- */
+LOADERS.compCountries = function(){
+  $('#cnBody').innerHTML = loadingBox();
+  api('/api/admin/compliance/countries').then(function(d){
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#cnSum').innerHTML =
+      sc('🌍', '#e0f2fe', s.total, '国家/地区') + sc('✅', '#dcfce7', s.allowed, '允许') + sc('⚠️', '#fef3c7', s.restricted, '限制') + sc('⛔', '#fee2e2', s.prohibited, '禁止');
+    var list = d.list || [];
+    var rows = list.map(function(c){
+      return '<tr' + (c.level === 'prohibited' ? ' style="background:#fef2f2"' : c.level === 'restricted' ? ' style="background:#fffbeb"' : '') + '>' +
+        '<td><b class="num">' + esc(c.cc) + '</b></td>' +
+        '<td>' + esc(c.country) + '</td>' +
+        '<td>' + (CN_PILL[c.level] || esc(c.level)) + '</td>' +
+        '<td style="white-space:normal;font-size:12.5px" class="dim">' + esc(c.notes || '') + '</td></tr>';
+    }).join('');
+    $('#cnBody').innerHTML = '<table><thead><tr><th>代码</th><th>国家/地区</th><th>政策级别</th><th>说明</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#cnSum').innerHTML = ''; $('#cnBody').innerHTML = errBox(e); });
+};
 
 /* ================= 登录 / 身份 ================= */
 function renderAccounts(list){

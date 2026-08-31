@@ -45,6 +45,8 @@ let openApps, openKeys, openWebhooks, openApiLogs; // P4.5 开放平台: 应用 
 let notifyTemplates, notifySends, notifyChannels; // P4.6 消息通知中心: 模板 / 发送记录 / 渠道配置
 let approvals; // P4.2 审批中心: 5 类流程实例(发卡/KYC升级/退款/佣金结算/调账), 节点支持或签/会签
 let engineRules, engineHits, engineVersions; // P4.3 风控规则引擎: 结构化规则 / 命中记录 / 策略版本
+let orchAdapters, orchTxs, orchHealthLog, orchWebhookLogs, orchReconFixed; // P5.1 支付编排: 适配器注册表 / 编排交易 / 健康探测日志 / 出站通知记录 / 对账已处理差异
+let kybCases, sanctions, peps, strReports, userDocs, compCases, countryRules; // P5.2 合规中心: KYB / 制裁名单 / PEP / STR / 证件 / 合规案件 / 国家政策
 let inited = false;
 function initSeed() {
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
@@ -564,6 +566,217 @@ engineVersions = [
   { ver: 'v1.0', at: daysAgo(45), by: 'Noura Al-Faisal', note: '初始策略上线: 5 条内置规则覆盖 拦截/审核/冻结/标记 四类动作', changes: ['创建规则: 大额交易拦截 / 高风险地区交易 / 24 小时高频交易 / 连续支付失败保护 / 新设备大额充值'] },
   { ver: 'v1.1', at: daysAgo(18), by: 'Noura Al-Faisal', note: '收紧大额拦截口径', changes: ['规则「大额交易拦截」条件 amount > 2000 → amount > 1000'] },
   { ver: 'v1.2', at: daysAgo(6), by: 'Noura Al-Faisal', note: '停用新设备观察规则', changes: ['规则「新设备大额充值」启用 → 停用'] },
+];
+
+// ---------------- P5.1 支付编排种子: 适配器注册表 / 编排交易(覆盖状态机全边) / 健康日志 / 出站通知 ----------------
+orchAdapters = [
+  { id: 301, kind: 'fiat_gateway', name: 'Visanet-ME (mock)', status: 'healthy', priority: 10, enabled: true, manual: false,
+    feeRate: 0.018, feeFixed: 0.3, latencyMs: 420, successRate: 99.2, mttdMs: 8000,
+    caps: { currencies: ['USD', 'AED', 'SAR', 'QAR', 'KWD', 'EGP'], scenes: ['topup_fiat', 'pay'], binRanges: [], note: '中东 Visa 收单主力通道, 支持法币充值与卡消费授权' } },
+  { id: 302, kind: 'fiat_gateway', name: 'MEPS (mock)', status: 'healthy', priority: 20, enabled: true, manual: false,
+    feeRate: 0.012, feeFixed: 0.8, latencyMs: 650, successRate: 97.8, mttdMs: 12000,
+    caps: { currencies: ['USD', 'SAR', 'AED'], scenes: ['topup_fiat', 'pay'], binRanges: [], note: '本地借记网络, 费率更低但成功率略低, 天然备选' } },
+  { id: 303, kind: 'crypto_gateway', name: 'USDT-TRC20 Gateway', status: 'healthy', priority: 10, enabled: true, manual: false,
+    feeRate: 0.005, feeFixed: 1, latencyMs: 1800, successRate: 98.6, mttdMs: 30000,
+    caps: { currencies: ['USD', 'USDT'], scenes: ['topup_crypto'], binRanges: [], note: 'TRC20 链上入金, 6 确认后回调, 单独的 30s 超时补偿窗口' } },
+  { id: 304, kind: 'card_issuer', name: 'IssueCo (mock)', status: 'healthy', priority: 10, enabled: true, manual: false,
+    feeRate: 0, feeFixed: 3, latencyMs: 300, successRate: 99.6, mttdMs: 6000,
+    caps: { currencies: ['USD'], scenes: ['pay', 'issue_card'], binRanges: ['5533', '5299'], note: '主发卡行, 5533/5299 BIN 段发卡与实时授权' } },
+  { id: 305, kind: 'card_issuer', name: 'CardWorks (mock)', status: 'degraded', priority: 20, enabled: true, manual: false,
+    feeRate: 0, feeFixed: 5, latencyMs: 950, successRate: 94.1, mttdMs: 9000,
+    caps: { currencies: ['USD'], scenes: ['pay', 'issue_card'], binRanges: ['4571'], note: '备用发卡行(4571 BIN), 当前授权延迟升高处于降级' } },
+  { id: 306, kind: 'kyc', name: 'IdentityGuard KYC (mock)', status: 'healthy', priority: 10, enabled: true, manual: false,
+    feeRate: 0, feeFixed: 0.9, latencyMs: 2400, successRate: 99.0, mttdMs: 15000,
+    caps: { currencies: [], scenes: ['kyc'], binRanges: [], note: '证件 OCR + 活体检测, 每次核验 $0.9, 不参与资金路由表' } },
+  { id: 307, kind: 'fx', name: 'GulfFX Desk (mock)', status: 'healthy', priority: 10, enabled: true, manual: false,
+    feeRate: 0.003, feeFixed: 0, latencyMs: 220, successRate: 99.9, mttdMs: 5000,
+    caps: { currencies: ['USD', 'AED', 'SAR', 'QAR', 'KWD'], scenes: ['fx'], binRanges: [], note: 'USD↔AED/SAR/QAR/KWD 换汇报价, 点差 0.3%' } },
+  { id: 308, kind: 'settlement', name: 'Payout Rails (mock)', status: 'healthy', priority: 10, enabled: true, manual: false,
+    feeRate: 0.001, feeFixed: 1.5, latencyMs: 3000, successRate: 99.3, mttdMs: 60000,
+    caps: { currencies: ['USD', 'AED', 'SAR'], scenes: ['settle'], binRanges: [], note: '佣金/商户出金打款, T+0/T+1 轨道' } },
+];
+orchHealthLog = [
+  { id: 980001, adapterId: 305, at: daysAgo(2, 8), type: 'probe', from: 'healthy', to: 'degraded', latencyMs: 940, successRate: 95.8, note: '探测: 授权 P95 超阈值, 自动降级(降权路由)' },
+  { id: 980002, adapterId: 304, at: daysAgo(2, 8), type: 'probe', from: 'healthy', to: 'healthy', latencyMs: 310, successRate: 99.6, note: '探测: 正常' },
+  { id: 980003, adapterId: 301, at: daysAgo(1, 20), type: 'probe', from: 'healthy', to: 'healthy', latencyMs: 435, successRate: 99.1, note: '探测: 正常' },
+  { id: 980004, adapterId: 303, at: daysAgo(1, 6), type: 'probe', from: 'healthy', to: 'healthy', latencyMs: 1760, successRate: 98.5, note: '探测: 链上确认正常' },
+];
+orchWebhookLogs = [
+  { id: 980101, orchTxId: null, event: 'heartbeat', payload: { ok: true }, url: 'https://biz.alrashid.example/webhook/ucard', status: 200, at: daysAgo(1, 4) },
+];
+orchReconFixed = [];
+const refTxId = (pred) => { const t = refTx(pred); return t ? t.id : null; }; // 取一笔种子交易 id 做编排单本地账务关联
+// 编排交易种子: 覆盖状态机每条边 created→pending→processing→success|failed|reversed|refunded
+orchTxs = [];
+// topup_fiat ×3: success / failed / pending
+mkOrchTx({ scene: 'topup_fiat', amount: 500, currency: 'USD', adapterId: 301, state: 'success', key: 'idem-topup-5001', ageD: 6, localRef: refTxId(t => t.type === 'topup' && t.status === 'success' && t.userId === 1), channelStatus: 'success' });
+mkOrchTx({ scene: 'topup_fiat', amount: 300, currency: 'SAR', adapterId: 302, state: 'success', key: 'idem-topup-5002', ageD: 5, localRef: refTxId(t => t.type === 'topup' && t.status === 'success' && t.userId === 4), channelStatus: 'success' });
+mkOrchTx({ scene: 'topup_fiat', amount: 1000, currency: 'AED', adapterId: 301, state: 'failed', failNote: '渠道返回 05-Do Not Honor', ageD: 4, key: 'idem-topup-5003' });
+mkOrchTx({ scene: 'topup_fiat', amount: 200, currency: 'USD', adapterId: 301, state: 'pending', ageD: 0, hoursAgo: 1, key: 'idem-topup-5004', channelStatus: null });
+// topup_crypto ×3: success / success(对账差异1: 渠道成功本地缺账) / processing
+mkOrchTx({ scene: 'topup_crypto', amount: 800, currency: 'USD', adapterId: 303, state: 'success', key: 'idem-crypto-6001', ageD: 5, localRef: refTxId(t => t.type === 'topup' && t.status === 'success' && t.userId === 2), channelStatus: 'success' });
+mkOrchTx({ scene: 'topup_crypto', amount: 650, currency: 'USDT', adapterId: 303, state: 'success', key: 'idem-crypto-6002', ageD: 3, localRef: null, channelStatus: 'success', userId: 3, reconSeed: 'channel_success_local_missing' }); // 对账差异: 渠道成功/本地缺账
+mkOrchTx({ scene: 'topup_crypto', amount: 400, currency: 'USDT', adapterId: 303, state: 'processing', ageD: 0, hoursAgo: 2, key: 'idem-crypto-6003', channelStatus: null });
+// pay ×5: success ×2 / failed / success→reversed / success→refunded
+mkOrchTx({ scene: 'pay', amount: 128.4, currency: 'USD', adapterId: 304, state: 'success', key: 'idem-pay-7001', ageD: 4, localRef: refTxId(t => t.type === 'consume' && t.status === 'success' && t.userId === 1), channelStatus: 'success' });
+mkOrchTx({ scene: 'pay', amount: 89.9, currency: 'USD', adapterId: 304, state: 'success', key: 'idem-pay-7002', ageD: 3, localRef: refTxId(t => t.type === 'consume' && t.status === 'success' && t.userId === 4), channelStatus: 'success' });
+mkOrchTx({ scene: 'pay', amount: 220, currency: 'USD', adapterId: 305, state: 'failed', failNote: '发卡行授权超时(降级渠道)', ageD: 3, key: 'idem-pay-7003' });
+mkOrchTx({ scene: 'pay', amount: 76.2, currency: 'USD', adapterId: 304, state: 'reversed', key: 'idem-pay-7004', ageD: 2, localRef: null, channelStatus: 'reversed' });
+mkOrchTx({ scene: 'pay', amount: 45, currency: 'USD', adapterId: 304, state: 'refunded', key: 'idem-pay-7005', ageD: 2, localRef: null, channelStatus: 'refunded' });
+// pay: local-success-channel-timeout 对账差异(本地已入账, 渠道一直未回调)
+const reconLocalTx = { id: nid(), type: 'consume', userId: 1, cardId: 1, amount: 158.6, fee: 3.17, method: 'card', merchant: 'Noon', pointsEarned: 0, pointsUsed: 0, status: 'success', ref: 'ORCH-CH-TIMEOUT', createdAt: daysAgo(1, 5) };
+transactions.push(reconLocalTx);
+transactions.sort((a, b) => b.createdAt - a.createdAt);
+mkOrchTx({ scene: 'pay', amount: 158.6, currency: 'USD', adapterId: 305, state: 'processing', ageD: 1, hoursAgo: 5, key: 'idem-pay-7006', channelStatus: 'timeout', userId: 1, localRef: reconLocalTx.id, reconSeed: 'local_success_channel_timeout' });
+// issue_card ×3: success / created / failed
+mkOrchTx({ scene: 'issue_card', amount: 5, currency: 'USD', adapterId: 304, state: 'success', key: 'idem-card-8001', ageD: 8, channelStatus: 'success' });
+mkOrchTx({ scene: 'issue_card', amount: 15, currency: 'USD', adapterId: 304, state: 'created', ageD: 0, hoursAgo: 0, key: 'idem-card-8002', channelStatus: null });
+mkOrchTx({ scene: 'issue_card', amount: 1, currency: 'USD', adapterId: 305, state: 'failed', failNote: '备用发卡行 4571 BIN 段库存不足', ageD: 6, key: 'idem-card-8003' });
+// fx ×2: success / pending
+mkOrchTx({ scene: 'fx', amount: 10000, currency: 'AED', adapterId: 307, state: 'success', key: 'idem-fx-9001', ageD: 4, channelStatus: 'success' });
+mkOrchTx({ scene: 'fx', amount: 5000, currency: 'SAR', adapterId: 307, state: 'pending', ageD: 0, hoursAgo: 1, key: 'idem-fx-9002', channelStatus: null });
+// settle ×2: success / pending + pay 1 笔渠道成功本地缺账(对账差异2)
+mkOrchTx({ scene: 'settle', amount: 286.4, currency: 'USD', adapterId: 308, state: 'success', key: 'idem-stl-10001', ageD: 9, channelStatus: 'success' });
+mkOrchTx({ scene: 'settle', amount: 420.7, currency: 'AED', adapterId: 308, state: 'pending', ageD: 0, hoursAgo: 3, key: 'idem-stl-10002', channelStatus: null });
+mkOrchTx({ scene: 'pay', amount: 95.4, currency: 'USD', adapterId: 304, state: 'success', key: 'idem-pay-7007', ageD: 2, localRef: null, channelStatus: 'success', userId: 2, reconSeed: 'channel_success_local_missing' });
+// 幂等演示固定单: 相同 key 重复提交返回同一订单
+mkOrchTx({ scene: 'topup_fiat', amount: 999, currency: 'USD', adapterId: 301, state: 'success', key: 'DEMO-IDEM-KEY-001', ageD: 1, channelStatus: 'success' });
+
+// ---------------- P5.2 合规中心种子 ----------------
+// 制裁名单 ×25(OFAC/EU/UN), 其中「Ali Al-Mansouri」与持卡人 #9 同名(演示筛查命中)
+sanctions = [
+  ['Ali Al-Mansouri', ['A. Al-Mansouri', 'Ali Mansouri'], 'individual', 'AE', 'OFAC', 'SDN 名单 · 涉恐融资关联'],
+  ['Yousef Al-Anzi', ['Yusuf Al-Anzi', 'Yousef Anzi'], 'individual', 'KW', 'UN', '联合国安理会综合名单'],
+  ['Mahmoud Al-Jabr', ['M. Al-Jabr'], 'individual', 'IQ', 'OFAC', 'SDN 名单 · 武器采购网络'],
+  ['Hassan Nasrallah Group', ['HNG Trading'], 'entity', 'LB', 'OFAC', 'SDN 名单 · 实体制裁'],
+  ['Islamic Revolutionary Wallet Corp', ['IRWC'], 'entity', 'IR', 'EU', '欧盟综合制裁名单'],
+  ['Kim Chol-su', ['Kim Chol Su'], 'individual', 'KP', 'UN', '大规模杀伤性武器扩散'],
+  ['Omar Al-Baghdadi Estate', [], 'entity', 'SY', 'OFAC', 'SDN 名单 · 资产冻结'],
+  ['Fatima Al-Zahra Foundation', ['FZF Charity'], 'entity', 'SY', 'EU', '欧盟综合制裁名单'],
+  ['Abdul Rahman Al-Sudais Trading', ['ARAS Trading'], 'entity', 'YE', 'OFAC', 'SDN 名单 · 资金转移'],
+  ['Walid Makled Garcia', ['W. Makled'], 'individual', 'VE', 'OFAC', 'SDN 名单 · 毒品走私'],
+  ['Sergei Ivanov Corp', ['SIC Holdings'], 'entity', 'RU', 'EU', '欧盟制裁 · 侵乌相关'],
+  ['Viktor Zolotov', ['V. Zolotov Jr.'], 'individual', 'RU', 'OFAC', 'SDN 名单 · 特别指定国民'],
+  ['Hafiz Muhammad Saeed', ['H. M. Saeed'], 'individual', 'PK', 'UN', '联合国安理会综合名单'],
+  ['Abd al-Nasr Ghali', [], 'individual', 'LY', 'UN', '资产冻结名单'],
+  ['Khalid Al-Masri Network', ['KAM Network'], 'entity', 'EG', 'OFAC', 'SDN 名单 · 汇款网络'],
+  ['Nasr Al-Din Lijun', [], 'individual', 'SD', 'OFAC', 'SDN 名单 · 军火中间人'],
+  ['Al-Salam Exchange House', ['ASEH'], 'entity', 'QA', 'OFAC', 'SDN 名单 · 非正式价值转移'],
+  ['Rida Al-Khouja', ['R. Khouja'], 'individual', 'TN', 'EU', '欧盟综合制裁名单'],
+  ['Mohammed Dahlan Holdings', ['MDH Group'], 'entity', 'PS', 'EU', '欧盟制裁名单'],
+  ['Faisal Al-Maliki', ['F. Al-Maliki'], 'individual', 'BH', 'OFAC', 'SDN 名单 · 融资中介'],
+  ['Zaher Al-Husseini', [], 'individual', 'JO', 'OFAC', 'SDN 名单 · 贸易洗钱'],
+  ['Gulf Shadow Shipping LLC', ['GSS LLC'], 'entity', 'AE', 'UN', '违反石油禁运'],
+  ['Abu Zayd Al-Kuwaiti', ['A. Z. Kuwaiti'], 'individual', 'KW', 'UN', '安理会综合名单'],
+  ['Nadia Al-Amin Trust', ['NAT Trust'], 'entity', 'SD', 'OFAC', 'SDN 名单 · 慈善掩护实体'],
+  ['Tariq Bin Ziyad Brigade Fund', ['TBZ Fund'], 'entity', 'LY', 'EU', '欧盟综合制裁名单'],
+].map((r, i) => ({ id: 7001 + i, name: r[0], aliases: r[1], type: r[2], country: r[3], listSource: r[4], note: r[5] }));
+// PEP 名单 ×15, 其中「Fatima Hassan」与持卡人 #2 同名(演示筛查命中)
+peps = [
+  ['Fatima Hassan', '议会财政委员会成员', 'AE', 'high'],
+  ['Mohammed Al-Ghannashi', '国企石油公司董事', 'LY', 'high'],
+  ['Salman Al-Mahmoud', '王室办公室顾问', 'QA', 'high'],
+  ['Nasser Al-Kaabi', '市政采购负责人', 'QA', 'medium'],
+  ['Ayman Al-Zahrani', '海关副署长', 'SA', 'high'],
+  ['Rashid Al-Maktoum Jr.', '自贸区管理局副局长', 'AE', 'medium'],
+  ['Huda Al-Mutairi', '央行监管官员', 'KW', 'high'],
+  ['Yousef Al-Anzi', '国有企业董事会主席', 'KW', 'high'],
+  ['Sami Al-Banna', '国防部采购官', 'JO', 'medium'],
+  ['Laila Al-Sabah', '主权基金投资经理', 'KW', 'medium'],
+  ['Faisal Al-Shammari', '司法部顾问', 'SA', 'low'],
+  ['Mona Al-Rahman', '国有电视台台长', 'EG', 'low'],
+  ['Karim Al-Nassrallah', '驻外使馆参赞', 'LB', 'medium'],
+  ['Adel Al-Hamdan', '国有企业财务总监', 'BH', 'medium'],
+  ['Zainab Al-Moussawi', '石油部合同官', 'IQ', 'high'],
+].map((r, i) => ({ id: 7101 + i, name: r[0], position: r[1], country: r[2], level: r[3] }));
+// 企业 KYB ×6(待审×2 / 通过×2 / 驳回×1 / 补充材料×1), UBO 1-3 人/单
+kybCases = [
+  { id: 7201, company: 'Emirates Tech Trading LLC', regNo: 'AE-DXB-774102', country: 'AE', businessLicense: { no: 'BL-AE-88214', expiry: daysAgo(-400) }, articles: true,
+    bankAccount: { bank: 'Emirates NBD', iban: 'AE** **** **** **** 4821' }, status: 'pending',
+    ubos: [{ name: 'Ahmed Bin Zayed', ownershipPct: 60, nationality: 'AE', pep: false }, { name: 'Yousef Al-Anzi', ownershipPct: 40, nationality: 'KW', pep: true }],
+    submittedBy: '客户自助提交', createdAt: daysAgo(6, 4), reviewedAt: null, timeline: [{ ts: daysAgo(6, 4), node: '提交申请', note: '营业执照 / 公司章程 / 银行账户证明已上传', operator: '客户' }] },
+  { id: 7202, company: 'Doha Logistics W.L.L.', regNo: 'QA-DOH-55318', country: 'QA', businessLicense: { no: 'BL-QA-61022', expiry: daysAgo(-180) }, articles: true,
+    bankAccount: { bank: 'Qatar National Bank', iban: 'QA** **** **** **** 7734' }, status: 'pending',
+    ubos: [{ name: 'Mansour Al-Hail', ownershipPct: 100, nationality: 'QA', pep: false }],
+    submittedBy: '销售 Layla Al-Saad 协助', createdAt: daysAgo(3, 2), reviewedAt: null, timeline: [{ ts: daysAgo(3, 2), node: '提交申请', note: '独资企业, UBO 1 人', operator: 'Layla Al-Saad' }] },
+  { id: 7203, company: 'Riyadh Contracting Co.', regNo: 'SA-RUH-33024', country: 'SA', businessLicense: { no: 'BL-SA-45501', expiry: daysAgo(-260) }, articles: true,
+    bankAccount: { bank: 'Al Rajhi Bank', iban: 'SA** **** **** **** 2091' }, status: 'approved',
+    ubos: [{ name: 'Faisal Al-Otaibi', ownershipPct: 55, nationality: 'SA', pep: false }, { name: 'Maha Al-Qahtani', ownershipPct: 30, nationality: 'SA', pep: false }, { name: 'Sultan Al-Dossary', ownershipPct: 15, nationality: 'SA', pep: false }],
+    submittedBy: '客户自助提交', createdAt: daysAgo(20, 6), reviewedAt: daysAgo(17, 1),
+    timeline: [{ ts: daysAgo(20, 6), node: '提交申请', note: '建筑承包企业, UBO 3 人', operator: '客户' }, { ts: daysAgo(17, 1), node: '合规初审', note: 'UBO 链条完整, 无制裁/PEP 命中', operator: 'Noura Al-Faisal' }, { ts: daysAgo(17, 1), node: '终审通过', note: '批准开通企业钱包与批量发卡', operator: 'Noura Al-Faisal' }] },
+  { id: 7204, company: 'Kuwait Foodstuff Trading Est.', regNo: 'KW-KWC-91837', country: 'KW', businessLicense: { no: 'BL-KW-30988', expiry: daysAgo(-90) }, articles: true,
+    bankAccount: { bank: 'National Bank of Kuwait', iban: 'KW** **** **** **** 5512' }, status: 'approved',
+    ubos: [{ name: 'Huda Al-Amin', ownershipPct: 70, nationality: 'KW', pep: false }, { name: 'Bader Al-Kandari', ownershipPct: 30, nationality: 'KW', pep: false }],
+    submittedBy: '客户自助提交', createdAt: daysAgo(35, 8), reviewedAt: daysAgo(31, 3),
+    timeline: [{ ts: daysAgo(35, 8), node: '提交申请', note: '食品贸易企业', operator: '客户' }, { ts: daysAgo(31, 3), node: '终审通过', note: '材料齐全, 无制裁/PEP 命中', operator: 'Noura Al-Faisal' }] },
+  { id: 7205, company: 'Cairo Digital Media S.A.E.', regNo: 'EG-CAI-12904', country: 'EG', businessLicense: { no: 'BL-EG-77410', expiry: daysAgo(-15) }, articles: false,
+    bankAccount: { bank: 'Banque Misr', iban: 'EG** **** **** **** 0388' }, status: 'rejected',
+    ubos: [{ name: 'Karim Al-Nasser', ownershipPct: 80, nationality: 'LB', pep: false }, { name: 'Nour Al-Hoda', ownershipPct: 20, nationality: 'EG', pep: false }],
+    submittedBy: '客户自助提交', createdAt: daysAgo(12, 5), reviewedAt: daysAgo(9, 2),
+    timeline: [{ ts: daysAgo(12, 5), node: '提交申请', note: '数字媒体公司', operator: '客户' }, { ts: daysAgo(9, 2), node: '合规初审', note: '缺少公司章程, 营业执照 15 天后到期', operator: 'Noura Al-Faisal' }, { ts: daysAgo(9, 2), node: '终审驳回', note: '章程缺失且 UBO 尽调无法完成, 驳回', operator: 'Noura Al-Faisal' }] },
+  { id: 7206, company: 'Manama Fintech Labs BSC', regNo: 'BH-MNM-20456', country: 'BH', businessLicense: { no: 'BL-BH-66120', expiry: daysAgo(-330) }, articles: true,
+    bankAccount: { bank: 'Bank of Bahrain and Kuwait', iban: 'BH** **** **** **** 9104' }, status: 'info_required',
+    ubos: [{ name: 'Adel Al-Fahim', ownershipPct: 50, nationality: 'BH', pep: false }, { name: 'Zainab Al-Moussawi', ownershipPct: 50, nationality: 'IQ', pep: false }],
+    submittedBy: '客户自助提交', createdAt: daysAgo(2, 7), reviewedAt: daysAgo(0, 6),
+    timeline: [{ ts: daysAgo(2, 7), node: '提交申请', note: '金融科技实验室', operator: '客户' }, { ts: daysAgo(0, 6), node: '合规初审', note: 'UBO Zainab Al-Moussawi 国籍为 IQ, 请补充资金来源证明与简历', operator: 'Noura Al-Faisal' }] },
+];
+// STR 可疑交易报告 ×5(draft×2 / submitted×2 / closed×1)
+strReports = [
+  { id: 7301, refNo: 'STR-2026-0041', userId: 11, triggerRule: 'R201 大额交易拦截', triggerEventId: null, amount: 1500, status: 'submitted',
+    note: '单笔充值 $1,500 触发大额拦截后转人工, 资金来源说明与收入不匹配', createdAt: daysAgo(10, 4), submittedAt: daysAgo(8, 2), closedAt: null },
+  { id: 7302, refNo: 'STR-2026-0042', userId: 7, triggerRule: 'R203 24 小时高频交易', triggerEventId: null, amount: 640, status: 'submitted',
+    note: 'KYC L0 用户新开户后 24 小时内 11 笔小额充值后集中消费', createdAt: daysAgo(7, 6), submittedAt: daysAgo(5, 1), closedAt: null },
+  { id: 7303, refNo: 'STR-2026-0043', userId: 6, triggerRule: 'R202 高风险地区交易', triggerEventId: null, amount: 890, status: 'closed',
+    note: '交易发起国不在允许清单, 人工核实为客户出差, 关闭并留档', createdAt: daysAgo(30, 8), submittedAt: daysAgo(28, 3), closedAt: daysAgo(24, 5) },
+  { id: 7304, refNo: 'STR-2026-0044', userId: 11, triggerRule: 'R204 连续支付失败保护', triggerEventId: null, amount: 60, status: 'draft',
+    note: '连续 3 笔支付失败后再次尝试, 疑似卡片信息泄露测试', createdAt: daysAgo(2, 3), submittedAt: null, closedAt: null },
+  { id: 7305, refNo: 'STR-2026-0045', userId: 6, triggerRule: 'R201 大额交易拦截', triggerEventId: null, amount: 1200, status: 'draft',
+    note: '单笔消费 $1,200 被拦截, 商户为高风险 MCC, 待补充分析后报送', createdAt: daysAgo(1, 5), submittedAt: null, closedAt: null },
+];
+// 证件管理: 每持卡人 1-2 件, 2 件临期(12 天/5 天), 1 件 90 天档
+userDocs = [];
+const DOC_TYPES = { passport: '护照', national_id: '国民 ID', driver_license: '驾驶证' };
+for (let i = 0; i < users.length; i++) {
+  const u = users[i];
+  const mainType = i % 3 === 0 ? 'passport' : (i % 3 === 1 ? 'national_id' : 'driver_license');
+  const expDays = i === 0 ? 12 : i === 6 ? 5 : i === 3 ? 85 : ri(200, 900); // 2 件临期 + 1 件 90 天档, 其余正常
+  userDocs.push({ id: 7401 + i * 2, userId: u.id, userName: u.name, country: u.country, type: mainType, typeLabel: DOC_TYPES[mainType], number: maskDocNo('UC' + ri(100000, 999999)), expiry: daysAgo(-expDays), createdAt: daysAgo(ri(100, 400)) });
+  if (i % 2 === 0) { // 一半用户有第二证件
+    const sub = mainType === 'passport' ? 'national_id' : 'passport';
+    userDocs.push({ id: 7402 + i * 2, userId: u.id, userName: u.name, country: u.country, type: sub, typeLabel: DOC_TYPES[sub], number: maskDocNo('UC' + ri(100000, 999999)), expiry: daysAgo(-ri(300, 1000)), createdAt: daysAgo(ri(100, 400)) });
+  }
+}
+// 合规案件 ×4(aml/kyc/kyb/str 各一)
+compCases = [
+  { id: 7501, type: 'aml', title: '持卡人 Ali Al-Mansouri 制裁名单命中', linkedRef: '筛查命中 OFAC SDN · 用户 #9', status: 'investigating', owner: 'Noura Al-Faisal',
+    createdAt: daysAgo(4, 6), timeline: [
+      { ts: daysAgo(4, 6), node: '立案', note: 'AML 全量筛查命中 OFAC 制裁名单(精确匹配), 立即限制出金', operator: '系统' },
+      { ts: daysAgo(3, 2), node: '调查中', note: '调取开户证件与近 30 天交易流水, 比对名单生日/证件号字段', operator: 'Noura Al-Faisal' }] },
+  { id: 7502, type: 'kyc', title: 'Mohammed Al-Mutairi L2 升级材料存疑', linkedRef: 'KYC 案例 · 用户 #3 · 审批单联动', status: 'open', owner: 'Noura Al-Faisal',
+    createdAt: daysAgo(1, 4), timeline: [{ ts: daysAgo(1, 4), node: '立案', note: '银行流水与收入证明金额差异较大, 转合规复核', operator: '系统' }] },
+  { id: 7503, type: 'kyb', title: 'Emirates Tech Trading UBO 为 PEP', linkedRef: 'KYB #7201 · UBO Yousef Al-Anzi', status: 'open', owner: 'Noura Al-Faisal',
+    createdAt: daysAgo(5, 3), timeline: [{ ts: daysAgo(5, 3), node: '立案', note: 'KYB 尽调发现 40% UBO 为高敏感 PEP, 需加强尽调后决定', operator: '系统' }] },
+  { id: 7504, type: 'str', title: 'STR-2026-0042 报送后跟进', linkedRef: 'STR #7302 · 用户 #7', status: 'closed', owner: 'Noura Al-Faisal',
+    createdAt: daysAgo(6, 8), timeline: [
+      { ts: daysAgo(6, 8), node: '立案', note: '高频充值疑似拆分交易, 跟进 STR 报送', operator: '系统' },
+      { ts: daysAgo(5, 1), node: '报送监管', note: 'STR 已通过监管门户报送, 案件转跟进', operator: 'Noura Al-Faisal' },
+      { ts: daysAgo(2, 6), node: '结案', note: '监管回执无进一步行动, 账户维持限额监控, 结案', operator: 'Noura Al-Faisal' }] },
+];
+// 国家/地区政策限制(仅展示, 不接入交易链路)
+countryRules = [
+  { cc: 'SA', country: '沙特阿拉伯', level: 'allowed', notes: '本地监管友好, 支持全量产品' },
+  { cc: 'AE', country: '阿联酋', level: 'allowed', notes: '需 CBUAE 牌照口径展示' },
+  { cc: 'QA', country: '卡塔尔', level: 'allowed', notes: '正常开放' },
+  { cc: 'KW', country: '科威特', level: 'allowed', notes: '正常开放' },
+  { cc: 'EG', country: '埃及', level: 'restricted', notes: '外汇管制: 月累计充值 ≤ $2,000, 需补充资金来源' },
+  { cc: 'BH', country: '巴林', level: 'allowed', notes: '正常开放' },
+  { cc: 'OM', country: '阿曼', level: 'allowed', notes: '正常开放' },
+  { cc: 'TR', country: '土耳其', level: 'restricted', notes: '高通胀法币拒收, 仅开放 USDT 充值' },
+  { cc: 'JO', country: '约旦', level: 'restricted', notes: '发卡白名单城市: 安曼/扎尔卡' },
+  { cc: 'IR', country: '伊朗', level: 'prohibited', notes: '全面制裁, 禁止开户/入金/出金' },
+  { cc: 'SY', country: '叙利亚', level: 'prohibited', notes: '全面制裁, 禁止一切交易' },
+  { cc: 'KP', country: '朝鲜', level: 'prohibited', notes: '全面制裁, 禁止一切交易' },
+  { cc: 'IQ', country: '伊拉克', level: 'restricted', notes: '仅 KYC L2 可入金, 单月 ≤ $5,000' },
 ];
 
 rebuildLedgerSeed(); // P4.4: 为种子交易回填复式账本(与卡余额自洽) + 14 天余额快照 + 演示冻结余额
@@ -1548,6 +1761,215 @@ const OPEN_MOCKS = {
 };
 
 
+// ---------------- P5.1 支付编排: 模块级模型与工具(routeFor 供后续波次复用) ----------------
+const ORCH_SCENE_KIND = { topup_fiat: 'fiat_gateway', topup_crypto: 'crypto_gateway', pay: 'card_issuer', issue_card: 'card_issuer', fx: 'fx', settle: 'settlement' };
+const ORCH_SCENE_LABEL = { topup_fiat: '法币充值', topup_crypto: '加密充值', pay: '卡消费授权', issue_card: '发卡', fx: '换汇', settle: '结算打款' };
+const ORCH_KIND_LABEL = { fiat_gateway: '法币收单网关', crypto_gateway: '加密支付网关', card_issuer: '发卡机构', kyc: 'KYC 认证', fx: '汇率/换汇', settlement: '结算打款' };
+const ORCH_STATE_LABEL = { created: '已创建', pending: '待受理', processing: '处理中', success: '成功', failed: '失败', reversed: '已冲正', refunded: '已退款' };
+// 状态机: created → pending → processing → success(├ failed ├ reversed └ refunded); failed 可重放回 pending/processing
+const ORCH_NEXT = { created: ['pending', 'failed'], pending: ['processing', 'failed', 'success'], processing: ['success', 'failed'], success: ['reversed', 'refunded'], failed: ['pending', 'processing'], reversed: [], refunded: [] };
+const ORCH_STATE_PATHS = {
+  created: ['created'], pending: ['created', 'pending'], processing: ['created', 'pending', 'processing'],
+  success: ['created', 'pending', 'processing', 'success'], failed: ['created', 'pending', 'failed'],
+  reversed: ['created', 'pending', 'processing', 'success', 'reversed'], refunded: ['created', 'pending', 'processing', 'success', 'refunded'],
+};
+const ORCH_TL_NOTES = { created: '编排单创建, 路由决策完成', pending: '已提交渠道, 等待渠道受理回执', processing: '渠道受理中, 执行扣款/授权', success: '渠道确认成功, 终态', failed: '渠道返回失败, 终态(可重放)', reversed: '渠道侧冲正, 撤销已授权交易', refunded: '原路退款成功' };
+function maskDocNo(no) { const s = String(no || ''); return s.length <= 4 ? s : s.slice(0, 2) + '***' + s.slice(-3); }
+function orchFeeOf(a, amount) { return +(((a.feeRate || 0) * (+amount || 0) + (a.feeFixed || 0)).toFixed(2)); }
+function orchEffPriority(a) { return (a.priority || 99) + (a.status === 'degraded' ? 100 : 0); } // 降级渠道降权 100, 仍可被路由(无更优备选时)
+function orchById(id) { return orchAdapters.find(a => a.id === +id); }
+// 渠道路由决策(模块级, 供编排 API 与后续波次调用): 场景×币种 → 选中渠道 + 备选 + 决策原因
+function routeFor(scene, currency) {
+  const BASE = 1000; // 费率比较基数 $1000
+  const kind = ORCH_SCENE_KIND[scene];
+  if (!kind) return { scene, currency: currency || '', adapter: null, backup: null, reason: '未知场景: ' + scene, candidates: [] };
+  const all = orchAdapters.filter(a => a.enabled !== false && a.kind === kind
+    && (a.caps.scenes || []).includes(scene)
+    && (!currency || !(a.caps.currencies || []).length || (a.caps.currencies || []).includes(currency)));
+  const usable = all.filter(a => a.status !== 'down').sort((a, b) => orchEffPriority(a) - orchEffPriority(b) || orchFeeOf(a, BASE) - orchFeeOf(b, BASE));
+  const head = [...all].sort((a, b) => (a.priority || 99) - (b.priority || 99))[0] || null;
+  if (!usable.length) return { scene, currency: currency || '', adapter: null, backup: null,
+    reason: all.length ? '该场景全部渠道宕机, 暂不可路由(自动熔断)' : '无支持 场景=' + scene + (currency ? ' / 币种=' + currency : '') + ' 的渠道', candidates: [] };
+  const adapter = usable[0], backup = usable[1] || null;
+  let reason = '健康检查通过, 按渠道优先级路由';
+  if (head && head.id !== adapter.id) reason = head.status === 'down'
+    ? '首选渠道 ' + head.name + ' 宕机, 自动故障切换至 ' + adapter.name
+    : '首选渠道 ' + head.name + ' 降级降权, 路由至 ' + adapter.name;
+  else if (adapter.status === 'degraded') reason = '首选渠道 ' + adapter.name + ' 降级中且无更优备选, 继续使用(降权提示)';
+  const cheaper = usable.slice(1).filter(x => orchFeeOf(x, BASE) < orchFeeOf(adapter, BASE));
+  if (cheaper.length) reason += '; 备选 ' + cheaper[0].name + ' 千美元成本更低, 可下调其优先级切换';
+  return { scene, currency: currency || '', adapter, backup, reason, candidates: usable };
+}
+// 种子编排单构造(initSeed 调用; attempts/callbacks/timeline 按目标状态回溯生成)
+function mkOrchTx(o) {
+  const t = {
+    id: nid(), scene: o.scene, sceneLabel: ORCH_SCENE_LABEL[o.scene] || o.scene,
+    amount: +(+o.amount || 0).toFixed(2), currency: o.currency || 'USD',
+    adapterId: o.adapterId, state: o.state, idempotencyKey: o.key || null,
+    timeoutMs: o.timeoutMs || (o.scene === 'topup_crypto' ? 30000 : 15000),
+    attempts: [], callbacks: [], timeline: [],
+    userId: o.userId != null ? o.userId : null, localRef: o.localRef != null ? o.localRef : null,
+    channelStatus: o.channelStatus || null, note: o.failNote || '', reconSeed: o.reconSeed || null, reconFixed: null,
+    createdAt: o.hoursAgo != null ? now() - o.hoursAgo * 36e5 : daysAgo(o.ageD != null ? o.ageD : 1, 6),
+    updatedAt: now(),
+  };
+  const steps = ORCH_STATE_PATHS[o.state] || ['created'];
+  const gap = Math.max(20000, Math.floor((t.timeoutMs * 1.5) / Math.max(1, steps.length)));
+  steps.forEach((s, i) => {
+    t.timeline.push({ ts: t.createdAt + i * gap, from: i ? steps[i - 1] : null, to: s, note: s === 'failed' ? (o.failNote || '渠道返回失败') : (ORCH_TL_NOTES[s] || '') });
+  });
+  t.updatedAt = t.timeline[t.timeline.length - 1].ts;
+  if (steps.includes('pending')) {
+    const a = orchById(o.adapterId);
+    t.attempts.push({ no: 1, adapterId: o.adapterId, at: t.createdAt + gap, latencyMs: a ? a.latencyMs + ri(-40, 60) : ri(200, 900),
+      result: o.state === 'failed' ? 'fail' : 'accepted', note: o.state === 'failed' ? (o.failNote || '渠道拒绝/超时') : '渠道已受理' });
+  }
+  if (['success', 'failed', 'reversed', 'refunded'].includes(o.state)) {
+    t.callbacks.push({ at: t.updatedAt - 4000, type: o.state === 'failed' ? 'fail' : o.state, receipt: 'RCPT-' + ri(100000, 999999), source: 'channel-async-callback', note: '渠道异步回调(种子回放)' });
+  }
+  orchTxs.push(t);
+  return t;
+}
+function pubOrchTx(t) {
+  const a = orchById(t.adapterId);
+  return { ...t, stateLabel: ORCH_STATE_LABEL[t.state] || t.state, sceneLabel: ORCH_SCENE_LABEL[t.scene] || t.scene,
+    adapterName: a ? a.name : '—', kindLabel: a ? ORCH_KIND_LABEL[a.kind] : '', adapterStatus: a ? a.status : 'unknown' };
+}
+// 状态迁移: 校验状态机合法性, 追加时间轴, 终态时补发出站 webhook 通知
+function orchTransit(t, to, note) {
+  if (!(ORCH_NEXT[t.state] || []).includes(to)) return false;
+  const from = t.state;
+  t.state = to;
+  t.timeline.push({ ts: now(), from, to, note: note || ORCH_TL_NOTES[to] || '' });
+  t.updatedAt = now();
+  if (['success', 'failed', 'reversed', 'refunded'].includes(to)) orchNotify(t, to);
+  return true;
+}
+function orchNotify(t, event) {
+  orchWebhookLogs.unshift({
+    id: orchWebhookLogs.length ? Math.max(...orchWebhookLogs.map(w => w.id)) + 1 : 981000,
+    orchTxId: t.id, event, payload: { orchTxId: t.id, scene: t.scene, sceneLabel: ORCH_SCENE_LABEL[t.scene] || t.scene, state: t.state, amount: t.amount, currency: t.currency, idempotencyKey: t.idempotencyKey },
+    url: 'https://biz.example.com/webhook/orch/' + t.id, status: 200, ms: ri(20, 240), at: now(),
+  });
+  if (orchWebhookLogs.length > 100) orchWebhookLogs.length = 100;
+}
+// 对账: 编排单(渠道口径) vs 交易流水(本地口径) vs 资金账本(记账口径) 三方比对
+function orchReconDiffs() {
+  const items = [];
+  orchTxs.forEach(t => {
+    if (!t.reconSeed || t.reconFixed) return;
+    const local = t.localRef != null ? transactions.find(x => x.id === t.localRef) : null;
+    const ledgerOk = t.localRef != null ? ledgerEntries.some(e => e.txId === t.localRef) : false;
+    const base = { id: 790000 + t.id, orchTxId: t.id, scene: t.scene, sceneLabel: ORCH_SCENE_LABEL[t.scene] || t.scene, amount: t.amount, currency: t.currency, state: t.state };
+    if (t.reconSeed === 'channel_success_local_missing') {
+      items.push({ ...base, type: 'channel_success_local_missing', typeLabel: '渠道成功 · 本地缺账', severity: 'high',
+        channelStatus: 'success(有回执)', localStatus: 'missing(无流水)', ledgerStatus: 'missing(未记账)',
+        suggest: '补单: 按渠道回执补录交易流水并记入资金账本' });
+    } else if (t.reconSeed === 'local_success_channel_timeout') {
+      items.push({ ...base, type: 'local_success_channel_timeout', typeLabel: '本地已入账 · 渠道超时', severity: 'medium',
+        channelStatus: 'timeout(未回执)', localStatus: local ? 'success(流水 #' + local.id + ')' : 'success', ledgerStatus: ledgerOk ? 'posted(已记账)' : 'missing',
+        suggest: '补单: 超时补偿重查渠道回执, 关闭在途编排单' });
+    }
+  });
+  return items;
+}
+// 补单: channel_success_local_missing → 补录交易 + 复式记账(与卡余额自洽); local_success_channel_timeout → 超时补偿关闭在途单
+function orchFixDiff(item, byName) {
+  const t = orchTxs.find(x => x.id === item.orchTxId);
+  if (!t) return { error: '编排单不存在' };
+  if (item.type === 'channel_success_local_missing') {
+    const u = users.find(x => x.id === (t.userId || 1)) || users[0];
+    const card = cards.find(c => c.userId === u.id);
+    if (!card) return { error: '用户无在册卡, 无法补单' };
+    let txNew;
+    if (t.scene === 'topup_fiat' || t.scene === 'topup_crypto') {
+      const fee = +(t.amount * 0.01).toFixed(2);
+      txNew = { id: nid(), type: 'topup', userId: u.id, cardId: card.id, amount: t.amount, fee, method: t.scene === 'topup_crypto' ? 'usdt' : 'fiat', ref: 'ORCH' + t.id, pointsEarned: 0, status: 'success', createdAt: now() };
+      card.balance = +(card.balance + t.amount - fee).toFixed(2);
+      transactions.unshift(txNew);
+      ledgerForTopup(txNew, card);
+    } else {
+      const fee = +(t.amount * 0.02).toFixed(2);
+      txNew = { id: nid(), type: 'consume', userId: u.id, cardId: card.id, amount: t.amount, fee, method: 'card', merchant: 'Orch 补单入账', pointsEarned: 0, pointsUsed: 0, status: 'success', ref: 'ORCH' + t.id, createdAt: now() };
+      card.balance = +(card.balance - t.amount).toFixed(2);
+      transactions.unshift(txNew);
+      ledgerForConsume(txNew, card);
+    }
+    t.localRef = txNew.id;
+    t.reconFixed = { at: now(), by: byName, note: '已补录交易流水 #' + txNew.id + ' 并复式记账(渠道回执为成功)' };
+    return { ok: true, localTxId: txNew.id, note: t.reconFixed.note };
+  }
+  if (item.type === 'local_success_channel_timeout') {
+    if (!orchTransit(t, 'success', '对账补单: 超时补偿重查渠道回执, 渠道确认成功, 关闭在途单')) {
+      if (t.state === 'success') return { error: '该编排单已处理过' };
+      return { error: '当前状态 ' + t.state + ' 不可执行超时补偿' };
+    }
+    t.channelStatus = 'success';
+    t.reconFixed = { at: now(), by: byName, note: '超时补偿完成: 渠道回执确认成功, 在途单已关闭' };
+    return { ok: true, note: t.reconFixed.note };
+  }
+  return { error: '未知差异类型' };
+}
+
+// ---------------- P5.2 合规中心: 模块级工具 ----------------
+// 模糊筛查: 姓名精确/包含/别名/词元匹配 + 同国家加成 → 命中明细 + 风险分
+function screenName(name, country) {
+  const q = String(name || '').toLowerCase().trim();
+  const hits = [];
+  const matchOne = (target, aliases) => {
+    const s = String(target || '').toLowerCase();
+    if (q && s === q) return { score: 60, basis: ['姓名精确匹配'] };
+    if (q && s.length >= 6 && (s.includes(q) || q.includes(s))) return { score: 40, basis: ['姓名包含匹配'] };
+    for (const al of (aliases || [])) {
+      const a = String(al).toLowerCase();
+      if (a.length >= 6 && (a === q || a.includes(q) || q.includes(a))) return { score: 35, basis: ['别名命中: ' + al] };
+    }
+    return null;
+  };
+  sanctions.forEach(s => {
+    const m = q ? matchOne(s.name, s.aliases) : null;
+    if (!m) return;
+    if (country && s.country === country) { m.score += 15; m.basis.push('同国家/地区加成'); }
+    hits.push({ kind: 'sanction', listLabel: s.listSource + ' 制裁名单', target: s.name, type: s.type, country: s.country, detail: s.note, aliases: s.aliases, score: Math.min(100, m.score), basis: m.basis });
+  });
+  peps.forEach(p => {
+    const m = q ? matchOne(p.name, []) : null;
+    if (!m) return;
+    if (country && p.country === country) { m.score += 10; m.basis.push('同国家/地区加成'); }
+    hits.push({ kind: 'pep', listLabel: 'PEP 政治公众人物名单', target: p.name, type: 'individual', country: p.country, detail: p.position + ' · 敏感级 ' + p.level, level: p.level, score: Math.min(100, m.score + (p.level === 'high' ? 10 : 0)), basis: m.basis });
+  });
+  hits.sort((a, b) => b.score - a.score);
+  const riskScore = hits.length ? Math.min(100, hits[0].score + (hits.length - 1) * 5) : 0;
+  const grade = riskScore >= 60 ? 'high' : riskScore >= 30 ? 'mid' : hits.length ? 'low' : 'clean';
+  return { name: String(name || ''), country: country || '', hits, riskScore, grade, checkedAt: now() };
+}
+// 全量筛查: 12 名持卡人 + 全部 KYB UBO(演示 2-3 处命中)
+function complianceScreenings() {
+  const out = [];
+  users.forEach(u => {
+    const r = screenName(u.name, u.cc);
+    out.push({ subjectType: 'user', subject: u.name, subjectRef: '用户 #' + u.id, country: u.country, cc: u.cc, ...r, grade: r.grade === 'clean' ? 'clean' : r.grade });
+  });
+  kybCases.forEach(k => {
+    (k.ubos || []).forEach(ub => {
+      const r = screenName(ub.name, ub.nationality);
+      out.push({ subjectType: 'kyb_ubo', subject: ub.name, subjectRef: 'KYB #' + k.id + ' ' + k.company + ' · 持股 ' + ub.ownershipPct + '%', country: ub.nationality, cc: ub.nationality, ...r, pepFlag: ub.pep, grade: r.grade === 'clean' ? 'clean' : r.grade });
+    });
+  });
+  return out;
+}
+function docTier(daysLeft) {
+  if (daysLeft < 0) return { key: 'expired', label: '已过期', cls: 'red' };
+  if (daysLeft <= 7) return { key: 'd7', label: '7 天内到期', cls: 'red' };
+  if (daysLeft <= 30) return { key: 'd30', label: '30 天内到期', cls: 'amber' };
+  if (daysLeft <= 90) return { key: 'd90', label: '90 天内到期', cls: 'amber' };
+  return { key: 'ok', label: '有效', cls: 'green' };
+}
+const KYB_STATUS_LABEL = { pending: '待审核', approved: '已通过', rejected: '已驳回', info_required: '需补充材料' };
+const STR_STATUS_LABEL = { draft: '草稿', submitted: '已报送', closed: '已结案' };
+const COMP_CASE_TYPE_LABEL = { aml: 'AML 反洗钱', kyc: 'KYC 尽调', kyb: 'KYB 企业尽调', str: 'STR 报送跟进' };
+const COUNTRY_LEVEL_LABEL = { prohibited: '禁止', restricted: '限制', allowed: '允许' };
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
 export function handleApi(method, p, q = {}, b = {}, h = {}) {
@@ -2374,6 +2796,367 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       if (p === '/api/admin/risk-engine/versions') {
         return J({ current: (engineVersions[engineVersions.length - 1] || {}).ver || 'v1.0',
           list: [...engineVersions].sort((a, b) => b.at - a.at) });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    // ============ P5.1 支付和发卡编排(总监专属, 其他角色一律 403) ============
+    if (p.startsWith('/api/admin/orch')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问支付编排中心' }, 403);
+      const logHealth = (adapterId, type, from, to, latencyMs, successRate, note) => {
+        orchHealthLog.unshift({ id: orchHealthLog.length ? Math.max(...orchHealthLog.map(l => l.id)) + 1 : 980005, adapterId, at: now(), type, from, to, latencyMs, successRate, note });
+        if (orchHealthLog.length > 120) orchHealthLog.length = 120;
+      };
+      const pubAdapter = (a) => ({ ...a, kindLabel: ORCH_KIND_LABEL[a.kind], fee1000: orchFeeOf(a, 1000) });
+      // -- 适配器注册表
+      if (p === '/api/admin/orch/adapters' && method === 'GET') {
+        const cnt = (s) => orchAdapters.filter(a => a.status === s).length;
+        return J({ list: orchAdapters.map(pubAdapter),
+          kinds: [...new Set(orchAdapters.map(a => a.kind))].map(k => ({ key: k, label: ORCH_KIND_LABEL[k] })),
+          summary: { total: orchAdapters.length, healthy: cnt('healthy'), degraded: cnt('degraded'), down: cnt('down'), disabled: orchAdapters.filter(a => a.enabled === false).length } });
+      }
+      const mAda = p.match(/^\/api\/admin\/orch\/adapters\/(\d+)$/);
+      if (mAda && method === 'PATCH') { // 人工标记健康状态 / 调优先级 / 启停
+        const a = orchById(mAda[1]);
+        if (!a) return J({ error: '适配器不存在' }, 404);
+        const changes = [];
+        if (b.status != null && ['healthy', 'degraded', 'down'].includes(b.status) && b.status !== a.status) {
+          const from = a.status;
+          a.status = b.status;
+          a.manual = b.status !== 'healthy'; // 人工标记异常后, 探测不自动恢复; 人工恢复健康即清除标记
+          logHealth(a.id, 'manual', from, a.status, a.latencyMs, a.successRate, '人工标记: ' + String(b.note || (b.status === 'down' ? '演示故障切换' : '演示降权')) + (a.manual ? '(探测不改状态)' : ''));
+          changes.push('状态 ' + from + ' → ' + a.status + (a.manual ? '(人工标记, 自动探测不改状态)' : '(人工恢复)'));
+        }
+        if (b.priority != null && isFinite(+b.priority) && +b.priority > 0 && +b.priority !== a.priority) {
+          changes.push('优先级 ' + a.priority + ' → ' + (+b.priority));
+          a.priority = +b.priority;
+        }
+        if (typeof b.enabled === 'boolean' && b.enabled !== a.enabled) { a.enabled = b.enabled; changes.push(b.enabled ? '启用适配器' : '停用适配器(路由不再选中)'); }
+        if (!changes.length) return J({ error: '无可更新字段: status(healthy/degraded/down) / priority / enabled' }, 400);
+        return J({ adapter: pubAdapter(a), changes });
+      }
+      // -- 渠道路由表: 场景 × 币种 → 选中渠道 + 备选 + 决策原因(实时计算, 标记宕机后自动切换)
+      if (p === '/api/admin/orch/routes' && method === 'GET') {
+        const scenes = Object.keys(ORCH_SCENE_KIND);
+        const currencies = ['USD', 'AED', 'SAR'];
+        const brief = (a, amt) => a ? { id: a.id, name: a.name, kindLabel: ORCH_KIND_LABEL[a.kind], priority: a.priority, effPriority: orchEffPriority(a), status: a.status, latencyMs: a.latencyMs, successRate: a.successRate, feeRate: a.feeRate, feeFixed: a.feeFixed, fee100: orchFeeOf(a, amt) } : null;
+        const table = [];
+        scenes.forEach(sc => currencies.forEach(cc => {
+          const r = routeFor(sc, cc);
+          table.push({ scene: sc, sceneLabel: ORCH_SCENE_LABEL[sc], currency: cc,
+            adapter: brief(r.adapter, 100), backup: brief(r.backup, 100), reason: r.reason });
+        }));
+        return J({ table, scenes: scenes.map(k => ({ key: k, label: ORCH_SCENE_LABEL[k] })), currencies,
+          note: '路由实时计算: 标记渠道 down/degraded 后刷新即可看到故障切换' });
+      }
+      if (p === '/api/admin/orch/routes/simulate' && method === 'GET') { // 模拟一次路由决策(不下单)
+        const scene = String(q.scene || 'topup_fiat');
+        const currency = String(q.currency || 'USD').toUpperCase();
+        const amount = Math.max(1, +q.amount || 1000);
+        if (!ORCH_SCENE_KIND[scene]) return J({ error: '未知场景: ' + scene + ', 支持: ' + Object.keys(ORCH_SCENE_KIND).join(' / ') }, 400);
+        const r = routeFor(scene, currency);
+        if (!r.adapter) return J({ error: '无可路由渠道: ' + r.reason }, 409);
+        const est = orchFeeOf(r.adapter, amount);
+        return J({ scene, sceneLabel: ORCH_SCENE_LABEL[scene], currency, amount,
+          decision: { adapterId: r.adapter.id, adapterName: r.adapter.name, priority: r.adapter.priority, status: r.adapter.status, latencyMs: r.adapter.latencyMs, successRate: r.adapter.successRate, estimatedFee: est, totalCost: +(amount + est).toFixed(2) },
+          backup: r.backup ? { id: r.backup.id, name: r.backup.name, priority: r.backup.priority, estimatedFee: orchFeeOf(r.backup, amount) } : null,
+          candidates: r.candidates.map(x => ({ id: x.id, name: x.name, status: x.status, effPriority: orchEffPriority(x), estimatedFee: orchFeeOf(x, amount) })),
+          reason: r.reason });
+      }
+      // -- 健康检查: 时间线 + 一键全量探测
+      if (p === '/api/admin/orch/health' && method === 'GET') {
+        return J({ list: orchHealthLog.slice(0, 100),
+          adapters: orchAdapters.map(a => ({ id: a.id, name: a.name, kindLabel: ORCH_KIND_LABEL[a.kind], status: a.status, manual: a.manual, latencyMs: a.latencyMs, successRate: a.successRate, mttdMs: a.mttdMs })),
+          summary: { healthy: orchAdapters.filter(a => a.status === 'healthy').length, degraded: orchAdapters.filter(a => a.status === 'degraded').length, down: orchAdapters.filter(a => a.status === 'down').length, probes: orchHealthLog.filter(l => l.type === 'probe').length, manual: orchHealthLog.filter(l => l.type === 'manual').length } });
+      }
+      if (p === '/api/admin/orch/health/check' && method === 'POST') { // 一键全量探测(人工标记的状态不被覆盖)
+        const results = orchAdapters.map(a => {
+          const latency = Math.max(30, a.latencyMs + ri(-60, 80));
+          const sr = +Math.min(99.9, Math.max(80, a.successRate + (rnd() < 0.5 ? -0.2 : 0.3))).toFixed(1);
+          const from = a.status;
+          let to = a.status;
+          let note = '探测: 延迟 ' + latency + 'ms / 成功率 ' + sr + '%';
+          if (a.manual) note += '(人工标记 ' + a.status + ', 探测不改状态)';
+          else if (a.status === 'degraded') { to = 'healthy'; note += ', 探活恢复, 自动解除降级'; }
+          a.latencyMs = latency; a.successRate = sr;
+          if (from !== to) a.status = to;
+          logHealth(a.id, 'probe', from, to, latency, sr, note);
+          return { id: a.id, name: a.name, from, to, latencyMs: latency, successRate: sr, manual: a.manual };
+        });
+        const snap = routeFor('pay', 'USD');
+        return J({ results, routing: { scene: 'pay', currency: 'USD', adapter: snap.adapter ? snap.adapter.name : null, reason: snap.reason },
+          note: '全量健康探测完成: ' + results.length + ' 个适配器(降级渠道探活成功自动恢复, 人工标记不动)' });
+      }
+      // -- 费率比较: 按场景分组, $1000 样本总成本排名
+      if (p === '/api/admin/orch/compare' && method === 'GET') {
+        const amount = Math.max(1, +q.amount || 1000);
+        const groups = Object.keys(ORCH_SCENE_KIND).map(sc => {
+          const kind = ORCH_SCENE_KIND[sc];
+          const list = orchAdapters.filter(a => a.kind === kind && (a.caps.scenes || []).includes(sc))
+            .map(a => ({ id: a.id, name: a.name, status: a.status, enabled: a.enabled !== false, priority: a.priority, feeRate: a.feeRate, feeFixed: a.feeFixed, fee1000: orchFeeOf(a, 1000), total: orchFeeOf(a, amount), note: (a.caps && a.caps.note) || '' }))
+            .sort((x, y) => x.total - y.total);
+          const r = routeFor(sc, 'USD');
+          return { scene: sc, sceneLabel: ORCH_SCENE_LABEL[sc], kindLabel: ORCH_KIND_LABEL[kind], sampleAmount: amount, list, routed: r.adapter ? r.adapter.id : null };
+        });
+        return J({ amount, groups });
+      }
+      // -- 编排交易列表(含出站 webhook 通知记录)
+      if (p === '/api/admin/orch/txs' && method === 'GET') {
+        let list = orchTxs;
+        if (q.state) list = list.filter(t => t.state === String(q.state));
+        if (q.scene) list = list.filter(t => t.scene === String(q.scene));
+        const cnt = (s) => orchTxs.filter(t => t.state === s).length;
+        return J({ list: [...list].sort((a, b) => b.createdAt - a.createdAt).map(pubOrchTx),
+          webhooks: orchWebhookLogs.slice(0, 50),
+          summary: { total: orchTxs.length, created: cnt('created'), pending: cnt('pending'), processing: cnt('processing'), success: cnt('success'), failed: cnt('failed'), reversed: cnt('reversed'), refunded: cnt('refunded'), callbacks: orchTxs.reduce((s, t) => s + t.callbacks.length, 0) },
+          scenes: Object.keys(ORCH_SCENE_KIND).map(k => ({ key: k, label: ORCH_SCENE_LABEL[k] })),
+          states: Object.keys(ORCH_STATE_LABEL).map(k => ({ key: k, label: ORCH_STATE_LABEL[k] })) });
+      }
+      // -- 新建编排单: 幂等控制(相同 idempotencyKey 返回同一订单, 不重复提交渠道)
+      if (p === '/api/admin/orch/txs' && method === 'POST') {
+        const scene = String(b.scene || '');
+        if (!ORCH_SCENE_KIND[scene]) return J({ error: '不支持的场景: ' + (scene || '(空)') + ', 支持: ' + Object.keys(ORCH_SCENE_KIND).join(' / ') }, 400);
+        const amount = +b.amount;
+        if (!(amount > 0)) return J({ error: '金额必须大于 0' }, 400);
+        const currency = String(b.currency || 'USD').toUpperCase();
+        const key = String(b.idempotencyKey || '').trim();
+        if (key) {
+          const exist = orchTxs.find(t => t.idempotencyKey === key);
+          if (exist) return J({ idempotent: true, tx: pubOrchTx(exist), note: '幂等命中: 相同 idempotencyKey(' + key + ')不重复下单, 返回同一订单 #' + exist.id });
+        }
+        const r = routeFor(scene, currency);
+        if (!r.adapter) return J({ error: '无可路由渠道: ' + r.reason }, 409);
+        const t = { id: nid(), scene, sceneLabel: ORCH_SCENE_LABEL[scene], amount: +amount.toFixed(2), currency,
+          adapterId: r.adapter.id, state: 'created', idempotencyKey: key || null,
+          timeoutMs: scene === 'topup_crypto' ? 30000 : 15000,
+          attempts: [], callbacks: [], timeline: [{ ts: now(), from: null, to: 'created', note: '编排单创建, 路由决策: ' + r.adapter.name + '(' + r.reason + ')' }],
+          userId: +b.userId || null, localRef: null, channelStatus: null, note: '', reconSeed: null, reconFixed: null,
+          createdAt: now(), updatedAt: now() };
+        orchTxs.push(t);
+        orchTransit(t, 'pending', '已提交 ' + r.adapter.name + '(尝试 #1), 等待渠道异步回调');
+        t.attempts.push({ no: 1, adapterId: r.adapter.id, at: now(), latencyMs: r.adapter.latencyMs, result: 'accepted', note: '渠道已受理' });
+        return J({ idempotent: false, tx: pubOrchTx(t), routing: { adapter: r.adapter.name, backup: r.backup ? r.backup.name : null, reason: r.reason } });
+      }
+      const mTx = p.match(/^\/api\/admin\/orch\/tx\/(\d+)$/);
+      if (mTx && method === 'GET') {
+        const t = orchTxs.find(x => x.id === +mTx[1]);
+        if (!t) return J({ error: '编排单不存在' }, 404);
+        const local = t.localRef != null ? transactions.find(x => x.id === t.localRef) : null;
+        const a = orchById(t.adapterId);
+        return J({ tx: pubOrchTx(t), adapter: a ? pubAdapter(a) : null,
+          localTx: local ? { id: local.id, type: local.type, status: local.status, amount: local.amount, createdAt: local.createdAt } : null,
+          nextStates: ORCH_NEXT[t.state] || [] });
+      }
+      const mAct = p.match(/^\/api\/admin\/orch\/tx\/(\d+)\/(callback|replay|compensate|reverse|refund)$/);
+      if (mAct && method === 'POST') {
+        const t = orchTxs.find(x => x.id === +mAct[1]);
+        if (!t) return J({ error: '编排单不存在' }, 404);
+        const act = mAct[2];
+        if (act === 'callback') { // 异步回调模拟: 渠道回执 success/fail → 驱动状态机至终态
+          if (!['pending', 'processing'].includes(t.state)) return J({ error: '仅待受理/处理中状态可接收渠道回调, 当前: ' + ORCH_STATE_LABEL[t.state] }, 409);
+          const type = b.result === 'fail' ? 'fail' : 'success';
+          if (t.state === 'pending') orchTransit(t, 'processing', '渠道受理回执到达');
+          t.callbacks.push({ at: now(), type, receipt: String(b.receipt || 'RCPT-' + ri(100000, 999999)), source: 'channel-async-callback', note: String(b.note || (type === 'success' ? '渠道确认成功' : '渠道返回失败')) });
+          orchTransit(t, type === 'success' ? 'success' : 'failed', '渠道异步回调: ' + type + ' 回执');
+          t.channelStatus = type;
+          return J({ tx: pubOrchTx(t), note: '回调已受理, 编排单进入终态并已发出站 webhook 通知' });
+        }
+        if (act === 'replay') { // 重放: failed/created → 重新路由提交
+          if (!['failed', 'created'].includes(t.state)) return J({ error: '仅失败/已创建的编排单可重放, 当前: ' + ORCH_STATE_LABEL[t.state] }, 409);
+          const r = routeFor(t.scene, t.currency);
+          if (!r.adapter) return J({ error: '无可路由渠道: ' + r.reason }, 409);
+          if (!orchTransit(t, 'pending', '人工重放: 重新路由至 ' + r.adapter.name + '(' + r.reason + ')')) return J({ error: '状态机不允许该迁移' }, 409);
+          t.adapterId = r.adapter.id;
+          t.attempts.push({ no: t.attempts.length + 1, adapterId: r.adapter.id, at: now(), latencyMs: r.adapter.latencyMs, result: 'accepted', note: '重放尝试 #' + (t.attempts.length) });
+          return J({ tx: pubOrchTx(t), note: '已重放至 ' + r.adapter.name + ', 等待渠道回调' });
+        }
+        if (act === 'compensate') { // 超时补偿: 超过 timeoutMs 重查渠道回执(默认成功, 可指定 outcome=fail)
+          if (!['pending', 'processing'].includes(t.state)) return J({ error: '仅待受理/处理中可执行超时补偿, 当前: ' + ORCH_STATE_LABEL[t.state] }, 409);
+          const age = now() - t.updatedAt;
+          if (age < t.timeoutMs && b.force !== true) return J({ error: '未到超时阈值: 需 ' + t.timeoutMs + 'ms, 已等待 ' + age + 'ms(可传 force: true 强制)' }, 409);
+          const outcome = b.outcome === 'fail' ? 'failed' : 'success';
+          t.attempts.push({ no: t.attempts.length + 1, adapterId: t.adapterId, at: now(), latencyMs: ri(120, 400), result: outcome === 'success' ? 'success' : 'fail', note: '超时补偿: 重查渠道回执 → ' + outcome });
+          if (t.state === 'pending') orchTransit(t, 'processing', '超时补偿: 转处理中并重查回执');
+          orchTransit(t, outcome, '超时补偿: 渠道回执重查结果为 ' + outcome);
+          t.channelStatus = outcome;
+          return J({ tx: pubOrchTx(t), note: '超时补偿完成: 渠道回执 ' + outcome });
+        }
+        if (act === 'reverse') { // 冲正演示: success → reversed
+          if (t.state !== 'success') return J({ error: '仅成功单可冲正, 当前: ' + ORCH_STATE_LABEL[t.state] }, 409);
+          orchTransit(t, 'reversed', String(b.note || '人工冲正: 撤销渠道侧已授权交易'));
+          t.channelStatus = 'reversed';
+          return J({ tx: pubOrchTx(t), note: '已冲正: 渠道侧授权撤销, 编排单终态 reversed' });
+        }
+        if (act === 'refund') { // 退款演示: success → refunded
+          if (t.state !== 'success') return J({ error: '仅成功单可退款, 当前: ' + ORCH_STATE_LABEL[t.state] }, 409);
+          orchTransit(t, 'refunded', String(b.note || '原路退款(演示)'));
+          t.channelStatus = 'refunded';
+          return J({ tx: pubOrchTx(t), note: '已退款: 原路退回, 编排单终态 refunded' });
+        }
+      }
+      // -- 对账: 编排单(渠道) vs 交易流水(本地) vs 资金账本 三方比对
+      if (p === '/api/admin/orch/recon' && method === 'GET') {
+        const diffs = orchReconDiffs();
+        return J({ ranAt: now(), diffs, fixed: orchReconFixed,
+          summary: { checked: orchTxs.length, matched: orchTxs.filter(t => !t.reconSeed || t.reconFixed).length, open: diffs.length, fixedCount: orchReconFixed.length,
+            channelSuccessLocalMissing: diffs.filter(d => d.type === 'channel_success_local_missing').length,
+            localSuccessChannelTimeout: diffs.filter(d => d.type === 'local_success_channel_timeout').length },
+          note: '三方比对: 编排单(渠道口径) × 交易流水(本地口径) × 资金账本(记账口径)' });
+      }
+      const mFix = p.match(/^\/api\/admin\/orch\/diff\/(\d+)\/fix$/);
+      if (mFix && method === 'POST') { // 补单
+        const item = orchReconDiffs().find(d => d.id === +mFix[1]);
+        if (!item) return J({ error: '差异不存在或已处理' }, 404);
+        const r = orchFixDiff(item, me.name);
+        if (r.error) return J(r, 409);
+        orchReconFixed.unshift({ ...item, fixedAt: now(), by: me.name, fixNote: r.note });
+        return J({ ok: true, note: r.note, remaining: orchReconDiffs().length });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    // ============ P5.2 合规中心(总监专属, 其他角色一律 403) ============
+    if (p.startsWith('/api/admin/compliance')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问合规中心' }, 403);
+      // -- C 端 KYC 案例: 12 持卡人KYC 档案 + 证件 + 审核轨迹(联动审批中心 kyc_upgrade)
+      if (p === '/api/admin/compliance/kyc' && method === 'GET') {
+        const list = users.map(u => {
+          const docs = userDocs.filter(d => d.userId === u.id);
+          const linked = approvals.filter(a => a.type === 'kyc_upgrade' && a.payload && a.payload.userId === u.id)
+            .map(a => ({ id: a.id, title: a.title, status: a.status, statusLabel: { pending: '审批中', approved: '已通过', rejected: '已驳回', cancelled: '已撤回' }[a.status] || a.status, createdAt: a.createdAt }));
+          const lim = KYC_LIMITS[u.kycLevel] || { perTx: 0, perDay: 0 };
+          const trail = [{ ts: u.createdAt, node: '开户建档', note: '初始 KYC L' + u.kycLevel + ' · ' + (u.kycLevel === 0 ? '基础档(免证件, 低限额)' : '证件已核验'), operator: '系统' }];
+          docs.forEach(d => trail.push({ ts: d.createdAt, node: '证件提交', note: d.typeLabel + ' ' + d.number + ' · 有效期至 ' + isoDay(d.expiry), operator: '客户' }));
+          if (u.kycStatus === 'pending_upgrade') trail.push({ ts: daysAgo(2, 6), node: '申请升级', note: '提交升级材料, 已转审批中心「KYC 升级」流程', operator: '客户' });
+          linked.forEach(a => trail.push({ ts: a.createdAt, node: '审批流转', note: a.title + ' · ' + a.statusLabel, operator: '审批中心' }));
+          return { userId: u.id, name: u.name, country: u.country, cc: u.cc, city: u.city,
+            kycLevel: u.kycLevel, kycLevelLabel: ['L0 基础档', 'L1 初级', 'L2 高级'][u.kycLevel] || ('L' + u.kycLevel),
+            kycStatus: u.kycStatus, statusLabel: u.kycStatus === 'approved' ? '已认证' : '升级审核中',
+            levelBand: u.kycLevel === 2 ? 'high' : u.kycLevel === 1 ? 'mid' : 'low',
+            perTxLimit: lim.perTx, perDayLimit: lim.perDay,
+            docs: docs.map(d => ({ ...d, expiryDay: isoDay(d.expiry), daysLeft: Math.ceil((d.expiry - now()) / 864e5) })),
+            trail, linkedApprovals: linked };
+        });
+        const band = (b2) => list.filter(x => x.levelBand === b2).length;
+        return J({ list, summary: { total: list.length, low: band('low'), mid: band('mid'), high: band('high'), pendingUpgrade: list.filter(x => x.kycStatus === 'pending_upgrade').length },
+          note: 'KYC 升级审批在「审批中心 → kyc_upgrade」流程中处理, 通过后等级与限额自动生效' });
+      }
+      // -- B 端 KYB
+      if (p === '/api/admin/compliance/kyb' && method === 'GET') {
+        const cnt = (s) => kybCases.filter(k => k.status === s).length;
+        return J({ list: kybCases.map(k => ({ ...k, statusLabel: KYB_STATUS_LABEL[k.status], uboCount: (k.ubos || []).length })),
+          summary: { total: kybCases.length, pending: cnt('pending'), approved: cnt('approved'), rejected: cnt('rejected'), info_required: cnt('info_required'), ubos: kybCases.reduce((s, k) => s + (k.ubos || []).length, 0), pepUbos: kybCases.reduce((s, k) => s + (k.ubos || []).filter(u => u.pep).length, 0) } });
+      }
+      const mKyb = p.match(/^\/api\/admin\/compliance\/kyb\/(\d+)\/action$/);
+      if (mKyb && method === 'POST') { // approve / reject / request_info
+        const k = kybCases.find(x => x.id === +mKyb[1]);
+        if (!k) return J({ error: 'KYB 案件不存在' }, 404);
+        const action = String(b.action || '');
+        const ALLOWED = { pending: ['approve', 'reject', 'request_info'], info_required: ['approve', 'reject'], approved: [], rejected: [] };
+        if (!(ALLOWED[k.status] || []).includes(action)) {
+          const names = { approve: '通过', reject: '驳回', request_info: '要求补充材料' };
+          return J({ error: '当前状态「' + KYB_STATUS_LABEL[k.status] + '」不允许' + (names[action] || action) + ', 允许: ' + ((ALLOWED[k.status] || []).join(' / ') || '无(已终态)') }, 409);
+        }
+        const reason = String(b.reason || '').trim();
+        if ((action === 'reject' || action === 'request_info') && !reason) return J({ error: (action === 'reject' ? '驳回' : '要求补充材料') + '必须填写原因' }, 400);
+        const NODE = { approve: '终审通过', reject: '终审驳回', request_info: '要求补充材料' };
+        const NOTE = { approve: 'KYB 审核通过, 开通企业钱包与批量发卡资格', reject: '驳回: ' + reason, request_info: '补充材料: ' + reason };
+        k.status = { approve: 'approved', reject: 'rejected', request_info: 'info_required' }[action];
+        k.reviewedAt = now();
+        k.timeline.push({ ts: now(), node: NODE[action], note: NOTE[action], operator: me.name });
+        return J({ case: { ...k, statusLabel: KYB_STATUS_LABEL[k.status], uboCount: (k.ubos || []).length } });
+      }
+      // -- AML 筛查: 单个姓名模糊筛查(制裁 + PEP)
+      if (p === '/api/admin/compliance/screen' && method === 'POST') {
+        const name = String(b.name || '').trim();
+        if (!name) return J({ error: '请填写筛查姓名' }, 400);
+        return J(screenName(name, String(b.country || '').toUpperCase()));
+      }
+      // -- 全量筛查结果: 12 持卡人 + 全部 KYB UBO
+      if (p === '/api/admin/compliance/screenings' && method === 'GET') {
+        const list = complianceScreenings();
+        const hit = list.filter(x => x.hits.length);
+        return J({ list, summary: { total: list.length, hit: hit.length, clean: list.length - hit.length,
+            sanctionHits: hit.filter(x => x.hits.some(h2 => h2.kind === 'sanction')).length,
+            pepHits: hit.filter(x => x.hits.some(h2 => h2.kind === 'pep')).length,
+            high: hit.filter(x => x.grade === 'high').length, mid: hit.filter(x => x.grade === 'mid').length, low: hit.filter(x => x.grade === 'low').length },
+          note: '模糊匹配口径: 精确/包含/别名/词元 + 同国家加成' });
+      }
+      if (p === '/api/admin/compliance/sanctions' && method === 'GET') {
+        const kw = String(q.kw || '').toLowerCase();
+        const list = kw ? sanctions.filter(s => s.name.toLowerCase().includes(kw) || (s.aliases || []).some(a => a.toLowerCase().includes(kw)) || s.country.toLowerCase() === kw || s.listSource.toLowerCase() === kw) : sanctions;
+        return J({ list, summary: { total: sanctions.length, individual: sanctions.filter(s => s.type === 'individual').length, entity: sanctions.filter(s => s.type === 'entity').length, ofac: sanctions.filter(s => s.listSource === 'OFAC').length, eu: sanctions.filter(s => s.listSource === 'EU').length, un: sanctions.filter(s => s.listSource === 'UN').length } });
+      }
+      if (p === '/api/admin/compliance/peps' && method === 'GET') {
+        const kw = String(q.kw || '').toLowerCase();
+        const list = kw ? peps.filter(p => p.name.toLowerCase().includes(kw) || p.position.toLowerCase().includes(kw) || p.country.toLowerCase() === kw) : peps;
+        const cnt = (l) => peps.filter(p => p.level === l).length;
+        return J({ list, summary: { total: peps.length, high: cnt('high'), medium: cnt('medium'), low: cnt('low') } });
+      }
+      // -- STR 可疑交易报告
+      if (p === '/api/admin/compliance/str' && method === 'GET') {
+        const cnt = (s) => strReports.filter(r => r.status === s).length;
+        return J({ list: [...strReports].sort((a, b) => b.createdAt - a.createdAt).map(r => {
+          const u = users.find(x => x.id === r.userId);
+          return { ...r, statusLabel: STR_STATUS_LABEL[r.status], userName: u ? u.name : '用户 #' + r.userId, userCountry: u ? u.country : '—' };
+        }), summary: { total: strReports.length, draft: cnt('draft'), submitted: cnt('submitted'), closed: cnt('closed') } });
+      }
+      if (p === '/api/admin/compliance/str' && method === 'POST') { // 一键从风险事件生成 STR 草稿
+        const ev = b.riskEventId != null ? riskEvents.find(x => x.id === +b.riskEventId) : null;
+        if (!ev) return J({ error: '风险事件不存在: ' + (b.riskEventId == null ? '(未传 riskEventId)' : b.riskEventId) + ', 请在「风控中心 → 风险事件」选择' }, 404);
+        const rule = engineRules.find(r => r.id === ev.ruleId);
+        const rep = { id: nid(), refNo: 'STR-' + new Date().getFullYear() + '-' + String(41 + strReports.length).padStart(4, '0'),
+          userId: ev.userId, triggerRule: rule ? 'R' + rule.id + ' ' + rule.name : (ev.reason || '风控规则'), triggerEventId: ev.id,
+          amount: ev.amount || 0, status: 'draft',
+          note: '由风险事件 #' + ev.id + ' 一键生成: ' + (ev.reason || '') + ' · 待合规补充分析后报送',
+          createdAt: now(), submittedAt: null, closedAt: null };
+        strReports.push(rep);
+        return J({ report: rep, note: '已生成 STR 草稿 ' + rep.refNo + ', 可在列表中一键报送' });
+      }
+      const mStr = p.match(/^\/api\/admin\/compliance\/str\/(\d+)\/submit$/);
+      if (mStr && method === 'POST') {
+        const r = strReports.find(x => x.id === +mStr[1]);
+        if (!r) return J({ error: 'STR 不存在' }, 404);
+        if (r.status !== 'draft') return J({ error: '仅草稿状态可报送, 当前: ' + STR_STATUS_LABEL[r.status] }, 409);
+        r.status = 'submitted'; r.submittedAt = now();
+        return J({ report: r, note: r.refNo + ' 已通过监管门户报送(模拟)' });
+      }
+      // -- 证件管理: 有效期 90/30/7 天三档提醒
+      if (p === '/api/admin/compliance/docs' && method === 'GET') {
+        const list = userDocs.map(d => {
+          const daysLeft = Math.ceil((d.expiry - now()) / 864e5);
+          const tier = docTier(daysLeft);
+          return { ...d, expiryDay: isoDay(d.expiry), daysLeft, tier: tier.key, tierLabel: tier.label };
+        }).sort((a, b) => a.daysLeft - b.daysLeft);
+        const cnt = (k) => list.filter(d => d.tier === k).length;
+        return J({ list, summary: { total: list.length, expired: cnt('expired'), d7: cnt('d7'), d30: cnt('d30'), d90: cnt('d90'), ok: cnt('ok') },
+          tiers: [{ key: 'd7', label: '7 天内', color: 'red' }, { key: 'd30', label: '30 天内', color: 'amber' }, { key: 'd90', label: '90 天内', color: 'amber' }] });
+      }
+      // -- 合规案件
+      if (p === '/api/admin/compliance/cases' && method === 'GET') {
+        const cnt = (s) => compCases.filter(c => c.status === s).length;
+        return J({ list: [...compCases].sort((a, b) => b.createdAt - a.createdAt).map(c => ({ ...c, typeLabel: COMP_CASE_TYPE_LABEL[c.type] })),
+          summary: { total: compCases.length, open: cnt('open'), investigating: cnt('investigating'), closed: cnt('closed') } });
+      }
+      const mCs = p.match(/^\/api\/admin\/compliance\/cases\/(\d+)\/action$/);
+      if (mCs && method === 'POST') { // investigate / close / reopen
+        const c = compCases.find(x => x.id === +mCs[1]);
+        if (!c) return J({ error: '合规案件不存在' }, 404);
+        const action = String(b.action || '');
+        const FLOW = { open: ['investigate', 'close'], investigating: ['close'], closed: ['reopen'] };
+        if (!(FLOW[c.status] || []).includes(action)) return J({ error: '当前状态(' + c.status + ')不允许该操作, 允许: ' + (FLOW[c.status] || []).join(' / ') || '无' }, 409);
+        const NODE = { investigate: '开始调查', close: '结案', reopen: '重新立案' };
+        const DEF_NOTE = { investigate: '调取关联 KYC/交易/筛查记录, 进入调查', close: '调查完毕, 结案归档', reopen: '有新线索, 重新立案调查' };
+        if (action === 'investigate') c.status = 'investigating';
+        else if (action === 'close') c.status = 'closed';
+        else c.status = 'investigating';
+        c.timeline.push({ ts: now(), node: NODE[action], note: String(b.note || '').trim() || DEF_NOTE[action], operator: me.name });
+        return J({ case: { ...c, typeLabel: COMP_CASE_TYPE_LABEL[c.type] } });
+      }
+      // -- 国家/地区政策限制(仅展示, 不接入交易链路)
+      if (p === '/api/admin/compliance/countries' && method === 'GET') {
+        const cnt = (l) => countryRules.filter(c => c.level === l).length;
+        return J({ list: [...countryRules].sort((a, b) => ({ prohibited: 0, restricted: 1, allowed: 2 }[a.level] ?? 3) - ({ prohibited: 0, restricted: 1, allowed: 2 }[b.level] ?? 3)),
+          summary: { total: countryRules.length, prohibited: cnt('prohibited'), restricted: cnt('restricted'), allowed: cnt('allowed') },
+          note: '政策清单仅作合规展示, 未接入交易链路(演示)' });
       }
       return J({ error: 'not found: ' + p }, 404);
     }
