@@ -49,6 +49,7 @@ let orchAdapters, orchTxs, orchHealthLog, orchWebhookLogs, orchReconFixed; // P5
 let kybCases, sanctions, peps, strReports, userDocs, compCases, countryRules; // P5.2 合规中心: KYB / 制裁名单 / PEP / STR / 证件 / 合规案件 / 国家政策
 let entAccounts, entMembers, entDepts, entCards, entTxApprovals, entBills, entDeptLogs; // P5.3 企业服务: 企业 / 成员 / 部门成本中心 / 企业卡 / 消费审批 / 账单发票 / 预算变更历史
 let mchAccounts, mchOrders, mchRefunds, mchSettles, mchSplits, mchRisk; // P5.4 商户平台: 收单商户 / 收款订单 / 退款单 / 结算批次 / 订单分账 / 商户风控
+let ffFlags, opsRateCfg, rlBuckets; // P5.6 运维中心: Feature Flag 开关 / 限流配置 / 内存令牌桶(演示级限流计数器)
 let inited = false;
 function initSeed() {
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
@@ -783,6 +784,7 @@ countryRules = [
 
 rebuildLedgerSeed(); // P4.4: 为种子交易回填复式账本(与卡余额自洽) + 14 天余额快照 + 演示冻结余额
 initEntMchSeeds(); // P5.3/P5.4: 企业服务 + 商户平台种子(企业期初/收单回填/结算分录直接入账本, 末尾重算余额快照)
+initOpsSeeds(); // P5.6 运维中心: Feature Flag 12 开关 + 限流配置 + 内存令牌桶
   inited = true;
 }
 
@@ -2438,6 +2440,461 @@ function initEntMchSeeds() {
   buildBalanceSnapshots(14);
 }
 
+// ---------------- P5.5 BI 数据中心 + P5.6 运维中心(模块级工具, 依赖 initSeed 填充的数据) ----------------
+// ===== P5.5 BI: 指标清单 / 维度清单(自定义报表勾选, 也可供其他模块复用) =====
+const BI_METRICS = {
+  txCount: { label: '交易笔数', unit: '笔' },
+  gmv: { label: 'GMV', unit: '$' },
+  topup: { label: '充值总额', unit: '$' },
+  consume: { label: '消费总额', unit: '$' },
+  fee: { label: '手续费收入', unit: '$' },
+  commission: { label: '佣金成本', unit: '$' },
+  pointsCost: { label: '积分成本', unit: '$' },
+  netIncome: { label: '净收入', unit: '$' },
+  users: { label: '覆盖用户数', unit: '人' },
+  activeUsers: { label: '活跃用户数', unit: '人' },
+  avgTicket: { label: '笔均金额', unit: '$' },
+  refundRate: { label: '退款率', unit: '%' },
+  riskRate: { label: '风险交易率', unit: '%' },
+};
+const BI_DIMS = {
+  day: { label: '按日' }, hour: { label: '按时段(小时)' }, channel: { label: '按渠道' }, level: { label: '按卡等级' },
+  merchant: { label: '按商户' }, rep: { label: '按销售' },
+};
+// 解析多维筛选: ?range=today|7d|30d & level=卡等级 & merchant=商户 & rep=销售(含 subtree)
+function biParseQ(q) {
+  const range = ['today', '7d', '30d'].includes(q.range) ? q.range : '30d';
+  const startTs = range === 'today' ? rangeStartTs('today') : now() - (range === '7d' ? 7 : 30) * 864e5;
+  return {
+    range, startTs, endTs: now(),
+    level: CARD_LEVELS[q.level] ? q.level : '',
+    merchant: String(q.merchant || '').trim(),
+    rep: parseInt(q.rep, 10) || 0,
+  };
+}
+// 应用全部筛选 → 窗口交易集 + 用户/卡片索引 + 范围内用户(scope: rep subtree; 维度: 卡等级/商户)
+function biCtx(f) {
+  const repIds = f.rep ? subtreeIds(f.rep) : null;
+  const userById = new Map(users.map(u => [u.id, u]));
+  const cardById = new Map(cards.map(c => [c.id, c]));
+  const txs = transactions.filter(t => {
+    if (t.createdAt < f.startTs || t.createdAt > f.endTs) return false;
+    const u = userById.get(t.userId);
+    if (!u || (repIds && !repIds.includes(u.salesRepId))) return false;
+    const card = cardById.get(t.cardId);
+    if (f.level && (!card || card.level !== f.level)) return false;
+    if (f.merchant && t.merchant !== f.merchant) return false;
+    return true;
+  });
+  const scopedUsers = users.filter(u => !repIds || repIds.includes(u.salesRepId))
+    .filter(u => !f.level || cards.some(c => c.userId === u.id && c.level === f.level));
+  return { txs, repIds, userById, cardById, scopedUsers };
+}
+// ---- 指标纯函数(可复用, 输入为任意交易子集; GMV/风险口径与驾驶舱一致) ----
+const biSucc = (txs) => txs.filter(t => t.status === 'success');
+const biGmv = (txs) => +biSucc(txs).filter(t => t.type === 'topup' || t.type === 'consume').reduce((s, t) => s + t.amount, 0).toFixed(2);
+const biTopup = (txs) => +biSucc(txs).filter(t => t.type === 'topup').reduce((s, t) => s + t.amount, 0).toFixed(2);
+const biConsume = (txs) => +biSucc(txs).filter(t => t.type === 'consume').reduce((s, t) => s + t.amount, 0).toFixed(2);
+const biFee = (txs) => +biSucc(txs).filter(t => t.type === 'topup' || t.type === 'consume').reduce((s, t) => s + (t.fee || 0), 0).toFixed(2);
+const biAvgTicket = (txs) => { const s = biSucc(txs).filter(t => t.type === 'topup' || t.type === 'consume'); return s.length ? +(biGmv(txs) / s.length).toFixed(2) : 0; };
+const biRefundRate = (txs) => { const cs = txs.filter(t => t.type === 'consume'); return cs.length ? +(100 * cs.filter(t => t.status === 'refunded').length / cs.length).toFixed(2) : 0; };
+const biRiskRate = (txs) => txs.length ? +(100 * txs.filter(t => t.status === 'refunded' || (t.type === 'consume' && t.amount > 400)).length / txs.length).toFixed(2) : 0; // 与驾驶舱 riskCount 同口径
+const biActiveUsers = (txs) => new Set(txs.map(t => t.userId)).size;
+// 一组交易的指标行(维度分组行 / 自定义报表行共用)
+function biRowMetrics(txs) {
+  return {
+    txCount: txs.length, gmv: biGmv(txs), topup: biTopup(txs), consume: biConsume(txs), fee: biFee(txs),
+    pointsCost: +(biSucc(txs).filter(t => t.type === 'consume').reduce((s, t) => s + (t.pointsEarned || 0), 0) * 0.01).toFixed(2), // 消费返积分 × $0.01
+    users: biActiveUsers(txs), activeUsers: biActiveUsers(biSucc(txs)),
+    avgTicket: biAvgTicket(txs), refundRate: biRefundRate(txs), riskRate: biRiskRate(txs),
+  };
+}
+// 交易 → 维度值(维度分组器; dim ∈ BI_DIMS)
+function biDimValue(dim, t, ctx) {
+  if (dim === 'day') return isoDay(t.createdAt);
+  if (dim === 'hour') return d2(new Date(t.createdAt).getHours()) + ':00';
+  if (dim === 'channel') return t.type === 'topup' ? (t.method === 'usdt' ? 'USDT 链上充值' : '银行卡充值') : 'U 卡消费';
+  if (dim === 'level') { const c = ctx.cardById.get(t.cardId); return c ? (CARD_LEVELS[c.level] || {}).label || c.level : '未知'; }
+  if (dim === 'merchant') return t.merchant || '(充值/无商户)';
+  if (dim === 'rep') { const u = ctx.userById.get(t.userId); return u ? (repById(u.salesRepId) || { name: '#' + u.salesRepId }).name : '未知'; }
+  return '全部';
+}
+function biGroupTxs(txs, dim, ctx) {
+  const groups = new Map();
+  txs.forEach(t => { const k = biDimValue(dim, t, ctx); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(t); });
+  return groups;
+}
+// 窗口佣金成本(卡等级/商户筛选时仅统计交易关联佣金, 与分组口径一致)
+function biCommissionScoped(f, ctx) {
+  const txIds = new Set(ctx.txs.map(t => t.id));
+  const dimOn = !!(f.level || f.merchant);
+  return +commissions.filter(c => c.createdAt >= f.startTs && c.createdAt <= f.endTs
+    && (!ctx.repIds || ctx.repIds.includes(c.salesId))
+    && (!dimOn || (c.type !== 'card' && txIds.has(c.refId))))
+    .reduce((s, c) => s + c.amount, 0).toFixed(2);
+}
+// 积分成本(pointsLogs 发放口径: Σ正变动 × $0.01, 与账本 pointscost 账户单价一致)
+function biPointsCost(f, ctx) {
+  const uids = new Set(ctx.scopedUsers.map(u => u.id));
+  const pts = pointsLogs.filter(l => l.delta > 0 && l.createdAt >= f.startTs && l.createdAt <= f.endTs && uids.has(l.userId)).reduce((s, l) => s + l.delta, 0);
+  return { points: pts, usd: +(pts * 0.01).toFixed(2) };
+}
+// 在管卡月费收入(财务口径: 非挂失卡 × 等级月费)
+function biMonthlyFee(f, ctx) {
+  return +cards.filter(c => c.status !== 'lost' && (!ctx.repIds || ctx.repIds.includes(c.salesRepId)) && (!f.level || c.level === f.level))
+    .reduce((s, c) => s + CARD_LEVELS[c.level].monthlyFee, 0).toFixed(2);
+}
+// 总览指标(DAU/MAU 用真实 distinct userId 近似; 净收入复用财务口径)
+function biOverviewData(f, ctx) {
+  const txs = ctx.txs, gmv = biGmv(txs), fee = biFee(txs);
+  const commission = biCommissionScoped(f, ctx);
+  const monthlyFee = biMonthlyFee(f, ctx);
+  const pc = biPointsCost(f, ctx);
+  const inScope = (t) => !ctx.repIds || ctx.repIds.includes((ctx.userById.get(t.userId) || {}).salesRepId);
+  return {
+    dau: biActiveUsers(transactions.filter(t => t.createdAt >= rangeStartTs('today') && inScope(t))),
+    mau: biActiveUsers(transactions.filter(t => t.createdAt >= now() - 30 * 864e5 && inScope(t))),
+    activeUsers: biActiveUsers(txs), users: ctx.scopedUsers.length, txCount: txs.length,
+    gmv, topup: biTopup(txs), consume: biConsume(txs), fee, monthlyFee, commission,
+    pointsCost: pc.usd, pointsIssued: pc.points,
+    netIncome: +(fee + monthlyFee - commission).toFixed(2),
+    refundRate: biRefundRate(txs), riskRate: biRiskRate(txs), avgTicket: biAvgTicket(txs),
+  };
+}
+// 趋势: today 按小时, 7d/30d 按日(GMV + 笔数)
+function biTrend(f, ctx) {
+  const succ = biSucc(ctx.txs).filter(t => t.type === 'topup' || t.type === 'consume');
+  const today00 = rangeStartTs('today');
+  const out = [];
+  if (f.range === 'today') {
+    for (let h = 0; h < 24; h++) {
+      const s = today00 + h * 36e5; if (s > now()) break;
+      const cell = succ.filter(t => t.createdAt >= s && t.createdAt < s + 36e5);
+      out.push({ label: d2(h) + ':00', gmv: +cell.reduce((a, t) => a + t.amount, 0).toFixed(0), count: cell.length });
+    }
+    return out;
+  }
+  const days = f.range === '7d' ? 7 : 30;
+  for (let i = days - 1; i >= 0; i--) {
+    const s = today00 - i * 864e5;
+    const cell = succ.filter(t => t.createdAt >= s && t.createdAt < s + 864e5);
+    out.push({ label: isoDay(s).slice(5), gmv: +cell.reduce((a, t) => a + t.amount, 0).toFixed(0), count: cell.length });
+  }
+  return out;
+}
+// 用户分析: 转化漏斗指标 + 分群(交易频次+金额三分位: 高价值/成长/沉睡)
+function biUsersData(f, ctx) {
+  const us = ctx.scopedUsers, gmv = biGmv(ctx.txs);
+  const ov = { fee: biFee(ctx.txs), commission: biCommissionScoped(f, ctx), monthlyFee: biMonthlyFee(f, ctx) };
+  const netIncome = +(ov.fee + ov.monthlyFee - ov.commission).toFixed(2);
+  const succ = biSucc(ctx.txs);
+  const topUsers = new Set(succ.filter(t => t.type === 'topup').map(t => t.userId));
+  const payUsers = new Set(succ.filter(t => t.type === 'consume').map(t => t.userId));
+  const hasCard = (u) => cards.some(c => c.userId === u.id);
+  // 留存(7 日窗口近似): 7~14 天前活跃用户中, 最近 7 天仍活跃的比例
+  const winA = now() - 7 * 864e5, winB = now() - 14 * 864e5;
+  const prior = new Set(transactions.filter(t => t.createdAt >= winB && t.createdAt < winA).map(t => t.userId));
+  const recent = new Set(transactions.filter(t => t.createdAt >= winA).map(t => t.userId));
+  const retained = [...prior].filter(id => recent.has(id)).length;
+  const pct = (a, b) => b ? +(100 * a / b).toFixed(1) : 0;
+  // 分群: 窗口内成功交易金额+频次排序后三分位
+  const per = us.map(u => {
+    const mine = succ.filter(t => t.userId === u.id);
+    return { user: u, count: mine.length, amount: +mine.reduce((s, t) => s + t.amount, 0).toFixed(2) };
+  }).sort((a, b) => b.amount - a.amount || b.count - a.count);
+  const cut1 = Math.ceil(per.length / 3), cut2 = Math.ceil(per.length * 2 / 3);
+  const segDef = [['vip', '高价值', per.slice(0, cut1)], ['growth', '成长', per.slice(cut1, cut2)], ['dormant', '沉睡', per.slice(cut2)]];
+  const segments = segDef.map(([key, label, list]) => ({
+    key, label, users: list.length,
+    avgCount: list.length ? +(list.reduce((s, x) => s + x.count, 0) / list.length).toFixed(1) : 0,
+    avgAmount: list.length ? +(list.reduce((s, x) => s + x.amount, 0) / list.length).toFixed(2) : 0,
+    gmv: +list.reduce((s, x) => s + x.amount, 0).toFixed(2),
+    gmvShare: pct(list.reduce((s, x) => s + x.amount, 0), gmv),
+    members: list.slice(0, 6).map(x => x.user.name),
+  }));
+  return {
+    metrics: {
+      users: us.length,
+      cardUsers: us.filter(hasCard).length,
+      openRate: pct(us.filter(hasCard).length, us.length), // 开卡转化率 = 领卡用户 / 总用户
+      kycPassed: us.filter(u => u.kycStatus === 'approved').length,
+      kycRate: pct(us.filter(u => u.kycStatus === 'approved').length, us.length), // KYC 通过率
+      firstTopupUsers: us.filter(u => topUsers.has(u.id)).length,
+      firstTopupRate: pct(us.filter(u => topUsers.has(u.id)).length, us.length), // 首充率(窗口内有成功充值)
+      consumeUsers: us.filter(u => payUsers.has(u.id)).length,
+      consumeRate: pct(us.filter(u => payUsers.has(u.id)).length, us.length), // 消费率(窗口内有成功消费)
+      retained, priorUsers: prior.size,
+      retentionRate: pct(retained, prior.size), // 留存率(7 日窗口近似)
+      gmv, netIncome,
+      ltv: us.length ? +(gmv / us.length).toFixed(2) : 0, // 用户 LTV = 人均 GMV
+      arpu: us.length ? +(netIncome / us.length).toFixed(2) : 0, // ARPU(净收入口径)
+      cac: 12, // CAC: 营销获客成本种子常数 $12/人
+      marketingSpend: +(12 * us.length).toFixed(2),
+    },
+    segments,
+    note: 'CAC 为营销种子常数($12/人); 留存率为 7 日窗口近似口径; LTV=GMV/用户数。',
+  };
+}
+// 销售分析: 团队行(窗口 GMV / 佣金 / 佣金效率 / 人均单产)
+function biSalesData(f, ctx) {
+  return salesReps.filter(s => !ctx.repIds || ctx.repIds.includes(s.id)).map(s => {
+    const team = subtreeIds(s.id);
+    const teamUids = new Set(users.filter(u => team.includes(u.salesRepId)).map(u => u.id));
+    const teamTx = ctx.txs.filter(t => teamUids.has(t.userId)); // 已含窗口/卡等级/商户筛选
+    const gmv = biGmv(teamTx);
+    const comm = +commissions.filter(c => c.salesId === s.id && c.createdAt >= f.startTs && c.createdAt <= f.endTs).reduce((s2, c) => s2 + c.amount, 0).toFixed(2);
+    return {
+      id: s.id, name: s.name, role: s.role, level: s.level, region: s.region, parentId: s.parentId,
+      users: users.filter(u => u.salesRepId === s.id).length,
+      cards: cards.filter(c => c.salesRepId === s.id).length,
+      teamSize: team.length - 1,
+      gmv, commission: comm,
+      eff: gmv > 0 ? +(100 * comm / gmv).toFixed(2) : 0, // 佣金效率 = 佣金 / GMV
+      perCapita: team.length ? +(gmv / team.length).toFixed(2) : 0, // 人均单产(含本人)
+    };
+  }).sort((a, b) => b.gmv - a.gmv);
+}
+// CRM 阶段漏斗(7 阶段分布合计 = 客户数; 前 6 阶段为递进漏斗, 沉睡单列)
+function biFunnelData(ctx) {
+  const ST = ['线索', '意向', '方案', '开卡', '充值', '活跃', '沉睡'];
+  const cs = customers.filter(c => !ctx.repIds || ctx.repIds.includes(c.ownerSalesId));
+  const list = ST.map((st, i) => ({
+    stage: st, order: i + 1,
+    count: cs.filter(c => c.stage === st).length,
+    pct: cs.length ? +(100 * cs.filter(c => c.stage === st).length / cs.length).toFixed(1) : 0,
+  }));
+  const funnel = ST.slice(0, 6).map((st, i) => ({ stage: st, value: cs.filter(c => ST.indexOf(c.stage) >= i && c.stage !== '沉睡').length }));
+  return { list, funnel, total: cs.length, stages: ST, note: '漏斗总数 = CRM 客户数; 「沉睡」为流失口径不计入递进漏斗。' };
+}
+// ===== P5.6 运维中心: Feature Flag / 限流 / 审计 / 监控 / 告警 / 链路追踪 / 备份 =====
+function initOpsSeeds() {
+  ffFlags = [
+    ['dashboardFlag', '驾驶舱', true, 100, '驾驶舱与业绩排行模块总开关'],
+    ['approvalsFlag', '审批中心', true, 100, 'P4.2 审批中心(真实生效: 关闭后审批页显示「功能已下线」横幅)'],
+    ['engineFlag', '风控规则引擎', true, 100, 'P4.3 风控规则引擎命中检测'],
+    ['complianceFlag', '合规中心', true, 100, 'P5.2 合规中心(KYC/KYB/AML/制裁筛查)'],
+    ['entFlag', '企业服务', true, 100, 'P5.3 企业账户与企业卡'],
+    ['mchFlag', '商户平台', true, 100, 'P5.4 商户收单与结算平台'],
+    ['biFlag', 'BI 数据中心', true, 100, 'P5.5 BI 数据中心(本模块)'],
+    ['opsFlag', '运维中心', true, 100, 'P5.6 生产运维中心(本页)'],
+    ['shopFlag', '积分商城', true, 100, '用户端积分商城(真实生效: 关闭后 /api/app/products 返回 503 降级)'],
+    ['notifyFlag', '消息通知中心', true, 100, 'P4.6 消息通知中心外发渠道'],
+    ['openFlag', '开放平台', true, 100, 'P4.5 开放 API 平台'],
+    ['grayPayFlag', '新支付编排灰度', true, 30, '新支付编排路由灰度发布(按 30% 流量逐步放量)'],
+  ].map(([key, label, enabled, rollout, desc], i) => ({ id: i + 1, key, label, enabled, rollout, desc, updatedAt: daysAgo(ri(2, 20), ri(0, 20)) }));
+  opsRateCfg = {
+    enabled: true, // 全局限流总开关
+    defaultQps: 5, defaultBurst: 10,
+    rules: [
+      { key: '/api/app/topup', qps: 2, burst: 5, desc: '用户端充值(防重放/防连点)' },
+      { key: '/api/app/pay', qps: 3, burst: 6, desc: '用户端消费(防重复下单)' },
+      { key: '/api/admin/ops/ratelimit/test', qps: 1, burst: 4, desc: '限流演示端点: 连打第 5 次触发 429' },
+      { key: '/api/open/*', qps: 10, burst: 20, desc: '开放 API 按 key 限流(演示)' },
+    ],
+  };
+  rlBuckets = new Map();
+}
+const ffOn = (key) => (ffFlags || []).some(f => f.key === key && f.enabled);
+// 内存令牌桶(演示级: 单实例; 生产预留 Redis + 滑动窗口, 按网关维度聚合)
+function rlAllow(key, qps, burst) {
+  if (!opsRateCfg.enabled) return { ok: true, tokens: null, seq: 0, disabled: true };
+  const bt = rlBuckets.get(key) || { tokens: burst, ts: now(), seq: 0 };
+  bt.tokens = Math.min(burst, bt.tokens + (now() - bt.ts) / 1000 * qps); // 按耗时补充令牌
+  bt.seq = (bt.seq || 0) + 1; bt.ts = now();
+  if (bt.tokens >= 1) { bt.tokens -= 1; rlBuckets.set(key, bt); return { ok: true, tokens: +bt.tokens.toFixed(2), seq: bt.seq }; }
+  rlBuckets.set(key, bt);
+  return { ok: false, tokens: +bt.tokens.toFixed(2), seq: bt.seq, retryAfterMs: Math.max(250, Math.ceil((1 - bt.tokens) / qps * 1000)) };
+}
+// 架构总览: 生产部署拓扑(每层 demo 现状 vs 生产预留) + 能力对照表 + 容灾卡
+function opsArchData() {
+  return {
+    layers: [
+      { name: '用户接入', demo: 'app.html / app-pc.html 直连本地 server / Workers', prod: 'CDN + WAF + DDoS 清洗(Cloudflare 边缘)', nodes: ['App H5', 'PC 门户', '管理后台', '小程序(预留)'] },
+      { name: '网关 / BFF', demo: 'server.js 单进程 HTTP 壳(静态文件 + /api 转发)', prod: 'API 网关(鉴权/路由/限流) + BFF 聚合层', nodes: ['api.ucard.io', '限流', '鉴权'] },
+      { name: '应用服务', demo: 'core.js 单模块承载全部业务域(内存态)', prod: '按域拆分微服务: 用户/卡/交易/风控/账本/编排/BI', nodes: ['用户服务', '交易服务', '风控服务', '账本服务', '编排服务'] },
+      { name: '编排 / 异步', demo: 'orchTxs 内存状态机 + 模拟渠道回调', prod: '消息队列(Kafka/RabbitMQ) + 定时任务(Cron) + 分布式锁(Redis)', nodes: ['MQ', 'Cron', '分布式锁'] },
+      { name: '持久层', demo: '内存 JS 对象, 冷启动 initSeed() 重建种子', prod: 'MySQL/PostgreSQL 主从 + Redis 缓存 + R2/S3 对象存储', nodes: ['MySQL', 'Redis', '对象存储'] },
+      { name: '可观测', demo: 'sysLogs/opLogs 内存数组 + 运维中心模拟面板', prod: '日志(ELK) + 指标(Prometheus) + 链路追踪(OpenTelemetry) + 告警联动消息中心', nodes: ['Log', 'Metric', 'Trace', 'Alert'] },
+    ],
+    table: [
+      { item: 'MySQL/PostgreSQL 持久化', demo: '内存对象(冷启动重建)', prod: '主从 + 读写分离 + 每日备份', ok: false },
+      { item: 'Redis 缓存', demo: '无(直接读内存对象)', prod: '热点缓存 / 分布式锁 / 限流计数器', ok: false },
+      { item: '消息队列', demo: '同步调用 + 模拟回调', prod: 'Kafka: 交易/佣金/通知异步解耦', ok: false },
+      { item: '对象存储', demo: '无(证件等仅存脱敏字段)', prod: 'R2/S3: 证件影像 / 账单归档', ok: false },
+      { item: '定时任务', demo: '请求触发式懒初始化', prod: '对账 / 结算 / 快照 Cron 任务', ok: false },
+      { item: '分布式锁', demo: '无(单实例无竞争)', prod: 'Redis Redlock: 结算/对账互斥', ok: false },
+      { item: '审计日志', demo: '已实现: 运维中心 → 审计日志(sysLogs+opLogs 合流)', prod: 'WORM 追加写 + 独立审计库', ok: true },
+      { item: '服务监控', demo: '已实现: 运维中心 → 服务监控(24h 模拟打点)', prod: 'Prometheus + Grafana 大盘', ok: true },
+      { item: '链路追踪', demo: '已实现: 运维中心 → 链路追踪(交易贯穿时间线)', prod: 'OpenTelemetry 全链路 span', ok: true },
+      { item: '错误告警', demo: '已实现: 运维中心 → 告警规则(联动消息中心渠道)', prod: 'Alertmanager 多级告警值班', ok: true },
+      { item: '数据备份', demo: '已实现: 备份导出(全量内存 JSON 下载)', prod: '全量 dump + binlog 增量 + 对象存储归档', ok: true },
+      { item: '灾备恢复', demo: 'POST /api/demo/reset 一键重建(演示专用)', prod: '同城双活 + 异地冷备, RPO≤5min / RTO≤30min', ok: false },
+      { item: '灰度发布', demo: '已实现: Feature Flag 灰度百分比(grayPayFlag 30%)', prod: '按用户/地区灰度 + 金丝雀集群 + 一键回滚', ok: true },
+      { item: 'Feature Flag', demo: '已实现: 12 个模块开关, 2 个真实生效点', prod: '接入配置中心, 支持AB实验', ok: true },
+      { item: 'API 限流', demo: '已实现: 内存令牌桶, 演示端点可触发 429', prod: '网关级 Redis 滑动窗口, 按 key/租户', ok: true },
+      { item: '数据脱敏', demo: '已实现: 卡号/证件/手机号掩码, 备份导出脱敏', prod: '字段级加密 + KMS 密钥管理', ok: true },
+    ],
+    resilience: [
+      { title: '数据备份', demo: '内存态全量数据, 点击「备份导出」下载 JSON(含脱敏)', prod: '每日全量 dump + binlog 增量 + 对象存储归档, 保留 30 天' },
+      { title: '灾备恢复', demo: 'POST /api/demo/reset 重建种子数据(演示环境专用)', prod: '同城双活 + 异地冷备, RPO ≤ 5min / RTO ≤ 30min, 季度灾备演练' },
+      { title: '灰度发布', demo: 'Feature Flag grayPayFlag 按 30% 放量演示', prod: '按用户/地区百分比灰度 + 金丝雀集群 + 一键回滚' },
+    ],
+    note: 'demo 为纯内存单实例架构, 本页展示生产化改造的拓扑与预留方案, 不引入真实中间件。',
+  };
+}
+// 审计日志: 登录日志 + 操作日志 合流统一视图(支持 人/模块/动作/时间 筛选)
+function opsAuditData(q) {
+  const who = String(q.who || '').trim().toLowerCase();
+  const mod = String(q.module || '').trim();
+  const act = String(q.action || '').trim();
+  const hours = parseInt(q.hours, 10) || 0;
+  const since = hours > 0 ? now() - hours * 36e5 : 0;
+  const all = [
+    ...sysLogs.map(l => ({ id: 'L' + l.id, source: 'login', sourceLabel: '登录日志', at: l.createdAt,
+      actor: l.name + '(' + l.username + ')', module: '登录认证', action: '登录' + (l.result === '成功' ? '' : '失败'),
+      target: l.ip + ' · ' + l.ua, result: l.result })),
+    ...opLogs.map(o => ({ id: 'O' + o.id, source: 'op', sourceLabel: '操作日志', at: o.createdAt,
+      actor: o.operator, module: o.module, action: o.action, target: o.target, result: o.result })),
+  ];
+  const rows = all.filter(r => r.at >= since)
+    .filter(r => !who || r.actor.toLowerCase().includes(who))
+    .filter(r => !mod || r.module.includes(mod))
+    .filter(r => !act || r.action.includes(act))
+    .sort((a, b) => b.at - a.at).slice(0, 200);
+  return {
+    list: rows,
+    summary: {
+      total: rows.length, logins: rows.filter(r => r.source === 'login').length, ops: rows.filter(r => r.source === 'op').length,
+      actors: new Set(rows.map(r => r.actor)).size, modules: [...new Set(all.map(r => r.module))],
+    },
+    note: '审计口径: 登录日志(认证事件) + 操作日志(业务/配置变更)双流合一; 完整性说明: 关键资金动作(发卡/调账/结算/开关切换)均强制落 opLogs。生产预留: WORM 追加写 + 独立审计库 + 安全审计员只读。',
+  };
+}
+// 服务监控: 各模块 24h 响应时间 / 成功率(可实时推导的用真实数据, 其余确定性模拟)
+function opsMonitorData() {
+  const okLogins = sysLogs.filter(l => l.result === '成功').length;
+  const txAll = transactions.length || 1;
+  const txOkRate = +(100 * transactions.filter(t => t.status === 'success').length / txAll).toFixed(2);
+  const orchAvg = orchAdapters.length ? +(orchAdapters.reduce((s, a) => s + (a.successRate || 100), 0) / orchAdapters.length).toFixed(2) : 100;
+  const ledOk = verifyLedger().balanced;
+  const defs = [
+    { key: 'auth', name: '登录 / 认证', path: 'POST /api/login', baseMs: 120, ok: sysLogs.length ? +(100 * okLogins / sysLogs.length).toFixed(2) : 100, src: 'sysLogs 实时推导' },
+    { key: 'app', name: '用户端交易', path: '/api/app/topup · /api/app/pay', baseMs: 210, ok: txOkRate, src: 'transactions 实时推导' },
+    { key: 'risk', name: '风控规则引擎', path: '/api/admin/risk-engine/hits', baseMs: 65, ok: 99.4, src: '模拟打点' },
+    { key: 'orch', name: '支付编排渠道', path: '/api/admin/orch/txs', baseMs: 640, ok: orchAvg, src: 'orchAdapters 实时推导' },
+    { key: 'ledger', name: '复式账本', path: '/api/admin/ledger/verify', baseMs: 95, ok: ledOk ? 100 : 97.2, src: 'ledger/verify 实时推导' },
+    { key: 'approvals', name: '审批中心', path: '/api/admin/approvals', baseMs: 150, ok: 99.8, src: '模拟打点' },
+    { key: 'bi', name: 'BI 数据中心', path: '/api/admin/bi/*', baseMs: 320, ok: 99.95, src: '模拟打点' },
+    { key: 'notify', name: '消息通知外发', path: '/api/admin/notify/*', baseMs: 380, ok: 99.1, src: '模拟打点' },
+  ];
+  const modules = defs.map((m, i) => {
+    const series = [];
+    for (let h = 23; h >= 0; h--) {
+      const peak = h >= 19 && h <= 22; // 晚高峰
+      series.push({
+        h: d2(h),
+        ms: Math.max(20, Math.round(m.baseMs * (peak ? 1.6 : 1) + 25 * Math.abs(Math.sin((h + i * 2) / 3.1)))),
+        ok: +Math.min(100, Math.max(90, m.ok - (peak ? 1.2 : 0.3) * Math.abs(Math.cos((h + i) / 2.7)))).toFixed(2),
+      });
+    }
+    const avgMs = Math.round(series.reduce((s, x) => s + x.ms, 0) / series.length);
+    const minOk = +Math.min(...series.map(x => x.ok)).toFixed(2);
+    return { ...m, series, avgMs, minOk, status: minOk >= 99 ? 'healthy' : minOk >= 97 ? 'degraded' : 'down',
+      statusLabel: minOk >= 99 ? '健康' : minOk >= 97 ? '降级' : '异常' };
+  });
+  return {
+    modules,
+    summary: { total: modules.length, healthy: modules.filter(m => m.status === 'healthy').length, degraded: modules.filter(m => m.status === 'degraded').length, down: modules.filter(m => m.status === 'down').length },
+    note: '响应时间/成功率为演示级打点(可推导项取自真实数据); 生产接入 Prometheus 指标采集 + Grafana 大盘。',
+  };
+}
+// 错误告警规则(阈值可触发判定, 通知渠道联动消息中心)
+function opsAlertsData() {
+  const degraded = orchAdapters.filter(a => a.status === 'degraded');
+  const led = verifyLedger();
+  const txAll = transactions.length || 1;
+  const riskRate = biRiskRate(transactions);
+  const timeOuts = approvals.filter(apTimeout).length;
+  const diffCnt = Object.values(financeMeta.diffs).reduce((s, d) => s + Object.keys(d).length, 0);
+  const chName = (keys) => keys.map(k => (notifyChannels.find(c => c.key === k) || { name: k }).name).join(' / ');
+  const rules = [
+    { id: 1, name: '渠道成功率跌破 97%', metric: 'orch.adapter.successRate', op: '<', threshold: '97%', level: 'critical', levelLabel: '严重', channels: ['sms', 'webhook'], enabled: true, status: degraded.length ? 'firing' : 'normal', detail: degraded.length ? '触发中: ' + degraded.map(a => a.name + ' ' + a.successRate + '%').join('、') : '全部渠道正常' },
+    { id: 2, name: '复式账本不平衡', metric: 'ledger.balanced', op: '=', threshold: 'false', level: 'critical', levelLabel: '严重', channels: ['inapp', 'sms'], enabled: true, status: led.balanced ? 'normal' : 'firing', detail: led.balanced ? '账本重放校验通过' : '账本不平衡: ' + (led.errors || []).slice(0, 2).join('; ') },
+    { id: 3, name: '风险交易率 > 5%', metric: 'bi.riskRate(30d)', op: '>', threshold: '5%', level: 'warn', levelLabel: '警告', channels: ['inapp', 'email'], enabled: true, status: riskRate > 5 ? 'firing' : 'normal', detail: '当前 ' + riskRate + '%' },
+    { id: 4, name: '审批单超时积压 > 5', metric: 'approvals.timeout', op: '>', threshold: '5 单', level: 'warn', levelLabel: '警告', channels: ['inapp'], enabled: true, status: timeOuts > 5 ? 'firing' : 'normal', detail: '当前超时 ' + timeOuts + ' 单' },
+    { id: 5, name: '对账差异未处理 > 3', metric: 'finance.openDiffs', op: '>', threshold: '3 笔', level: 'warn', levelLabel: '警告', channels: ['email'], enabled: true, status: diffCnt > 3 ? 'firing' : 'normal', detail: '当前待处理差异 ' + diffCnt + ' 笔' },
+    { id: 6, name: 'DAU 环比下跌 > 20%', metric: 'bi.dau.wow', op: '>', threshold: '20%', level: 'info', levelLabel: '提示', channels: ['inapp'], enabled: false, status: 'normal', detail: '演示停用中' },
+  ];
+  return {
+    rules: rules.map(r => ({ ...r, channelsLabel: chName(r.channels) })),
+    channels: notifyChannels.filter(c => c.enabled).map(c => ({ key: c.key, name: c.name, icon: c.icon })),
+    summary: { total: rules.length, firing: rules.filter(r => r.status === 'firing' && r.enabled).length, enabled: rules.filter(r => r.enabled).length },
+    note: '告警触发后按渠道联动消息中心外发(演示环境仅记录, 不真实发送)。',
+  };
+}
+// 链路追踪: 取一笔交易, 用既有数据拼贯穿时间线(用户端 → 风控 → 编排 → 账本 → 积分/佣金)
+function opsTraceCandidates() {
+  return orchTxs.filter(o => o.localRef != null).map(o => {
+    const t = transactions.find(x => x.id === o.localRef);
+    if (!t) return null;
+    const u = users.find(x => x.id === t.userId);
+    return { txId: t.id, traceId: 'TRC-' + String(t.id).padStart(8, '0'), type: t.type, status: t.status, amount: t.amount,
+      createdAt: t.createdAt, user: u ? u.name : '—', orchState: o.state, sceneLabel: o.sceneLabel };
+  }).filter(Boolean).slice(0, 10);
+}
+function opsTraceData(txId) {
+  const tx = transactions.find(t => t.id === +txId);
+  if (!tx) return { error: 'not found' };
+  const u = users.find(x => x.id === tx.userId);
+  const card = cards.find(c => c.id === tx.cardId);
+  const steps = [];
+  steps.push({ layer: '用户端', ts: tx.createdAt, title: tx.type === 'topup' ? '发起充值' : '发起消费',
+    note: (u ? u.name : '用户#' + tx.userId) + ' · ' + (tx.type === 'topup' ? (tx.method === 'usdt' ? 'USDT 链上' : '银行卡') : '商户 ' + (tx.merchant || '—')) + ' · $' + (+tx.amount).toFixed(2) + (card ? ' · 尾号 ' + String(card.cardNo).replace(/\s/g, '').slice(-4) : '') });
+  // 风控: 引擎命中(按 txId 关联) + 该用户事件时间轴(±24h 邻近片段)
+  engineHits.filter(h2 => h2.txId === tx.id).forEach(h2 => steps.push({ layer: '风控', ts: h2.createdAt, title: '规则引擎命中: ' + h2.ruleName, note: '动作 ' + h2.action + ' · 处理结果 ' + h2.result + ' · 场景 ' + h2.scene }));
+  riskEvents.filter(e => e.userId === tx.userId).forEach(e => e.timeline
+    .filter(x => Math.abs(x.ts - tx.createdAt) < 864e5)
+    .forEach(x => steps.push({ layer: '风控', ts: x.ts, title: '风险事件 #' + e.id + ' · ' + x.label, note: (x.note || '') + (x.operator ? ' · ' + x.operator : '') })));
+  // 编排: localRef 关联的编排单状态机
+  const o = orchTxs.find(x => x.localRef === tx.id);
+  if (o) o.timeline.forEach(x => steps.push({ layer: '编排', ts: x.ts, title: o.sceneLabel + ' · ' + (x.from ? x.from + ' → ' + x.to : '进入 ' + x.to), note: (x.note || '') + ' · idem=' + (o.idempotencyKey || '—') }));
+  // 账本: 该交易的复式分录
+  ledgerEntries.filter(e => e.txId === tx.id).forEach(e => {
+    const acc = ledgerAccounts.find(a => a.key === e.accountKey);
+    steps.push({ layer: '账本', ts: e.createdAt, title: (acc ? acc.name : e.accountKey) + ' ' + (e.dir === 'debit' ? '借方' : '贷方') + ' $' + (+e.amount).toFixed(2), note: (e.memo || '') + ' · 分录后余额 $' + (+e.balanceAfter).toFixed(2) });
+  });
+  // 积分 / 佣金
+  pointsLogs.filter(l => l.refNo == tx.id && l.userId === tx.userId).forEach(l => steps.push({ layer: '积分', ts: l.createdAt, title: (l.delta > 0 ? '+' : '') + l.delta + ' 分 · ' + l.source, note: '积分余额 ' + l.balanceAfter + ' 分' }));
+  commissions.filter(c => c.refId === tx.id).forEach(c => steps.push({ layer: '佣金', ts: c.createdAt, title: c.typeLabel + ' · ' + c.tierLabel + '(' + (repById(c.salesId) || { name: '#' + c.salesId }).name + ')', note: '基数 $' + (+c.baseAmt).toFixed(2) + ' × ' + c.rate + ' = $' + (+c.amount).toFixed(2) + ' · ' + (c.status === 'settled' ? '已结算' : '待结算') }));
+  steps.sort((a, b) => a.ts - b.ts);
+  return {
+    traceId: 'TRC-' + String(tx.id).padStart(8, '0'),
+    tx: { id: tx.id, type: tx.type, status: tx.status, amount: tx.amount, method: tx.method || '', merchant: tx.merchant || '', createdAt: tx.createdAt, user: u ? u.name : '—', cardNoMask: card ? maskCardNo(card.cardNo) : '—' },
+    steps, stepCount: steps.length,
+    layers: ['用户端', '风控', '编排', '账本', '积分', '佣金'],
+    note: 'traceId 按交易号生成; 时间线由既有数据(交易/引擎命中/风险事件/编排单/账本分录/积分/佣金)拼装; 生产接入 OpenTelemetry 全链路 span。',
+  };
+}
+// 数据备份: 全量内存集合导出(卡号/CVV/手机号脱敏 — 数据脱敏演示)
+function opsBackupData() {
+  const data = {
+    users: users.map(u => ({ ...u, phone: u.phone ? u.phone.slice(0, 6) + ' ****' + u.phone.slice(-2) : '' })),
+    cards: cards.map(c => ({ ...c, cardNo: maskCardNo(c.cardNo), cvv: '***' })),
+    transactions, pointsLogs, commissions, customers, orders, products, tasks,
+    riskEvents, riskRules, approvals, engineRules, engineHits,
+    ledgerAccounts, ledgerEntries,
+    orchAdapters, orchTxs,
+    entAccounts, entCards, mchAccounts, mchOrders, mchSettles,
+    ffFlags, tenants,
+  };
+  const counts = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v.length]));
+  return {
+    exportedAt: now(), version: 'demo-memory-1.0',
+    note: '演示环境为纯内存数据, 本导出即全量备份(卡号/CVV/手机号已脱敏)。生产预留: MySQL 每日全量 dump + binlog 增量 + 对象存储归档, 保留 30 天, 恢复演练季度一次。',
+    counts, data,
+  };
+}
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
 export function handleApi(method, p, q = {}, b = {}, h = {}) {
@@ -3092,6 +3549,11 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     if (p === '/api/admin/approvals' || p.startsWith('/api/admin/approvals/')) {
       if (sid !== 1) return J({ error: '仅运营总监可访问审批中心' }, 403);
       if (p === '/api/admin/approvals' && method === 'GET') { // ?box=todo|mine|all & type= 流程类型
+        const ffAp = ffFlags ? ffFlags.find(x => x.key === 'approvalsFlag') : null; // P5.6 Feature Flag 生效点
+        if (ffAp && !ffAp.enabled) return J({ disabled: true, flag: 'approvalsFlag',
+          notice: '审批中心功能已通过 Feature Flag 下线(approvalsFlag=off), 业务数据保留, 可在「运维中心 → Feature Flag」恢复',
+          box: ['todo', 'mine', 'all'].indexOf(q.box) >= 0 ? q.box : 'todo', types: Object.keys(AP_TYPE_LABEL).map(k => ({ key: k, label: AP_TYPE_LABEL[k] })),
+          summary: { todo: 0, mine: 0, approved: 0, rejected: 0, cancelled: 0, timeout: 0, total: approvals.length }, list: [] });
         const box = ['todo', 'mine', 'all'].indexOf(q.box) >= 0 ? q.box : 'todo';
         let list = [...approvals];
         if (box === 'todo') list = list.filter(a => a.status === 'pending');
@@ -4018,6 +4480,158 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       }
       return J({ error: 'not found: ' + p }, 404);
     }
+    // ============ P5.5 BI 数据中心(总监专属) ============
+    if (p.startsWith('/api/admin/bi/')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问 BI 数据中心' }, 403);
+      const f = biParseQ(q);
+      const ctx = biCtx(f);
+      const filtersEcho = { range: f.range, level: f.level || null, merchant: f.merchant || null, rep: f.rep || null, repName: f.rep ? (repById(f.rep) || {}).name : null };
+      const rangeLabel = { today: '今日', '7d': '近 7 天', '30d': '近 30 天' }[f.range];
+      const biOptions = { // 前端全局筛选器选项(等级/商户/销售)
+        levels: Object.keys(CARD_LEVELS).map(k => ({ key: k, label: CARD_LEVELS[k].label })),
+        merchants: [...new Set(transactions.filter(t => t.merchant).map(t => t.merchant))].sort(),
+        reps: salesReps.map(s => ({ id: s.id, name: s.name, level: s.level })),
+      };
+      if (p === '/api/admin/bi/overview' && method === 'GET') { // 实时指标卡 + 环比(上一同长周期)
+        const cur = biOverviewData(f, ctx);
+        const span = f.endTs - f.startTs;
+        const fPrev = { ...f, startTs: f.startTs - span, endTs: f.startTs };
+        const prev = biOverviewData(fPrev, biCtx(fPrev));
+        return J({ filters: filtersEcho, rangeLabel, options: biOptions, metrics: cur, prev,
+          note: 'DAU/MAU 按窗口内交易 distinct userId 近似; GMV=成功充值+消费(与驾驶舱同口径); 净收入=手续费+月费-佣金(与财务报表同口径); 积分成本=积分发放×$0.01。' });
+      }
+      if (p === '/api/admin/bi/users' && method === 'GET') {
+        const d = biUsersData(f, ctx);
+        return J({ filters: filtersEcho, rangeLabel, options: biOptions, ...d });
+      }
+      if (p === '/api/admin/bi/tx' && method === 'GET') {
+        const txs = ctx.txs;
+        const byChannel = [...biGroupTxs(txs, 'channel', ctx).entries()].map(([k, list]) => ({ dim: k, ...biRowMetrics(list) })).sort((a, b2) => b2.gmv - a.gmv);
+        const byLevel = Object.keys(CARD_LEVELS).map(lv => ({ dim: CARD_LEVELS[lv].label, ...biRowMetrics(txs.filter(t => (ctx.cardById.get(t.cardId) || {}).level === lv)) }));
+        const byMerchant = [...biGroupTxs(txs.filter(t => t.type === 'consume'), 'merchant', ctx).entries()]
+          .map(([k, list]) => ({ dim: k, ...biRowMetrics(list) })).sort((a, b2) => b2.gmv - a.gmv).slice(0, 10);
+        const byHour = Array.from({ length: 24 }, (_, h) => { const list = txs.filter(t => new Date(t.createdAt).getHours() === h); return { dim: d2(h) + ':00', txCount: list.length, gmv: biGmv(list) }; });
+        const distDef = [[0, 50], [50, 100], [100, 200], [200, 500], [500, Infinity]];
+        const succ = biSucc(txs).filter(t => t.type === 'topup' || t.type === 'consume');
+        const amountDist = distDef.map(([lo, hi]) => ({ dim: hi === Infinity ? '$' + lo + '+' : '$' + lo + '-' + hi, txCount: succ.filter(t => t.amount >= lo && t.amount < hi).length }));
+        return J({ filters: filtersEcho, rangeLabel, options: biOptions, summary: biRowMetrics(txs), byChannel, byLevel, byMerchant, byHour, amountDist, trend: biTrend(f, ctx),
+          note: '按渠道/卡等级/商户(Top10)/时段(小时)/金额分布; 趋势为窗口内日(小时)粒度 GMV 与笔数。' });
+      }
+      if (p === '/api/admin/bi/sales' && method === 'GET') {
+        const rows = biSalesData(f, ctx);
+        const head = rows.find(r => r.level === 0) || rows[0] || { gmv: 0, perCapita: 0 };
+        const commission = biCommissionScoped(f, ctx); // 汇总佣金取窗口口径(总监行个人佣金为 0 属正常: 三层分佣覆盖不到)
+        return J({ filters: filtersEcho, rangeLabel, options: biOptions, rows, summary: {
+          gmv: head.gmv, commission, eff: head.gmv > 0 ? +(100 * commission / head.gmv).toFixed(2) : 0,
+          perCapita: head.perCapita, reps: rows.length,
+        }, note: '每行 GMV 为该销售 subtree 口径(逐级包含下级); 人均单产=团队 GMV/团队人数(含本人); 佣金效率=窗口佣金/团队 GMV。' });
+      }
+      if (p === '/api/admin/bi/funnel' && method === 'GET') {
+        const d = biFunnelData(ctx);
+        return J({ filters: filtersEcho, options: biOptions, ...d });
+      }
+      if (p === '/api/admin/bi/report' && method === 'GET') { // ?metrics=a,b&dims=day,channel&format=csv
+        const mk = String(q.metrics || '').split(',').map(s => s.trim()).filter(k => BI_METRICS[k]);
+        const metrics = mk.length ? mk : ['txCount', 'gmv'];
+        const dims = String(q.dims || '').split(',').map(s => s.trim()).filter(k => BI_DIMS[k]).slice(0, 2);
+        const groups = new Map();
+        ctx.txs.forEach(t => {
+          const key = dims.length ? dims.map(d => biDimValue(d, t, ctx)).join(' / ') : '全部';
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(t);
+        });
+        const rows = [...groups.entries()].map(([k, list]) => {
+          const m = biRowMetrics(list);
+          const row = { dim: k };
+          metrics.forEach(key => { row[key] = m[key]; });
+          return row;
+        });
+        const timeOnly = dims.length && dims.every(d => d === 'day' || d === 'hour'); // 时间维度保持时序, 其余按 GMV 降序
+        rows.sort(timeOnly ? (a, b2) => String(a.dim).localeCompare(String(b2.dim)) : (a, b2) => (b2.gmv || 0) - (a.gmv || 0));
+        const columns = [{ key: 'dim', label: dims.length ? dims.map(d => BI_DIMS[d].label).join(' × ') : '汇总' }]
+          .concat(metrics.map(k => ({ key: k, label: BI_METRICS[k].label + '(' + BI_METRICS[k].unit + ')' })));
+        if (q.format === 'csv') {
+          const lines = [columns.map(c => c.label).join(',')];
+          rows.forEach(r => lines.push(columns.map(c => String(r[c.key] == null ? '' : r[c.key]).replace(/,/g, ' ')).join(',')));
+          return J({ filename: 'bi-report-' + f.range + '.csv', csv: lines.join('\r\n'), rowCount: rows.length,
+            note: 'CSV 内容(前端导出时追加 UTF-8 BOM, 复用对账导出模式)' });
+        }
+        return J({ filters: filtersEcho, rangeLabel, options: biOptions, columns, rows,
+          catalog: { metrics: Object.entries(BI_METRICS).map(([k, v]) => ({ key: k, ...v })), dims: Object.entries(BI_DIMS).map(([k, v]) => ({ key: k, ...v })) },
+          note: '自定义报表: 勾选指标×维度(最多 2 维交叉)生成表格, 可导出 CSV。' });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    // ============ P5.6 运维中心(总监专属, 演示级预留) ============
+    if (p.startsWith('/api/admin/ops/')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问运维中心' }, 403);
+      const opsOp = (module, action, target, result = '成功') => { // 运维操作写审计(与系统管理同模式)
+        opLogs.unshift({ id: opLogs.length ? Math.max(...opLogs.map(o => o.id)) + 1 : 910100, createdAt: now(), operator: me.name, module, action, target, result });
+        if (opLogs.length > 150) opLogs.length = 150;
+      };
+      if (p === '/api/admin/ops/arch' && method === 'GET') return J(opsArchData());
+      if (p === '/api/admin/ops/flags' && method === 'GET') {
+        return J({ list: ffFlags.map(f => ({ ...f })),
+          effects: [
+            { key: 'shopFlag', effect: '关闭后用户端 GET /api/app/products 返回 503 降级响应(商城页显示错误提示)' },
+            { key: 'approvalsFlag', effect: '关闭后审批中心 GET /api/admin/approvals 返回 disabled 标记, 页面显示「功能已下线」横幅' },
+            { key: 'grayPayFlag', effect: '灰度百分比控制新支付编排路由放量(演示展示, 不改路由)' },
+          ],
+          note: 'Feature Flag 为演示级内存开关(生产接入配置中心); 切换即写 opLogs 审计。' });
+      }
+      const mFlag = p.match(/^\/api\/admin\/ops\/flags\/(\d+)$/);
+      if (mFlag && method === 'PATCH') { // 开关切换 / 灰度百分比调整
+        const fl = ffFlags.find(x => x.id === +mFlag[1]);
+        if (!fl) return J({ error: '开关不存在' }, 404);
+        const changed = [];
+        if (typeof b.enabled === 'boolean' && b.enabled !== fl.enabled) { fl.enabled = b.enabled; changed.push('enabled → ' + b.enabled); }
+        if (b.rollout != null) { const r = Math.max(0, Math.min(100, Math.round(+b.rollout))); if (r !== fl.rollout) { fl.rollout = r; changed.push('灰度 ' + r + '%'); } }
+        if (!changed.length) return J({ error: '无有效修改字段(支持 enabled: boolean / rollout: 0-100)' }, 400);
+        fl.updatedAt = now();
+        opsOp('运维中心', 'Feature Flag 切换', fl.key + '(' + fl.label + '): ' + changed.join(', '));
+        return J({ ok: true, flag: { ...fl } });
+      }
+      if (p === '/api/admin/ops/ratelimit' && method === 'GET') {
+        return J({ ...opsRateCfg, tracked: rlBuckets.size,
+          note: '内存令牌桶(单实例演示); 生产预留网关级 Redis 滑动窗口按 key/租户聚合。全局限流开关关闭后 test 端点不再触发 429。' });
+      }
+      if (p === '/api/admin/ops/ratelimit' && method === 'PATCH') { // 全局开关 / 规则 qps/burst
+        const changed = [];
+        if (typeof b.enabled === 'boolean' && b.enabled !== opsRateCfg.enabled) { opsRateCfg.enabled = b.enabled; changed.push('全局限流 → ' + b.enabled); }
+        if (b.qps != null || b.burst != null) {
+          const rule = opsRateCfg.rules.find(r => r.key === b.key);
+          if (!rule) return J({ error: '限流规则不存在: ' + (b.key || '(未指定)') }, 400);
+          if (b.qps != null) { const v = Math.max(1, Math.round(+b.qps) || 1); if (v !== rule.qps) { rule.qps = v; changed.push(rule.key + ' QPS → ' + v); } }
+          if (b.burst != null) { const v = Math.max(1, Math.round(+b.burst) || 1); if (v !== rule.burst) { rule.burst = v; changed.push(rule.key + ' 突发 → ' + v); rlBuckets.delete('ops-demo:default'); } }
+        }
+        if (!changed.length) return J({ error: '无有效修改字段(支持 enabled / key+qps / key+burst)' }, 400);
+        opsOp('运维中心', '限流配置变更', changed.join(', '));
+        return J({ ok: true, cfg: { ...opsRateCfg } });
+      }
+      if (p === '/api/admin/ops/ratelimit/test' && method === 'POST') { // 限流演示: 连打第 5 次触发 429
+        const rule = opsRateCfg.rules.find(r => r.key === '/api/admin/ops/ratelimit/test') || { qps: 1, burst: 4 };
+        const r = rlAllow('ops-demo:' + String(h['x-demo-key'] || 'default'), rule.qps, rule.burst);
+        if (!r.ok) return J({ error: '请求过于频繁: 已触发限流(429), 令牌不足, 约 ' + r.retryAfterMs + 'ms 后恢复', rateLimited: true, retryAfterMs: r.retryAfterMs, tokensLeft: r.tokens, rule }, 429);
+        return J({ ok: true, seq: r.seq, tokensLeft: r.tokens, rule,
+          note: '内存令牌桶 burst=' + rule.burst + ': 快速连打 ' + rule.burst + ' 次后第 ' + (rule.burst + 1) + ' 次返回 429。' });
+      }
+      if (p === '/api/admin/ops/audit' && method === 'GET') return J(opsAuditData(q));
+      if (p === '/api/admin/ops/monitor' && method === 'GET') return J(opsMonitorData());
+      if (p === '/api/admin/ops/alerts' && method === 'GET') return J(opsAlertsData());
+      if (p === '/api/admin/ops/trace' && method === 'GET') return J({ candidates: opsTraceCandidates() });
+      const mTrace = p.match(/^\/api\/admin\/ops\/trace\/(\d+)$/);
+      if (mTrace && method === 'GET') {
+        const d = opsTraceData(mTrace[1]);
+        if (d.error) return J({ error: '交易不存在: #' + mTrace[1] }, 404);
+        return J(d);
+      }
+      if (p === '/api/admin/ops/backup' && method === 'GET') { // 全量内存数据 JSON(前端 Blob 下载)
+        const bk = opsBackupData();
+        opsOp('运维中心', '数据备份导出', '全量内存 JSON · ' + Object.keys(bk.counts).length + ' 个集合 / ' + Object.values(bk.counts).reduce((s, n) => s + n, 0) + ' 条');
+        return J(bk);
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
     return J({ error: 'not found: ' + p }, 404);
   }
 
@@ -4047,6 +4661,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       return J({ status: card.status });
     }
     if (p === '/api/app/products') { // P2.3: 返回商品(含限购/评分) + 分类列表
+      if (ffFlags && !ffOn('shopFlag')) return J({ error: '积分商城功能已下线 (Feature Flag: shopFlag=off), 请联系运营在后台「运维中心」恢复', flag: 'shopFlag', degraded: true }, 503); // P5.6 生效点
       const on = products.filter(pr => pr.status === 'on').map(pr => ({ ...pr, limitPerUser: productLimit(pr), rating: productRating(pr.id) }));
       return J({ products: on, categories: ['全部', ...new Set(on.map(pr => pr.category))] });
     }

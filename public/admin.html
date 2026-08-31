@@ -292,6 +292,41 @@
 @media (max-width:1080px){ .perm-grid{grid-template-columns:1fr} }
 .api-doc-grid{grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:980px){ .api-doc-grid{grid-template-columns:1fr} }
+
+/* ---------- P5.5 BI 数据中心 ---------- */
+.delta-up{color:var(--ok);font-weight:600}
+.delta-down{color:var(--bad);font-weight:600}
+.delta-flat{color:var(--ink3)}
+.bi-hbar{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.bi-hbar .bi-hbar-lab{width:120px;flex:none;font-size:12.5px;color:var(--ink2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bi-hbar .bi-hbar-track{flex:1;height:20px;background:#f1f5f9;border-radius:6px;overflow:hidden}
+.bi-hbar .bi-hbar-fill{height:100%;background:var(--grad);border-radius:6px;min-width:2px}
+.bi-hbar .bi-hbar-val{width:150px;flex:none;font-size:12px;color:var(--ink2)}
+.chk-line{display:flex;flex-wrap:wrap;gap:7px 16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.chk-line .perm-act{font-size:12.5px}
+.chk-line .perm-act b{font-weight:600}
+
+/* ---------- P5.6 运维中心 ---------- */
+.ops-layer{display:flex;gap:14px;align-items:stretch;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff;overflow:hidden}
+.ops-layer .ops-lab{flex:none;width:96px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;text-align:center;line-height:1.4;padding:10px 6px}
+.ops-layer .ops-body{flex:1;padding:10px 14px;min-width:0}
+.ops-layer .ops-nodes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
+.ops-node{background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--ink2);white-space:nowrap}
+.ops-layer .ops-cmp{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:12px}
+.ops-layer .ops-cmp .k{color:var(--ink3);flex:none}
+.ops-layer .ops-cmp .row{display:flex;gap:6px;min-width:0}
+.ops-layer .ops-cmp .row .v{color:var(--ink2);word-break:break-all}
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px}
+.mod-card{border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px 14px}
+.mod-card .mc-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.spark{display:flex;align-items:flex-end;gap:2px;height:44px;margin-top:8px}
+.spark i{flex:1;min-width:3px;background:#c7d2fe;border-radius:2px 2px 0 0;display:block}
+.spark i.hot{background:var(--warn)}
+.rl-log{font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.9;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px 16px;margin-top:10px;max-height:260px;overflow:auto;white-space:pre-wrap}
+.rl-log .ok{color:#86efac}
+.rl-log .bad{color:#fca5a5}
+.tl-type.tl-ops{background:#f3e8ff;color:#7c3aed}
+@media (max-width:980px){ .ops-layer .ops-cmp{grid-template-columns:1fr} .ops-layer .ops-lab{width:70px;font-size:12px} }
 </style>
 </head>
 <body>
@@ -1396,6 +1431,158 @@
       <div class="card"><div class="tbl-wrap" id="mrepBody"></div></div>
     </section>
 
+    <!-- 72. BI 实时指标 -->
+    <section class="page" id="page-biOverview">
+      <div class="notice">📡 实时指标大屏: DAU/MAU、GMV、净收入、佣金成本、积分成本、风险交易率、退款率, 均带环比箭头(与上一同长周期对比)。GMV/净收入与驾驶舱、财务报表同口径。</div>
+      <div class="toolbar" id="biBarOV"></div>
+      <div id="bioSum" class="sum-row"></div>
+      <div class="card" id="bioTrend"></div>
+      <div class="card"><div id="bioStruct" class="tbl-wrap"></div></div>
+    </section>
+
+    <!-- 73. BI 交易分析 -->
+    <section class="page" id="page-biTx">
+      <div class="notice">💸 交易多维分析: 按渠道 / 卡等级 / 商户 Top10 / 时段(小时) / 金额分布 + 窗口趋势。</div>
+      <div class="toolbar" id="biBarTX"></div>
+      <div id="bitSum" class="sum-row"></div>
+      <div class="card" id="bitTrend"></div>
+      <div class="two-col" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="card"><div class="card-title">按渠道</div><div class="tbl-wrap" id="bitChannel"></div></div>
+        <div class="card"><div class="card-title">按卡等级</div><div class="tbl-wrap" id="bitLevel"></div></div>
+      </div>
+      <div class="card" style="margin-top:12px"><div class="card-title">商户 Top10(GMV)</div><div class="card-sub">仅统计消费交易</div><div class="tbl-wrap" id="bitMerchant"></div></div>
+      <div class="two-col" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">
+        <div class="card"><div class="card-title">时段分布(24h 交易笔数)</div><div id="bitHour" style="padding:6px 12px 12px"></div></div>
+        <div class="card"><div class="card-title">金额分布(成功交易)</div><div id="bitDist" style="padding:12px 14px 4px"></div></div>
+      </div>
+    </section>
+
+    <!-- 74. BI 用户分析 -->
+    <section class="page" id="page-biUsers">
+      <div class="notice">👥 用户分析: 开卡转化率 / KYC 通过率 / 首充率 / 消费率 / 留存率(7 日窗口近似) / LTV / ARPU / CAC + 用户分群(交易频次+金额三分位)。</div>
+      <div class="toolbar" id="biBarUS"></div>
+      <div id="biuSum" class="sum-row"></div>
+      <div class="card"><div class="card-title">用户分群(高价值 / 成长 / 沉睡)</div><div class="card-sub">按窗口内成功交易金额+频次排序三分位</div><div class="tbl-wrap" id="biuSeg"></div></div>
+      <div class="card" style="margin-top:12px"><div class="card-title">转化指标明细</div><div class="tbl-wrap" id="biuDetail"></div></div>
+    </section>
+
+    <!-- 75. BI 销售分析 -->
+    <section class="page" id="page-biSales">
+      <div class="notice">🏆 销售分析: 团队树(层级缩进) + 人均单产 + 佣金效率(窗口佣金/团队 GMV)。每行 GMV 为该销售 subtree 口径(含全部下级)。</div>
+      <div class="toolbar" id="biBarSL"></div>
+      <div id="bisSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="bisBody"></div></div>
+    </section>
+
+    <!-- 76. BI 转化漏斗 -->
+    <section class="page" id="page-biFunnel">
+      <div class="notice">🔻 CRM 阶段转化漏斗: 7 阶段客户分布(合计 = 客户总数), 前 6 阶段为递进漏斗, 沉睡为流失口径单列。</div>
+      <div class="toolbar" id="biBarFN"></div>
+      <div class="card"><div class="card-title">阶段分布</div><div id="bifBars" style="padding:14px 16px 4px"></div></div>
+      <div class="card" style="margin-top:12px"><div class="tbl-wrap" id="bifBody"></div></div>
+    </section>
+
+    <!-- 77. BI 自定义报表 -->
+    <section class="page" id="page-biReport">
+      <div class="notice">🧾 自定义报表: 勾选指标 × 维度(最多 2 维交叉)生成表格, 支持导出 CSV(带 UTF-8 BOM, 复用对账导出模式)。</div>
+      <div class="toolbar" id="biBarRP"></div>
+      <div class="card">
+        <div class="card-title">指标(可多选)</div>
+        <div class="chk-line" id="birMetrics"></div>
+        <div class="card-title" style="margin-top:12px">维度(最多 2 个)</div>
+        <div class="chk-line" id="birDims"></div>
+        <div class="form-foot" style="margin-top:14px">
+          <button class="btn-outline" onclick="biReportReset()">重置勾选</button>
+          <button class="btn" onclick="LOADERS.biReport()">生成报表</button>
+          <button class="btn-outline" onclick="exportBiCsv()">⬇️ 导出 CSV</button>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px"><div class="tbl-wrap" id="birBody"></div></div>
+    </section>
+
+    <!-- 78. 运维 架构总览 -->
+    <section class="page" id="page-opsArch">
+      <div class="notice">🏗️ 生产部署拓扑(demo 现状 vs 生产预留): 接入层 → 网关 → 应用服务 → 编排/异步 → 持久层 → 可观测。纯 CSS 拓扑, 不引入真实中间件。</div>
+      <div id="opsaLayers"></div>
+      <div class="card" style="margin-top:12px"><div class="card-title">生产化能力对照(16 项)</div><div class="card-sub">绿色 = 演示已实现 · 灰色 = 生产预留</div><div class="tbl-wrap" id="opsaTable"></div></div>
+    </section>
+
+    <!-- 79. 运维 Feature Flag -->
+    <section class="page" id="page-opsFlags">
+      <div class="notice">🎚️ Feature Flag: 每模块一个开关(enabled + 灰度百分比)。其中 <b>shopFlag</b> 与 <b>approvalsFlag</b> 为真实生效点: 关闭 shopFlag → 用户端商城接口 503 降级; 关闭 approvalsFlag → 审批中心页显示「功能已下线」。切换即写操作日志审计。</div>
+      <div class="card"><div class="card-title">真实生效点演示</div><div class="tbl-wrap" id="opsfEffects"></div></div>
+      <div class="card" style="margin-top:12px"><div class="tbl-wrap" id="opsfBody"></div></div>
+    </section>
+
+    <!-- 80. 运维 API 限流 -->
+    <section class="page" id="page-opsRate">
+      <div class="notice">🚦 API 限流(内存令牌桶, 演示级): 每 key QPS / 突发配额; 演示端点连打第 5 次返回 429。全局限流开关关闭后不再触发。生产预留: 网关级 Redis 滑动窗口。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="btn-outline" id="opsrSwitch" onclick="toggleRlGlobal()">🟢 全局限流: 开启中</button>
+          <button class="btn" onclick="runRlTest()">⚡ 连打 6 次测试限流</button>
+        </div>
+        <span class="dim">点击测试将连续请求 POST /api/admin/ops/ratelimit/test</span>
+      </div>
+      <div id="opsrSum" class="sum-row"></div>
+      <div class="card"><div class="card-title">限流规则(每 key)</div><div class="tbl-wrap" id="opsrRules"></div></div>
+      <div class="rl-log" id="opsrLog">等待测试… 点击上方按钮开始限流演示</div>
+    </section>
+
+    <!-- 81. 运维 审计日志 -->
+    <section class="page" id="page-opsAudit">
+      <div class="notice">📜 审计日志: 登录日志(认证事件) + 操作日志(业务/配置变更)双流合一, 支持 人 / 模块 / 动作 / 时间 筛选。关键资金动作与配置变更强制落审计。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input class="input" style="width:150px" id="opaWho" placeholder="操作人(包含)">
+          <input class="input" style="width:140px" id="opaModule" placeholder="模块(包含)">
+          <input class="input" style="width:140px" id="opaAction" placeholder="动作(包含)">
+          <select class="select" style="width:130px" id="opaHours">
+            <option value="24">近 24 小时</option><option value="72">近 3 天</option><option value="168">近 7 天</option><option value="720" selected>近 30 天</option><option value="">全部时间</option>
+          </select>
+          <button class="btn-outline" onclick="LOADERS.opsAudit()">🔍 筛选</button>
+        </div>
+      </div>
+      <div id="opaSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="opaBody"></div></div>
+    </section>
+
+    <!-- 82. 运维 服务监控 -->
+    <section class="page" id="page-opsMonitor">
+      <div class="notice">🩺 服务监控: 各模块 API 最近 24h 响应时间 / 成功率(可推导项取自真实数据, 其余为演示级打点); 柱色越暖表示延迟越高(晚高峰 19-22 点)。</div>
+      <div id="opsmSum" class="sum-row"></div>
+      <div class="mod-grid" id="opsmGrid"></div>
+    </section>
+
+    <!-- 83. 运维 错误告警 -->
+    <section class="page" id="page-opsAlerts">
+      <div class="notice">🔔 错误告警规则: 阈值 / 级别 / 通知渠道(联动消息中心)。触发状态由真实数据实时判定(如渠道降级、账本校验)。</div>
+      <div id="opsaSum" class="sum-row"></div>
+      <div class="card"><div class="card-title">通知渠道(消息中心联动)</div><div id="opsalChannels" style="padding:4px 14px 12px"></div></div>
+      <div class="card" style="margin-top:12px"><div class="tbl-wrap" id="opsalRules"></div></div>
+    </section>
+
+    <!-- 84. 运维 链路追踪 -->
+    <section class="page" id="page-opsTrace">
+      <div class="notice">🧬 链路追踪演示: 选一笔交易, 用既有数据拼贯穿时间线 用户端 → 风控 → 编排 → 账本 → 积分/佣金(生产接入 OpenTelemetry)。</div>
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:340px" id="opstSel"></select>
+          <button class="btn-outline" onclick="loadTraceDetail()">🔍 追踪</button>
+        </div>
+        <span class="dim num" id="opstMeta"></span>
+      </div>
+      <div class="card"><div id="opstHead" class="tbl-wrap"></div></div>
+      <div class="card" style="margin-top:12px"><div class="card-title">贯穿时间线</div><div id="opstTl" style="padding:6px 16px 10px"></div></div>
+    </section>
+
+    <!-- 85. 运维 备份灾备 -->
+    <section class="page" id="page-opsBackup">
+      <div class="notice">💾 数据备份 / 灾备 / 灰度发布: demo 为内存态(导出即全量备份, 敏感字段已脱敏); 右侧为生产预留方案。</div>
+      <div id="opsbCards"></div>
+      <div class="card" style="margin-top:12px"><div class="card-title">最近一次导出的集合概览</div><div class="tbl-wrap" id="opsbCounts"></div></div>
+    </section>
+
   </div>
 </div>
 
@@ -1479,7 +1666,9 @@ var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'�
              orchAdapters:'适配器注册', orchRoutes:'渠道路由', orchHealth:'健康检查', orchCompare:'费率比较', orchTx:'交易状态机', orchIdem:'幂等控制', orchCallback:'异步回调', orchRecon:'对账差异',
              compKyc:'C端KYC案例', compKyb:'企业KYB', compScreen:'AML筛查', compSanctions:'制裁名单', compPeps:'PEP名单', compStr:'可疑报告', compDocs:'证件管理', compCases:'合规案件', compCountries:'国家政策',
              entAccounts:'企业列表', entBudget:'部门预算', entCards:'企业卡管理', entApprovals:'消费审批', entBills:'账单发票', entReport:'部门报表',
-             mchOnboard:'商户入驻', mchRates:'费率配置', mchOrders:'收款订单', mchRefunds:'退款管理', mchSettles:'结算管理', mchSplits:'分账管理', mchRisk:'商户风控', mchReport:'经营报表'};
+             mchOnboard:'商户入驻', mchRates:'费率配置', mchOrders:'收款订单', mchRefunds:'退款管理', mchSettles:'结算管理', mchSplits:'分账管理', mchRisk:'商户风控', mchReport:'经营报表',
+             biOverview:'实时指标', biTx:'交易分析', biUsers:'用户分析', biSales:'销售分析', biFunnel:'转化漏斗', biReport:'自定义报表',
+             opsArch:'架构总览', opsFlags:'Feature Flag', opsRate:'API 限流', opsAudit:'审计日志', opsMonitor:'服务监控', opsAlerts:'错误告警', opsTrace:'链路追踪', opsBackup:'备份灾备'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
@@ -1501,7 +1690,9 @@ var MENU = [
   {cap:'支付编排', lv0:true, items:[['orchAdapters','🔌','适配器注册'],['orchRoutes','🧭','渠道路由'],['orchHealth','🩺','健康检查'],['orchCompare','💰','费率比较'],['orchTx','⚙️','交易状态机'],['orchIdem','🛡️','幂等控制'],['orchCallback','📨','异步回调'],['orchRecon','🧮','对账差异']]},
   {cap:'合规中心', lv0:true, items:[['compKyc','🪪','C端KYC案例'],['compKyb','🏢','企业KYB'],['compScreen','🔍','AML筛查'],['compSanctions','⛔','制裁名单'],['compPeps','👥','PEP名单'],['compStr','📋','可疑报告'],['compDocs','📇','证件管理'],['compCases','🗂️','合规案件'],['compCountries','🌍','国家政策']]},
   {cap:'企业服务', lv0:true, items:[['entAccounts','🏢','企业列表'],['entBudget','🏗️','部门预算'],['entCards','💳','企业卡管理'],['entApprovals','✅','消费审批'],['entBills','🧾','账单发票'],['entReport','📊','部门报表']]},
-  {cap:'商户平台', lv0:true, items:[['mchOnboard','🏪','商户入驻'],['mchRates','⚙️','费率配置'],['mchOrders','🧾','收款订单'],['mchRefunds','↩️','退款管理'],['mchSettles','💰','结算管理'],['mchSplits','✂️','分账管理'],['mchRisk','🚨','商户风控'],['mchReport','📈','经营报表']]}
+  {cap:'商户平台', lv0:true, items:[['mchOnboard','🏪','商户入驻'],['mchRates','⚙️','费率配置'],['mchOrders','🧾','收款订单'],['mchRefunds','↩️','退款管理'],['mchSettles','💰','结算管理'],['mchSplits','✂️','分账管理'],['mchRisk','🚨','商户风控'],['mchReport','📈','经营报表']]},
+  {cap:'数据中心', lv0:true, items:[['biOverview','📡','实时指标'],['biTx','💸','交易分析'],['biUsers','👥','用户分析'],['biSales','🏆','销售分析'],['biFunnel','🔻','转化漏斗'],['biReport','🧾','自定义报表']]},
+  {cap:'运维中心', lv0:true, items:[['opsArch','🏗️','架构总览'],['opsFlags','🎚️','Feature Flag'],['opsRate','🚦','API 限流'],['opsAudit','📜','审计日志'],['opsMonitor','🩺','服务监控'],['opsAlerts','🔔','错误告警'],['opsTrace','🧬','链路追踪'],['opsBackup','💾','备份灾备']]}
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -3961,6 +4152,11 @@ LOADERS.approvals = function(silent){
       typeSel.value = typeVal || '';
     }
     renderApSum(d.summary || {});
+    if (d.disabled){ // P5.6 Feature Flag: approvalsFlag 关闭 → 页面显示「功能已下线」横幅
+      $('#apBody').innerHTML = '<div class="empty" style="border:1.5px dashed var(--bad);color:var(--bad);padding:30px 16px">🚫 ' + esc(d.notice || '审批中心功能已下线') +
+        '<div style="color:var(--ink3);font-size:12px;margin-top:8px">业务数据完整保留(' + nz((d.summary || {}).total) + ' 条历史单) · 恢复入口: 运维中心 → Feature Flag → approvalsFlag</div></div>';
+      return;
+    }
     renderApTable();
   }).catch(function(e){ if (!silent){ $('#apBody').innerHTML = errBox(e); $('#apSum').innerHTML = ''; } });
 };
@@ -5954,6 +6150,651 @@ LOADERS.mchReport = function(){
     $('#mrepBody').innerHTML = '<table><thead><tr><th>' + (dim === 'month' ? '月份' : '日期') + '</th><th>商户</th><th>交易量</th><th>笔数</th><th>成功率</th><th>平均客单</th><th>退款率</th><th>手续费</th><th>净额</th></tr></thead><tbody>' + (rows || '<tr><td colspan="9" class="empty">暂无数据</td></tr>') + '</tbody></table>';
   }).catch(function(e){ $('#mrepBody').innerHTML = errBox(e); });
 };
+
+/* ================= 72-77. P5.5 BI 数据中心(总监专属) ================= */
+var BI_Q = { range: '30d', level: '', merchant: '', rep: '' }; // 全局多维筛选: 时间/卡等级/商户/销售 subtree
+var BI_OPTS = null;      // 筛选器选项(等级/商户/销售), 来自任一 BI 接口返回
+var BI_BAR_SIG = '';
+var BI_RANGE_LABEL = { today: '今日', '7d': '近 7 天', '30d': '近 30 天' };
+var BI_METRIC_LABEL = { txCount:'交易笔数', gmv:'GMV', topup:'充值总额', consume:'消费总额', fee:'手续费收入', commission:'佣金成本', pointsCost:'积分成本', netIncome:'净收入', users:'覆盖用户数', activeUsers:'活跃用户数', avgTicket:'笔均金额', refundRate:'退款率', riskRate:'风险交易率' };
+var BI_DIM_LABEL = { day:'按日', hour:'按时段(小时)', channel:'按渠道', level:'按卡等级', merchant:'按商户', rep:'按销售' };
+var BI_PICKED = { metrics: ['txCount', 'gmv', 'refundRate'], dims: ['day'] };
+var BI_CATALOG = null, BI_REPORT = null;
+function biQs(){
+  var q = '?range=' + BI_Q.range;
+  if (BI_Q.level) q += '&level=' + encodeURIComponent(BI_Q.level);
+  if (BI_Q.merchant) q += '&merchant=' + encodeURIComponent(BI_Q.merchant);
+  if (BI_Q.rep) q += '&rep=' + encodeURIComponent(BI_Q.rep);
+  return q;
+}
+function biEchoText(){
+  var parts = [BI_RANGE_LABEL[BI_Q.range] || BI_Q.range];
+  if (BI_Q.level) parts.push('卡等级 ' + BI_Q.level);
+  if (BI_Q.merchant) parts.push('商户 ' + BI_Q.merchant);
+  if (BI_Q.rep && BI_OPTS) { (BI_OPTS.reps || []).forEach(function(r){ if (String(r.id) === BI_Q.rep) parts.push('销售 ' + r.name + '(含团队)'); }); }
+  return parts.join(' · ');
+}
+function biAcceptOpts(d){
+  if (d && d.options && !BI_OPTS){ BI_OPTS = d.options; renderBiBars(true); }
+}
+function renderBiBars(force){
+  if (!BI_OPTS) return; // 选项未就绪: 首个 BI 接口返回后强制渲染
+  var sig = JSON.stringify(BI_Q);
+  if (!force && sig === BI_BAR_SIG) return;
+  BI_BAR_SIG = sig;
+  var html =
+    '<div class="toolbar-left">' +
+      '<div class="tabs">' + ['today', '7d', '30d'].map(function(r){
+        return '<button class="tab' + (BI_Q.range === r ? ' active' : '') + '" onclick="setBiQ(\'range\',\'' + r + '\')">' + BI_RANGE_LABEL[r] + '</button>';
+      }).join('') + '</div>' +
+      '<select class="select" style="width:150px" onchange="setBiQ(\'level\',this.value)"><option value="">全部卡等级</option>' +
+        (BI_OPTS.levels || []).map(function(l){ return '<option value="' + l.key + '"' + (BI_Q.level === l.key ? ' selected' : '') + '>' + esc(l.label) + '</option>'; }).join('') + '</select>' +
+      '<select class="select" style="width:150px" onchange="setBiQ(\'merchant\',this.value)"><option value="">全部商户</option>' +
+        (BI_OPTS.merchants || []).map(function(m){ return '<option value="' + esc(m) + '"' + (BI_Q.merchant === m ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('') + '</select>' +
+      '<select class="select" style="width:190px" onchange="setBiQ(\'rep\',this.value)"><option value="">全部销售(含团队)</option>' +
+        (BI_OPTS.reps || []).map(function(r){
+          var pad = new Array((r.level || 0) * 2 + 1).join('·');
+          return '<option value="' + r.id + '"' + (BI_Q.rep === String(r.id) ? ' selected' : '') + '>' + (r.level ? pad + ' ' : '') + esc(r.name) + (r.level === 0 ? '(总监)' : '') + '</option>';
+        }).join('') + '</select>' +
+    '</div><span class="dim">当前筛选: ' + esc(biEchoText()) + '</span>';
+  ['biBarOV', 'biBarTX', 'biBarUS', 'biBarSL', 'biBarFN', 'biBarRP'].forEach(function(id){ var el = $('#' + id); if (el) el.innerHTML = html; });
+}
+function setBiQ(key, val){
+  BI_Q[key] = (val == null ? '' : String(val));
+  renderBiBars(true);
+  var page = (location.hash || '#biOverview').slice(1);
+  if (LOADERS[page]) LOADERS[page]();
+}
+/* 环比箭头: pct=true 为百分比类指标(百分点差), 否则相对变化率 */
+function biDelta(cur, prev, pct){
+  cur = nz(cur); prev = nz(prev);
+  if (pct){
+    if (!prev && !cur) return '';
+    var d = +(cur - prev).toFixed(1);
+    return ' <span class="' + (d > 0 ? 'delta-up' : d < 0 ? 'delta-down' : 'delta-flat') + '">' + (d > 0 ? '▲' : d < 0 ? '▼' : '▬') + (d > 0 ? '+' : '') + d + 'pp</span>';
+  }
+  if (!prev) return '';
+  var p = +(100 * (cur - prev) / Math.abs(prev)).toFixed(1);
+  return ' <span class="' + (p > 0 ? 'delta-up' : p < 0 ? 'delta-down' : 'delta-flat') + '">' + (p > 0 ? '▲' : p < 0 ? '▼' : '▬') + (p > 0 ? '+' : '') + p + '%</span>';
+}
+function biCard(ic, bg, v, k, delta){
+  return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + (delta || '') + '</div></div></div>';
+}
+/* 单序列柱状图(复用驾驶舱 barPath/niceCeil) */
+function biBarChart(el, rows, valKey, title, sub, fmtV){
+  if (!rows || !rows.length){ el.innerHTML = '<div class="card-title">' + title + '</div>' + emptyBox(); return; }
+  fmtV = fmtV || fmtMoney0;
+  var W = 780, H = 228, padL = 52, padR = 10, padT = 16, padB = 26;
+  var iw = W - padL - padR, ih = H - padT - padB;
+  var maxV = 10, iMax = 0;
+  rows.forEach(function(r, i){ if (nz(r[valKey]) > nz(rows[iMax][valKey])) iMax = i; maxV = Math.max(maxV, nz(r[valKey])); });
+  var step = niceCeil(maxV);
+  var y = function(v){ return padT + ih - (v / step) * ih; };
+  var gw = iw / rows.length, bw = Math.min(16, gw * 0.55);
+  var every = rows.length > 20 ? 5 : rows.length > 10 ? 2 : 1;
+  var grid = '', bars = '', labels = '';
+  [0, 0.25, 0.5, 0.75, 1].forEach(function(f2){
+    var v = step * f2;
+    grid += '<line x1="' + padL + '" y1="' + y(v) + '" x2="' + (W - padR) + '" y2="' + y(v) + '" stroke="#e2e8f0"/><text x="' + (padL - 7) + '" y="' + (y(v) + 3.5) + '" text-anchor="end" class="ax">' + fmtV(v) + '</text>';
+  });
+  rows.forEach(function(r, i){
+    var cx = padL + gw * i + gw / 2, h = padT + ih - y(nz(r[valKey]));
+    bars += '<path class="bar" d="' + barPath(cx - bw / 2, y(nz(r[valKey])), bw, h) + '" fill="#4f46e5"><title>' + esc(r.label || r.dim || '') + (r.count != null ? ' · ' + r.count + ' 笔' : '') + ' · ' + fmtV(nz(r[valKey])) + '</title></path>';
+    if (i % every === 0) labels += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" class="ax">' + esc(r.label || r.dim || '') + '</text>';
+  });
+  el.innerHTML = '<div class="chart-head"><div><div class="card-title">' + title + '</div><div class="card-sub">' + (sub || '') + '</div></div></div>' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block">' + grid + bars + labels + '</svg>';
+}
+function biHBar(lab, val, max, valText){
+  var w = max > 0 ? Math.max(1.5, 100 * nz(val) / max) : 0;
+  return '<div class="bi-hbar"><div class="bi-hbar-lab" title="' + esc(lab) + '">' + esc(lab) + '</div><div class="bi-hbar-track"><div class="bi-hbar-fill" style="width:' + w + '%"></div></div><div class="bi-hbar-val num">' + valText + '</div></div>';
+}
+/* ---- 72. 实时指标 ---- */
+LOADERS.biOverview = function(){
+  $('#bioSum').innerHTML = loadingBox('加载指标…');
+  $('#bioTrend').innerHTML = ''; $('#bioStruct').innerHTML = loadingBox();
+  api('/api/admin/bi/overview' + biQs()).then(function(d){
+    biAcceptOpts(d); renderBiBars();
+    var m = d.metrics || {}, pv = d.prev || {};
+    $('#bioSum').innerHTML = [
+      biCard('📊', '#e0e7ff', fmtMoney(nz(m.gmv)), 'GMV', biDelta(m.gmv, pv.gmv)),
+      biCard('💼', '#dcfce7', fmtMoney(nz(m.netIncome)), '净收入', biDelta(m.netIncome, pv.netIncome)),
+      biCard('💰', '#f3e8ff', fmtMoney(nz(m.commission)), '佣金成本', biDelta(m.commission, pv.commission)),
+      biCard('⭐', '#fef3c7', fmtMoney(nz(m.pointsCost)), '积分成本 <span class="dim">(' + fmtPts(nz(m.pointsIssued)) + ' 分)</span>', biDelta(m.pointsCost, pv.pointsCost)),
+      biCard('🌞', '#e0f2fe', String(nz(m.dau)), 'DAU 今日活跃', biDelta(m.dau, pv.dau)),
+      biCard('🌕', '#eef2ff', String(nz(m.mau)), 'MAU 近30天活跃', biDelta(m.mau, pv.mau)),
+      biCard('🧾', '#f1f5f9', String(nz(m.txCount)), '交易笔数', biDelta(m.txCount, pv.txCount)),
+      biCard('🚨', '#fee2e2', nz(m.riskRate) + '%', '风险交易率', biDelta(m.riskRate, pv.riskRate, true)),
+      biCard('↩️', '#ffedd5', nz(m.refundRate) + '%', '退款率', biDelta(m.refundRate, pv.refundRate, true)),
+      biCard('🧮', '#e0e7ff', fmtMoney(nz(m.avgTicket)), '笔均金额', biDelta(m.avgTicket, pv.avgTicket))
+    ].join('');
+    api('/api/admin/bi/tx' + biQs()).then(function(d2){
+      biAcceptOpts(d2); renderBiBars();
+      biBarChart($('#bioTrend'), d2.trend || [], 'gmv', 'GMV 趋势 · ' + BI_RANGE_LABEL[BI_Q.range], (biEchoText()) + ' · 悬停柱体查看笔数与金额');
+      var s = d2.summary || {};
+      var maxV = Math.max(nz(s.topup), nz(s.consume), nz(s.fee), nz(m.monthlyFee), nz(m.commission), nz(s.pointsCost), 1);
+      $('#bioStruct').innerHTML = '<div class="card-title" style="padding-top:12px">收入 / 成本结构(窗口)</div><div style="padding:4px 16px 14px">' +
+        biHBar('充值总额', s.topup, maxV, fmtMoney0(nz(s.topup))) +
+        biHBar('消费总额', s.consume, maxV, fmtMoney0(nz(s.consume))) +
+        biHBar('手续费收入', s.fee, maxV, fmtMoney0(nz(s.fee))) +
+        biHBar('月费收入', m.monthlyFee, maxV, fmtMoney0(nz(m.monthlyFee))) +
+        biHBar('佣金成本', m.commission, maxV, fmtMoney0(nz(m.commission))) +
+        biHBar('积分成本', s.pointsCost, maxV, fmtMoney0(nz(s.pointsCost))) +
+        '</div><div class="card-sub" style="padding:0 16px 12px">' + esc(d.note || '') + '</div>';
+    });
+  }).catch(function(e){ $('#bioSum').innerHTML = ''; $('#bioStruct').innerHTML = errBox(e); });
+};
+/* ---- 73. 交易分析 ---- */
+LOADERS.biTx = function(){
+  $('#bitSum').innerHTML = loadingBox('加载交易分析…');
+  ['bitChannel', 'bitLevel', 'bitMerchant', 'bitHour', 'bitDist'].forEach(function(id){ $('#' + id).innerHTML = loadingBox(); });
+  $('#bitTrend').innerHTML = '';
+  api('/api/admin/bi/tx' + biQs()).then(function(d){
+    biAcceptOpts(d); renderBiBars();
+    var s = d.summary || {};
+    $('#bitSum').innerHTML = [
+      biCard('📊', '#e0e7ff', fmtMoney(nz(s.gmv)), 'GMV'),
+      biCard('⬆️', '#dcfce7', fmtMoney(nz(s.topup)), '充值总额'),
+      biCard('🛍️', '#e0f2fe', fmtMoney(nz(s.consume)), '消费总额'),
+      biCard('🧾', '#f1f5f9', String(nz(s.txCount)), '交易笔数'),
+      biCard('🧮', '#fef3c7', fmtMoney(nz(s.avgTicket)), '笔均金额'),
+      biCard('🚨', '#fee2e2', nz(s.riskRate) + '%', '风险交易率'),
+      biCard('↩️', '#ffedd5', nz(s.refundRate) + '%', '退款率')
+    ].join('');
+    biBarChart($('#bitTrend'), d.trend || [], 'gmv', 'GMV / 笔数趋势 · ' + BI_RANGE_LABEL[BI_Q.range], esc(biEchoText()) + ' · 悬停查看笔数');
+    var rowOf = function(r, maxG){
+      var w = maxG > 0 ? Math.max(1.5, 100 * nz(r.gmv) / maxG) : 0;
+      return '<tr><td><b>' + esc(r.dim) + '</b></td><td class="num">' + fmtMoney(nz(r.gmv)) + '</td>' +
+        '<td style="min-width:120px">' + progBar(w) + '</td><td class="num">' + nz(r.txCount) + '</td>' +
+        '<td class="num">' + nz(r.users) + '</td><td class="num">' + fmtMoney(nz(r.avgTicket)) + '</td>' +
+        '<td class="num">' + nz(r.refundRate) + '%</td></tr>';
+    };
+    var tbl = function(list, maxG){ return '<table><thead><tr><th>维度</th><th>GMV</th><th>占比</th><th>笔数</th><th>用户数</th><th>笔均</th><th>退款率</th></tr></thead><tbody>' +
+      (list.length ? list.map(function(r){ return rowOf(r, maxG); }).join('') : '<tr><td colspan="7" class="empty">暂无数据</td></tr>') + '</tbody></table>'; };
+    var maxCh = Math.max.apply(null, [0].concat((d.byChannel || []).map(function(r){ return nz(r.gmv); })));
+    var maxLv = Math.max.apply(null, [0].concat((d.byLevel || []).map(function(r){ return nz(r.gmv); })));
+    var maxMc = Math.max.apply(null, [0].concat((d.byMerchant || []).map(function(r){ return nz(r.gmv); })));
+    $('#bitChannel').innerHTML = tbl(d.byChannel || [], maxCh);
+    $('#bitLevel').innerHTML = tbl(d.byLevel || [], maxLv);
+    $('#bitMerchant').innerHTML = tbl(d.byMerchant || [], maxMc);
+    biBarChart($('#bitHour'), (d.byHour || []).map(function(r){ return { label: r.dim, count: r.txCount, gmv: r.gmv }; }), 'count', '24 小时交易笔数分布', '悬停查看该时段 GMV', function(v){ return String(Math.round(v)); });
+    var dist = d.amountDist || [];
+    var maxD = Math.max.apply(null, [0].concat(dist.map(function(r){ return nz(r.txCount); })));
+    $('#bitDist').innerHTML = dist.map(function(r){ return biHBar(r.dim, r.txCount, maxD, nz(r.txCount) + ' 笔'); }).join('') || emptyBox();
+  }).catch(function(e){ $('#bitSum').innerHTML = ''; $('#bitChannel').innerHTML = errBox(e); });
+};
+/* ---- 74. 用户分析 ---- */
+LOADERS.biUsers = function(){
+  $('#biuSum').innerHTML = loadingBox('加载用户分析…');
+  $('#biuSeg').innerHTML = loadingBox(); $('#biuDetail').innerHTML = loadingBox();
+  api('/api/admin/bi/users' + biQs()).then(function(d){
+    biAcceptOpts(d); renderBiBars();
+    var m = d.metrics || {};
+    $('#biuSum').innerHTML = [
+      biCard('👥', '#e0e7ff', String(nz(m.users)), '总用户数'),
+      biCard('💳', '#e0f2fe', nz(m.openRate) + '%', '开卡转化率 <span class="dim">(' + nz(m.cardUsers) + '/' + nz(m.users) + ')</span>'),
+      biCard('🛡️', '#dcfce7', nz(m.kycRate) + '%', 'KYC 通过率 <span class="dim">(' + nz(m.kycPassed) + ')</span>'),
+      biCard('💧', '#fef3c7', nz(m.firstTopupRate) + '%', '首充率 <span class="dim">(' + nz(m.firstTopupUsers) + ')</span>'),
+      biCard('🛍️', '#ffedd5', nz(m.consumeRate) + '%', '消费率 <span class="dim">(' + nz(m.consumeUsers) + ')</span>'),
+      biCard('🔁', '#f3e8ff', nz(m.retentionRate) + '%', '留存率(7日近似) <span class="dim">(' + nz(m.retained) + '/' + nz(m.priorUsers) + ')</span>'),
+      biCard('💎', '#eef2ff', fmtMoney(nz(m.ltv)), '用户 LTV <span class="dim">(人均 GMV)</span>'),
+      biCard('📈', '#e0e7ff', fmtMoney(nz(m.arpu)), 'ARPU <span class="dim">(净收入口径)</span>'),
+      biCard('📣', '#fee2e2', fmtMoney(nz(m.cac)), 'CAC <span class="dim">(营销常数 $12/人)</span>')
+    ].join('');
+    var segIcon = { vip: '👑', growth: '🌱', dormant: '😴' };
+    $('#biuSeg').innerHTML = '<table><thead><tr><th>分群</th><th>用户数</th><th>人均笔数</th><th>人均金额</th><th>GMV</th><th>GMV 占比</th><th>代表用户</th></tr></thead><tbody>' +
+      (d.segments || []).map(function(sg){
+        return '<tr><td>' + (segIcon[sg.key] || '·') + ' <b>' + esc(sg.label) + '</b></td><td class="num">' + nz(sg.users) + '</td>' +
+          '<td class="num">' + nz(sg.avgCount) + '</td><td class="num">' + fmtMoney(nz(sg.avgAmount)) + '</td>' +
+          '<td class="num"><b>' + fmtMoney(nz(sg.gmv)) + '</b></td><td style="min-width:110px">' + progBar(nz(sg.gmvShare)) + '</td>' +
+          '<td class="dim">' + (sg.members || []).map(esc).join('、') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    var rows = [
+      ['总用户数', String(nz(m.users)), '筛选范围内的用户(销售 subtree / 卡等级)'],
+      ['开卡转化率', nz(m.openRate) + '% (' + nz(m.cardUsers) + ' 人领卡)', '领卡用户 / 总用户'],
+      ['KYC 通过率', nz(m.kycRate) + '% (' + nz(m.kycPassed) + ' 人)', 'kycStatus=approved / 总用户'],
+      ['首充率', nz(m.firstTopupRate) + '% (' + nz(m.firstTopupUsers) + ' 人)', '窗口内有成功充值的用户 / 总用户'],
+      ['消费率', nz(m.consumeRate) + '% (' + nz(m.consumeUsers) + ' 人)', '窗口内有成功消费的用户 / 总用户'],
+      ['留存率(7 日近似)', nz(m.retentionRate) + '% (' + nz(m.retained) + '/' + nz(m.priorUsers) + ')', '前 7~14 天活跃用户中最近 7 天仍活跃的比例'],
+      ['GMV / 净收入', fmtMoney(nz(m.gmv)) + ' / ' + fmtMoney(nz(m.netIncome)), '与驾驶舱 / 财务报表同口径'],
+      ['用户 LTV', fmtMoney(nz(m.ltv)), 'GMV / 用户数'],
+      ['ARPU', fmtMoney(nz(m.arpu)), '净收入 / 用户数'],
+      ['CAC / 营销投入', fmtMoney(nz(m.cac)) + ' / ' + fmtMoney(nz(m.marketingSpend)), '营销种子常数 $12/人 × 用户数']
+    ];
+    $('#biuDetail').innerHTML = '<table><thead><tr><th>指标</th><th>数值</th><th>口径说明</th></tr></thead><tbody>' +
+      rows.map(function(r){ return '<tr><td><b>' + r[0] + '</b></td><td class="num">' + r[1] + '</td><td class="dim">' + r[2] + '</td></tr>'; }).join('') + '</tbody></table>';
+  }).catch(function(e){ $('#biuSum').innerHTML = ''; $('#biuSeg').innerHTML = errBox(e); });
+};
+/* ---- 75. 销售分析 ---- */
+LOADERS.biSales = function(){
+  $('#bisSum').innerHTML = loadingBox('加载销售分析…');
+  $('#bisBody').innerHTML = loadingBox();
+  api('/api/admin/bi/sales' + biQs()).then(function(d){
+    biAcceptOpts(d); renderBiBars();
+    var s = d.summary || {};
+    $('#bisSum').innerHTML = [
+      biCard('🏆', '#e0e7ff', fmtMoney(nz(s.gmv)), '全司 GMV <span class="dim">(总监团队)</span>'),
+      biCard('💰', '#f3e8ff', fmtMoney(nz(s.commission)), '窗口佣金成本'),
+      biCard('⚙️', '#fef3c7', nz(s.eff) + '%', '佣金效率 <span class="dim">(佣金/GMV)</span>'),
+      biCard('👷', '#dcfce7', fmtMoney(nz(s.perCapita)), '人均单产 <span class="dim">(GMV/人数)</span>'),
+      biCard('🧑‍💼', '#e0f2fe', String(nz(s.reps)), '销售人数')
+    ].join('');
+    var rolePill = { 0: 'pill-gold', 1: 'pill-indigo', 2: 'pill-blue', 3: 'pill-gray' };
+    $('#bisBody').innerHTML = '<table><thead><tr><th>销售(团队树)</th><th>团队人数</th><th>名下用户</th><th>名下卡</th><th>团队 GMV</th><th>窗口佣金</th><th>佣金效率</th><th>人均单产</th></tr></thead><tbody>' +
+      (d.rows || []).map(function(r){
+        var indent = new Array((r.level || 0) * 3 + 1).join('·') + ' ';
+        return '<tr><td>' + (r.level ? indent : '') + '<b>' + esc(r.name) + '</b> <span class="pill ' + (rolePill[r.level] || 'pill-gray') + '">' + esc(r.role) + '</span><div class="sub-line dim">' + esc(r.region) + '</div></td>' +
+          '<td class="num">' + nz(r.teamSize) + '</td><td class="num">' + nz(r.users) + '</td><td class="num">' + nz(r.cards) + '</td>' +
+          '<td class="num" style="font-weight:600">' + fmtMoney(nz(r.gmv)) + '</td><td class="num">' + fmtMoney(nz(r.commission)) + '</td>' +
+          '<td style="min-width:110px">' + progBar(nz(r.eff)) + '</td><td class="num">' + fmtMoney(nz(r.perCapita)) + '</td></tr>';
+      }).join('') + '</tbody></table><div class="card-sub" style="padding:8px 4px">' + esc(d.note || '') + '</div>';
+  }).catch(function(e){ $('#bisSum').innerHTML = ''; $('#bisBody').innerHTML = errBox(e); });
+};
+/* ---- 76. 转化漏斗 ---- */
+LOADERS.biFunnel = function(){
+  $('#bifBars').innerHTML = loadingBox('加载漏斗…');
+  $('#bifBody').innerHTML = loadingBox();
+  api('/api/admin/bi/funnel' + biQs()).then(function(d){
+    biAcceptOpts(d); renderBiBars();
+    var list = d.list || [];
+    var maxC = Math.max.apply(null, [1].concat(list.map(function(r){ return nz(r.count); })));
+    var total = nz(d.total);
+    $('#bifBars').innerHTML = (d.funnel || []).map(function(fp, i){
+      var w = total > 0 ? Math.max(1.5, 100 * nz(fp.value) / total) : 0;
+      return '<div class="bi-hbar"><div class="bi-hbar-lab">' + esc(fp.stage) + '</div><div class="bi-hbar-track" style="height:26px"><div class="bi-hbar-fill" style="width:' + w + '%;opacity:' + (1 - i * 0.1) + '"></div></div><div class="bi-hbar-val num">' + nz(fp.value) + ' 人 <span class="dim">(' + (total ? (100 * nz(fp.value) / total).toFixed(1) : 0) + '%)</span></div></div>';
+    }).join('') + (list.length ? '<div class="bi-hbar"><div class="bi-hbar-lab" style="color:var(--warn)">沉睡(流失)</div><div class="bi-hbar-track" style="height:26px"><div class="bi-hbar-fill" style="width:' + (maxC > 0 ? Math.max(1.5, 100 * nz((list[6] || {}).count) / maxC) : 0) + '%;background:var(--warn)"></div></div><div class="bi-hbar-val num">' + nz((list[6] || {}).count) + ' 人</div></div>' : '') +
+      '<div class="card-sub" style="margin:8px 0 4px">' + esc(d.note || '') + '</div>';
+    $('#bifBody').innerHTML = '<table><thead><tr><th>#</th><th>CRM 阶段</th><th>客户数</th><th>占比</th><th>递进漏斗(≥该阶段, 不含沉睡)</th></tr></thead><tbody>' +
+      list.map(function(r, i){
+        var fu = (d.funnel || [])[i];
+        return '<tr><td class="num dim">' + nz(r.order) + '</td><td><b style="color:' + (STAGE_COLOR[r.stage] || '') + '">' + esc(r.stage) + '</b></td>' +
+          '<td class="num">' + nz(r.count) + '</td><td style="min-width:110px">' + progBar(nz(r.pct)) + '</td>' +
+          '<td class="num">' + (fu ? nz(fu.value) + ' 人' : '<span class="dim">—</span>') + '</td></tr>';
+      }).join('') + '<tr><td class="num dim">Σ</td><td><b>合计</b></td><td class="num"><b>' + total + '</b></td><td colspan="2" class="dim">= CRM 客户总数</td></tr></tbody></table>';
+  }).catch(function(e){ $('#bifBars').innerHTML = ''; $('#bifBody').innerHTML = errBox(e); });
+};
+/* ---- 77. 自定义报表 ---- */
+function biCatalog(){
+  if (BI_CATALOG) return BI_CATALOG;
+  return { metrics: Object.keys(BI_METRIC_LABEL).map(function(k){ return { key: k }; }), dims: Object.keys(BI_DIM_LABEL).map(function(k){ return { key: k }; }) };
+}
+function biRenderPickers(){
+  var cat = biCatalog();
+  var mEl = $('#birMetrics'), dEl = $('#birDims');
+  if (!mEl || !dEl) return;
+  mEl.innerHTML = cat.metrics.map(function(c){
+    var on = BI_PICKED.metrics.indexOf(c.key) >= 0;
+    return '<label class="perm-act"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="biTogglePick(\'metrics\',\'' + c.key + '\')"> <b>' + esc(BI_METRIC_LABEL[c.key] || c.key) + (c.unit ? '(' + c.unit + ')' : '') + '</b></label>';
+  }).join('');
+  dEl.innerHTML = cat.dims.map(function(c){
+    var on = BI_PICKED.dims.indexOf(c.key) >= 0;
+    return '<label class="perm-act"><input type="checkbox"' + (on ? ' checked' : '') + ' onchange="biTogglePick(\'dims\',\'' + c.key + '\')"> <b>' + esc(BI_DIM_LABEL[c.key] || c.key) + '</b></label>';
+  }).join('');
+}
+function biTogglePick(kind, key){
+  var arr = BI_PICKED[kind];
+  var i = arr.indexOf(key);
+  if (i >= 0) arr.splice(i, 1);
+  else {
+    if (kind === 'dims' && arr.length >= 2){ toast('维度最多勾选 2 个(先取消其他维度)', 'warn'); return; }
+    arr.push(key);
+  }
+  biRenderPickers();
+}
+function biReportReset(){
+  BI_PICKED = { metrics: ['txCount', 'gmv', 'refundRate'], dims: ['day'] };
+  biRenderPickers();
+  LOADERS.biReport();
+}
+LOADERS.biReport = function(){
+  biRenderPickers();
+  $('#birBody').innerHTML = loadingBox('生成报表…');
+  api('/api/admin/bi/report' + biQs() + '&metrics=' + BI_PICKED.metrics.join(',') + '&dims=' + BI_PICKED.dims.join(',')).then(function(d){
+    biAcceptOpts(d); renderBiBars();
+    if (d.catalog){
+      BI_CATALOG = d.catalog;
+      d.catalog.metrics.forEach(function(c){ if (c.label) BI_METRIC_LABEL[c.key] = c.label; });
+      d.catalog.dims.forEach(function(c){ if (c.label) BI_DIM_LABEL[c.key] = c.label; });
+      biRenderPickers();
+    }
+    BI_REPORT = d;
+    var cols = d.columns || [];
+    $('#birBody').innerHTML = '<div class="card-sub" style="padding:10px 4px 6px">' + esc(d.rangeLabel || '') + ' · ' + esc(biEchoText()) + ' · ' + nz(d.rows && d.rows.length) + ' 行</div>' +
+      '<table><thead><tr>' + cols.map(function(c){ return '<th>' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      ((d.rows || []).length ? d.rows.map(function(r){
+        return '<tr>' + cols.map(function(c){
+          var v = r[c.key];
+          var isNum = typeof v === 'number' && c.key !== 'dim';
+          return '<td class="' + (isNum ? 'num' : '') + '">' + (v == null ? '—' : esc(String(v))) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') : '<tr><td colspan="' + (cols.length || 1) + '" class="empty">暂无数据</td></tr>') + '</tbody></table>';
+  }).catch(function(e){ $('#birBody').innerHTML = errBox(e); });
+};
+function exportBiCsv(){
+  if (!BI_REPORT || !(BI_REPORT.rows || []).length){ toast('请先生成报表', 'warn'); return; }
+  var cols = BI_REPORT.columns || [];
+  var lines = [cols.map(function(c){ return c.label; }).join(',')];
+  BI_REPORT.rows.forEach(function(r){ lines.push(cols.map(function(c){ return String(r[c.key] == null ? '' : r[c.key]).replace(/,/g, ' '); }).join(',')); });
+  var csv = String.fromCharCode(0xfeff) + lines.join('\r\n'); // UTF-8 BOM(Excel 中文兼容, 复用对账导出模式)
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bi-report-' + BI_Q.range + '.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 400);
+  toast('CSV 已导出(' + BI_REPORT.rows.length + ' 行, 带 BOM)');
+}
+
+/* ================= 78-85. P5.6 运维中心(总监专属, 演示级) ================= */
+/* ---- 78. 架构总览 ---- */
+LOADERS.opsArch = function(){
+  $('#opsaLayers').innerHTML = loadingBox('加载架构…');
+  $('#opsaTable').innerHTML = loadingBox();
+  api('/api/admin/ops/arch').then(function(d){
+    var colors = ['#0ea5e9', '#6366f1', '#4f46e5', '#7c3aed', '#a855f7', '#334155'];
+    $('#opsaLayers').innerHTML = (d.layers || []).map(function(l, i){
+      return '<div class="ops-layer"><div class="ops-lab" style="background:' + colors[i % colors.length] + '">' + esc(l.name) + '</div>' +
+        '<div class="ops-body"><div class="ops-nodes">' + (l.nodes || []).map(function(n){ return '<span class="ops-node">' + esc(n) + '</span>'; }).join('') +
+        '<span class="ops-node" style="border-style:dashed;color:var(--ink3)">↓ 下层</span></div>' +
+        '<div class="ops-cmp"><div class="row"><span class="k">🏁 Demo 现状</span><span class="v">' + esc(l.demo) + '</span></div>' +
+        '<div class="row"><span class="k">🚀 生产预留</span><span class="v">' + esc(l.prod) + '</span></div></div></div></div>';
+    }).join('');
+    $('#opsaTable').innerHTML = '<table><thead><tr><th>能力项</th><th>Demo 现状</th><th>生产预留</th><th>状态</th></tr></thead><tbody>' +
+      (d.table || []).map(function(t){
+        return '<tr><td><b>' + esc(t.item) + '</b></td><td class="dim">' + esc(t.demo) + '</td><td class="dim">' + esc(t.prod) + '</td>' +
+          '<td>' + (t.ok ? '<span class="pill pill-green">已实现</span>' : '<span class="pill pill-gray">生产预留</span>') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }).catch(function(e){ $('#opsaLayers').innerHTML = errBox(e); });
+};
+/* ---- 79. Feature Flag ---- */
+var FF_LIST = [];
+LOADERS.opsFlags = function(){
+  $('#opsfEffects').innerHTML = loadingBox();
+  $('#opsfBody').innerHTML = loadingBox();
+  api('/api/admin/ops/flags').then(function(d){
+    FF_LIST = d.list || [];
+    $('#opsfEffects').innerHTML = '<table><thead><tr><th>开关</th><th>真实生效行为</th></tr></thead><tbody>' +
+      (d.effects || []).map(function(x){
+        return '<tr><td><span class="pill pill-indigo num">' + esc(x.key) + '</span></td><td>' + esc(x.effect) + ' <button class="btn-outline btn-sm" onclick="demoFlagEffect(\'' + esc(x.key) + '\')">一键演示</button></td></tr>';
+      }).join('') + '</tbody></table>';
+    $('#opsfBody').innerHTML = '<table><thead><tr><th>开关</th><th>说明</th><th>状态</th><th>灰度放量</th><th>操作</th><th>更新时间</th></tr></thead><tbody>' +
+      FF_LIST.map(function(f){
+        return '<tr><td><b>' + esc(f.label) + '</b><div class="sub-line dim num">' + esc(f.key) + '</div></td>' +
+          '<td class="dim" style="max-width:330px">' + esc(f.desc) + '</td>' +
+          '<td>' + (f.enabled ? '<span class="pill pill-green">开启</span>' : '<span class="pill pill-red">关闭</span>') + '</td>' +
+          '<td style="min-width:120px">' + progBar(nz(f.rollout)) + '</td>' +
+          '<td><button class="' + (f.enabled ? 'btn-danger' : 'btn-ok-sm') + '" onclick="toggleFlag(' + f.id + ')">' + (f.enabled ? '关闭' : '开启') + '</button></td>' +
+          '<td class="dim num">' + fmtTime(f.updatedAt) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }).catch(function(e){ $('#opsfBody').innerHTML = errBox(e); });
+};
+function ffFind(id){ var out = null; FF_LIST.forEach(function(x){ if (x.id === id) out = x; }); return out; }
+function toggleFlag(id){
+  var f = ffFind(id); if (!f) return;
+  patch('/api/admin/ops/flags/' + id, { enabled: !f.enabled }).then(function(d){
+    var real = d.flag && (d.flag.key === 'shopFlag' || d.flag.key === 'approvalsFlag');
+    toast('已' + (d.flag.enabled ? '开启' : '关闭') + '「' + d.flag.label + '」' + (real ? '(真实生效)' : '') + ' · 已写审计日志');
+    LOADERS.opsFlags();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* 一键演示: 关闭 → 打开受影响页面语义说明(不跳转, 弹窗讲解 + 引导) */
+function demoFlagEffect(key){
+  if (key === 'shopFlag'){
+    showModal('🛍️ shopFlag 演示',
+      '<div class="notice" style="margin-bottom:12px">将关闭积分商城开关, 然后请求用户端商品接口验证 503 降级, 最后自动恢复。</div>' +
+      '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="doDemoShopFlag()">开始演示</button></div>');
+  } else if (key === 'approvalsFlag'){
+    showModal('📝 approvalsFlag 演示',
+      '<div class="notice" style="margin-bottom:12px">将关闭审批中心开关, 然后拉取审批接口验证 disabled 标记, 最后自动恢复。</div>' +
+      '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="doDemoApFlag()">开始演示</button></div>');
+  } else {
+    showModal('🌦️ ' + esc(key), '<div class="notice">该开关为展示型灰度控制(如灰度百分比放量), 演示环境不改变路由行为。</div>' +
+      '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">知道了</button></div>');
+  }
+}
+function doDemoShopFlag(){
+  closeModal();
+  var f = null; FF_LIST.forEach(function(x){ if (x.key === 'shopFlag') f = x; });
+  if (!f) return;
+  patch('/api/admin/ops/flags/' + f.id, { enabled: false }).then(function(){
+    return api('/api/app/products'); // api() 对非 2xx 抛错 → 走 catch 展示降级响应
+  }).then(function(d){
+    showModal('⚠️ 预期应返回 503', '<div class="notice">却返回了正常数据(' + (d.products || []).length + ' 个商品), 请检查开关状态。</div>');
+  }).catch(function(e){
+    showModal('✅ shopFlag 关闭 → 用户端商城已降级',
+      '<div class="notice" style="margin-bottom:10px">GET /api/app/products → <b class="num">HTTP ' + (e.status || '?') + '</b><br>' + esc(e.message) + '</div>' +
+      '<div class="dim" style="font-size:12.5px;margin-bottom:12px">用户端积分商城页将显示该错误(功能下线横幅)。现在恢复开关?</div>' +
+      '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">保持关闭</button><button class="btn" onclick="restoreFlag(\'shopFlag\')">恢复开启</button></div>');
+  });
+}
+function doDemoApFlag(){
+  closeModal();
+  var f = null; FF_LIST.forEach(function(x){ if (x.key === 'approvalsFlag') f = x; });
+  if (!f) return;
+  patch('/api/admin/ops/flags/' + f.id, { enabled: false }).then(function(){
+    return api('/api/admin/approvals?box=todo');
+  }).then(function(d){
+    var disabled = !!d.disabled;
+    showModal(disabled ? '✅ approvalsFlag 关闭 → 审批中心返回下线标记' : '⚠️ 未返回下线标记',
+      '<div class="notice" style="margin-bottom:10px">' + (disabled ? '响应含 <b>disabled: true</b>, 审批中心页将显示「功能已下线」横幅(业务数据保留 ' + nz((d.summary || {}).total) + ' 条)。<br><span class="dim">' + esc(d.notice || '') + '</span>' : '请检查开关状态后重试。') + '</div>' +
+      (disabled ? '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">保持关闭</button><button class="btn" onclick="restoreFlag(\'approvalsFlag\')">恢复开启</button></div>' : '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">关闭</button></div>'));
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function restoreFlag(key){
+  closeModal();
+  var f = null; FF_LIST.forEach(function(x){ if (x.key === key) f = x; });
+  if (!f) return;
+  patch('/api/admin/ops/flags/' + f.id, { enabled: true }).then(function(){ toast('「' + f.label + '」已恢复开启'); LOADERS.opsFlags(); })
+    .catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 80. API 限流 ---- */
+var RL_CFG = null;
+LOADERS.opsRate = function(){
+  $('#opsrRules').innerHTML = loadingBox();
+  $('#opsrSum').innerHTML = '';
+  api('/api/admin/ops/ratelimit').then(function(d){
+    RL_CFG = d;
+    $('#opsrSwitch').innerHTML = d.enabled ? '🟢 全局限流: 开启中(点击关闭)' : '🔴 全局限流: 已关闭(点击开启)';
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#opsrSum').innerHTML =
+      sc('🎚️', d.enabled ? '#dcfce7' : '#fee2e2', d.enabled ? '开启' : '关闭', '全局限流开关') +
+      sc('🚦', '#e0e7ff', String(nz(d.defaultQps)), '默认 QPS(每秒)') +
+      sc('💥', '#fef3c7', String(nz(d.defaultBurst)), '默认突发桶容量') +
+      sc('🧮', '#e0f2fe', String(nz(d.tracked)), '当前计数 key 数');
+    $('#opsrRules').innerHTML = '<table><thead><tr><th>接口 Key</th><th>说明</th><th>QPS</th><th>突发</th><th>操作</th></tr></thead><tbody>' +
+      (d.rules || []).map(function(r, i){
+        return '<tr><td class="num">' + esc(r.key) + '</td><td class="dim">' + esc(r.desc || '') + '</td>' +
+          '<td><input class="input num" style="width:70px" type="number" min="1" id="rlq' + i + '" value="' + nz(r.qps) + '"></td>' +
+          '<td><input class="input num" style="width:70px" type="number" min="1" id="rlb' + i + '" value="' + nz(r.burst) + '"></td>' +
+          '<td><button class="btn-outline btn-sm" onclick="saveRlRule(' + i + ')">保存</button></td></tr>';
+      }).join('') + '</tbody></table><div class="card-sub" style="padding:8px 4px">' + esc(d.note || '') + '</div>';
+  }).catch(function(e){ $('#opsrRules').innerHTML = errBox(e); });
+};
+function toggleRlGlobal(){
+  patch('/api/admin/ops/ratelimit', { enabled: !(RL_CFG && RL_CFG.enabled) })
+    .then(function(d){ toast('全局限流已' + (d.cfg.enabled ? '开启' : '关闭')); LOADERS.opsRate(); })
+    .catch(function(e){ toast(e.message, 'err'); });
+}
+function saveRlRule(i){
+  if (!RL_CFG || !(RL_CFG.rules || [])[i]) return;
+  var r = RL_CFG.rules[i];
+  patch('/api/admin/ops/ratelimit', { key: r.key, qps: $('#rlq' + i).value, burst: $('#rlb' + i).value })
+    .then(function(){ toast('限流规则已保存: ' + r.key); LOADERS.opsRate(); })
+    .catch(function(e){ toast(e.message, 'err'); });
+}
+function runRlTest(){
+  var log = $('#opsrLog');
+  log.innerHTML = '▶ 开始连打 POST /api/admin/ops/ratelimit/test ×6\n';
+  var i = 0;
+  var next = function(){
+    if (i >= 6){ log.innerHTML += '<span class="ok">■ 测试结束: 令牌桶耗尽后持续返回 429, 约 1 秒后按 QPS 恢复</span>\n'; return; }
+    i++;
+    post('/api/admin/ops/ratelimit/test', {}).then(function(d){
+      log.innerHTML += '<span class="ok">第 ' + i + ' 次 → HTTP 200 · 剩余令牌 ' + nz(d.tokensLeft) + '</span>\n';
+      log.scrollTop = log.scrollHeight; next();
+    }).catch(function(e){
+      log.innerHTML += '<span class="bad">第 ' + i + ' 次 → HTTP ' + (e.status || '429') + ' · ' + esc(e.message) + '</span>\n';
+      log.scrollTop = log.scrollHeight; next();
+    });
+  };
+  next();
+}
+/* ---- 81. 审计日志 ---- */
+LOADERS.opsAudit = function(){
+  $('#opaBody').innerHTML = loadingBox();
+  $('#opaSum').innerHTML = '';
+  var who = $('#opaWho') ? $('#opaWho').value.trim() : '';
+  var mod = $('#opaModule') ? $('#opaModule').value.trim() : '';
+  var act = $('#opaAction') ? $('#opaAction').value.trim() : '';
+  var hours = $('#opaHours') ? $('#opaHours').value : '';
+  var q = '?who=' + encodeURIComponent(who) + '&module=' + encodeURIComponent(mod) + '&action=' + encodeURIComponent(act) + '&hours=' + encodeURIComponent(hours);
+  api('/api/admin/ops/audit' + q).then(function(d){
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#opaSum').innerHTML =
+      sc('📜', '#e0e7ff', String(nz(s.total)), '审计条数(筛选后)') +
+      sc('🔑', '#e0f2fe', String(nz(s.logins)), '登录认证事件') +
+      sc('✋', '#fef3c7', String(nz(s.ops)), '业务/配置操作') +
+      sc('🧑‍💼', '#f3e8ff', String(nz(s.actors)), '涉及操作人');
+    $('#opaBody').innerHTML = '<table><thead><tr><th>时间</th><th>来源</th><th>操作人</th><th>模块</th><th>动作</th><th>对象</th><th>结果</th></tr></thead><tbody>' +
+      ((d.list || []).length ? d.list.map(function(r){
+        return '<tr><td class="dim num" style="white-space:nowrap">' + fmtTime(r.at) + '</td>' +
+          '<td>' + (r.source === 'login' ? '<span class="pill pill-blue">登录日志</span>' : '<span class="pill pill-indigo">操作日志</span>') + '</td>' +
+          '<td><b>' + esc(r.actor) + '</b></td><td>' + esc(r.module) + '</td><td>' + esc(r.action) + '</td>' +
+          '<td class="dim" style="max-width:260px;word-break:break-all">' + esc(r.target) + '</td>' +
+          '<td>' + (r.result === '成功' ? '<span class="pill pill-green">成功</span>' : '<span class="pill pill-red">' + esc(r.result) + '</span>') + '</td></tr>';
+      }).join('') : '<tr><td colspan="7" class="empty">无匹配的审计记录</td></tr>') + '</tbody></table>' +
+      '<div class="card-sub" style="padding:8px 4px">' + esc(d.note || '') + '</div>';
+  }).catch(function(e){ $('#opaBody').innerHTML = errBox(e); });
+};
+/* ---- 82. 服务监控 ---- */
+LOADERS.opsMonitor = function(){
+  $('#opsmSum').innerHTML = loadingBox();
+  $('#opsmGrid').innerHTML = loadingBox();
+  api('/api/admin/ops/monitor').then(function(d){
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#opsmSum').innerHTML =
+      sc('🩺', '#e0e7ff', String(nz(s.total)), '监控模块') +
+      sc('✅', '#dcfce7', String(nz(s.healthy)), '健康') +
+      sc('⚠️', '#fef3c7', String(nz(s.degraded)), '降级') +
+      sc('❌', '#fee2e2', String(nz(s.down)), '异常');
+    var stPill = { healthy: '<span class="pill pill-green">健康</span>', degraded: '<span class="pill pill-amber">降级</span>', down: '<span class="pill pill-red">异常</span>' };
+    $('#opsmGrid').innerHTML = (d.modules || []).map(function(m){
+      var maxMs = 10;
+      (m.series || []).forEach(function(x){ maxMs = Math.max(maxMs, nz(x.ms)); });
+      var spark = '<div class="spark">' + (m.series || []).map(function(x){
+        var h = Math.max(8, Math.round(100 * nz(x.ms) / maxMs));
+        return '<i class="' + (nz(x.ms) > nz(m.baseMs) * 1.4 ? 'hot' : '') + '" style="height:' + h + '%" title="' + esc(x.h) + '时 · ' + nz(x.ms) + 'ms · 成功率 ' + nz(x.ok) + '%"></i>';
+      }).join('') + '</div>';
+      return '<div class="mod-card"><div class="mc-head"><b>' + esc(m.name) + '</b>' + (stPill[m.status] || '') + '</div>' +
+        '<div class="sub-line dim num">' + esc(m.path) + '</div>' +
+        '<div style="display:flex;gap:16px;margin-top:6px;font-size:12.5px;flex-wrap:wrap"><span>平均延迟 <b class="num">' + nz(m.avgMs) + 'ms</b></span><span>最低成功率 <b class="num">' + nz(m.minOk) + '%</b></span></div>' +
+        spark + '<div class="sub-line dim" style="margin-top:5px">口径: ' + esc(m.src) + ' · 柱体=24h 逐小时延迟</div></div>';
+    }).join('') + '<div class="card-sub" style="grid-column:1/-1">' + esc(d.note || '') + '</div>';
+  }).catch(function(e){ $('#opsmGrid').innerHTML = errBox(e); });
+};
+/* ---- 83. 错误告警 ---- */
+LOADERS.opsAlerts = function(){
+  $('#opsaSum').innerHTML = loadingBox();
+  $('#opsalRules').innerHTML = loadingBox();
+  api('/api/admin/ops/alerts').then(function(d){
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#opsaSum').innerHTML =
+      sc('🔔', '#e0e7ff', String(nz(s.total)), '告警规则') +
+      sc('🚨', '#fee2e2', String(nz(s.firing)), '触发中') +
+      sc('✅', '#dcfce7', String(nz(s.enabled)), '已启用') +
+      sc('📻', '#f3e8ff', String((d.channels || []).length), '通知渠道(启用)');
+    $('#opsalChannels').innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px">' + (d.channels || []).map(function(c){
+      return '<span class="pill pill-blue">' + c.icon + ' ' + esc(c.name) + '</span>';
+    }).join('') + '</div><div class="sub-line dim" style="margin-top:6px">触发后按规则配置的渠道联动消息中心外发(演示环境仅记录)</div>';
+    var lvPill = { critical: 'pill-red', warn: 'pill-amber', info: 'pill-blue' };
+    $('#opsalRules').innerHTML = '<table><thead><tr><th>规则</th><th>指标 / 阈值</th><th>级别</th><th>通知渠道</th><th>状态</th><th>当前值 / 详情</th></tr></thead><tbody>' +
+      (d.rules || []).map(function(r){
+        return '<tr><td><b>' + esc(r.name) + '</b>' + (r.enabled ? '' : ' <span class="pill pill-gray">停用</span>') + '</td>' +
+          '<td class="num dim">' + esc(r.metric) + ' ' + esc(r.op) + ' ' + esc(r.threshold) + '</td>' +
+          '<td><span class="pill ' + (lvPill[r.level] || 'pill-gray') + '">' + esc(r.levelLabel || r.level) + '</span></td>' +
+          '<td class="dim">' + esc(r.channelsLabel || '') + '</td>' +
+          '<td>' + (r.status === 'firing' ? '<span class="pill pill-red">🔴 触发中</span>' : '<span class="pill pill-green">正常</span>') + '</td>' +
+          '<td class="dim">' + esc(r.detail || '') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }).catch(function(e){ $('#opsalRules').innerHTML = errBox(e); });
+};
+/* ---- 84. 链路追踪 ---- */
+var TRACE_CANDS = [];
+LOADERS.opsTrace = function(){
+  $('#opstTl').innerHTML = loadingBox('加载可追踪交易…');
+  $('#opstHead').innerHTML = ''; $('#opstMeta').textContent = '';
+  api('/api/admin/ops/trace').then(function(d){
+    TRACE_CANDS = d.candidates || [];
+    $('#opstSel').innerHTML = TRACE_CANDS.map(function(c, i){
+      return '<option value="' + c.txId + '"' + (i === 0 ? ' selected' : '') + '>' + esc(c.traceId + ' · ' + (c.type === 'topup' ? '充值' : '消费') + ' $' + c.amount + ' · ' + c.user) + '</option>';
+    }).join('') || '<option value="">暂无可追踪交易</option>';
+    if (TRACE_CANDS.length) loadTraceDetail();
+    else $('#opstTl').innerHTML = emptyBox('暂无可追踪交易(需要交易被编排单 localRef 关联)');
+  }).catch(function(e){ $('#opstTl').innerHTML = errBox(e); });
+};
+function loadTraceDetail(){
+  var txId = $('#opstSel') ? $('#opstSel').value : '';
+  if (!txId) return;
+  $('#opstTl').innerHTML = loadingBox();
+  api('/api/admin/ops/trace/' + txId).then(function(d){
+    $('#opstMeta').textContent = d.traceId + ' · ' + nz(d.stepCount) + ' 个 span · ' + d.layers.join(' → ');
+    var t = d.tx || {};
+    $('#opstHead').innerHTML = '<table><tbody>' +
+      '<tr><td class="dim" style="width:110px">traceId</td><td class="num"><b>' + esc(d.traceId) + '</b></td><td class="dim" style="width:110px">交易号</td><td class="num">#' + nz(t.id) + '</td></tr>' +
+      '<tr><td class="dim">类型 / 状态</td><td>' + (t.type === 'topup' ? '充值(' + esc(t.method || '') + ')' : '消费(' + esc(t.merchant || '') + ')') + ' · <b>' + esc(t.status) + '</b></td><td class="dim">金额 / 卡</td><td class="num">' + fmtMoney(nz(t.amount)) + ' · ' + esc(t.cardNoMask || '—') + '</td></tr>' +
+      '<tr><td class="dim">用户 / 时间</td><td>' + esc(t.user || '—') + '</td><td class="dim num">' + fmtTime(t.createdAt) + '</td><td class="dim num">' + esc(d.note || '') + '</td></tr>' +
+      '</tbody></table>';
+    var layerIcon = { '用户端': '📱', '风控': '🚨', '编排': '🧭', '账本': '📒', '积分': '⭐', '佣金': '💰' };
+    $('#opstTl').innerHTML = (d.steps || []).length ? '<div class="tl">' + d.steps.map(function(s){
+      return '<div class="tl-item"><div class="tl-head"><span class="tl-type tl-ops">' + (layerIcon[s.layer] || '📌') + ' ' + esc(s.layer) + '</span><span class="num">' + fmtTime(s.ts) + '</span></div>' +
+        '<div class="tl-content"><b>' + esc(s.title) + '</b><div class="sub-line dim">' + esc(s.note || '') + '</div></div></div>';
+    }).join('') + '</div>' : emptyBox('该交易暂无关联链路数据');
+  }).catch(function(e){ $('#opstTl').innerHTML = errBox(e); });
+}
+/* ---- 85. 备份灾备 ---- */
+LOADERS.opsBackup = function(){
+  $('#opsbCards').innerHTML = loadingBox('加载灾备状态…');
+  $('#opsbCounts').innerHTML = emptyBox('尚未导出(点击上方「备份导出」后显示集合概览)');
+  api('/api/admin/ops/arch').then(function(d){
+    var icons = ['💾', '🛡️', '🌦️'];
+    $('#opsbCards').innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">' +
+      (d.resilience || []).map(function(r, i){
+        return '<div class="card" style="margin-bottom:0"><div class="card-title">' + icons[i % 3] + ' ' + esc(r.title) + '</div>' +
+          '<div style="font-size:12.5px;line-height:1.7"><div><span class="pill pill-green">Demo</span> ' + esc(r.demo) + '</div>' +
+          '<div style="margin-top:6px"><span class="pill pill-gray">生产</span> ' + esc(r.prod) + '</div></div>' +
+          (i === 0 ? '<div class="form-foot"><button class="btn" onclick="exportBackup()">⬇️ 备份导出(全量 JSON · 已脱敏)</button></div>' : '') + '</div>';
+      }).join('') + '</div>';
+  }).catch(function(e){ $('#opsbCards').innerHTML = errBox(e); });
+};
+function exportBackup(){
+  toast('正在生成全量内存备份…');
+  api('/api/admin/ops/backup').then(function(d){
+    var counts = d.counts || {};
+    var keys = Object.keys(counts);
+    var total = 0; keys.forEach(function(k){ total += nz(counts[k]); });
+    $('#opsbCounts').innerHTML = '<table><thead><tr><th>集合</th><th>条数</th><th>集合</th><th>条数</th></tr></thead><tbody>' +
+      (function(){
+        var rows = [];
+        for (var i = 0; i < keys.length; i += 2){
+          rows.push('<tr><td class="num">' + esc(keys[i]) + '</td><td class="num">' + nz(counts[keys[i]]) + '</td>' +
+            '<td class="num">' + (keys[i + 1] ? esc(keys[i + 1]) : '') + '</td><td class="num">' + (keys[i + 1] ? nz(counts[keys[i + 1]]) : '') + '</td></tr>');
+        }
+        return rows.join('');
+      })() + '<tr><td><b>合计</b></td><td class="num"><b>' + total + '</b></td><td class="dim" colspan="2">' + esc((d.note || '').split('。')[0]) + '</td></tr></tbody></table>';
+    var json = JSON.stringify(d, null, 2);
+    var blob = new Blob([json], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    var ts = new Date();
+    a.download = 'ucard-backup-' + ts.getFullYear() + pad2(ts.getMonth() + 1) + pad2(ts.getDate()) + '-' + pad2(ts.getHours()) + pad2(ts.getMinutes()) + '.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 400);
+    toast('备份已导出: ' + keys.length + ' 个集合 / ' + total + ' 条(卡号/CVV/手机号已脱敏)');
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
 
 /* ================= 登录 / 身份 ================= */
 function renderAccounts(list){
