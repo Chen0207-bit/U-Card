@@ -1,0 +1,925 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>U-Card · 持卡人端</title>
+<style>
+:root{--pri:#4f46e5;--pri2:#7c3aed;--ok:#16a34a;--warn:#f59e0b;--bad:#dc2626;--ink:#0f172a;--mut:#64748b;--bg:#eef1f7;--line:#e5e9f2;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{min-height:100vh;background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--ink)}
+.phone{position:relative;width:100%;max-width:430px;height:100vh;margin:0 auto;background:var(--bg);overflow:hidden}
+.phone ::-webkit-scrollbar{display:none}
+@media (min-width:540px){
+ body{display:flex;align-items:center;justify-content:center}
+ .phone{height:min(880px,92vh);border-radius:36px;box-shadow:0 0 0 10px #0b1226,0 0 0 12px rgba(99,102,241,.35),0 40px 90px rgba(0,0,0,.6)}
+}
+/* ---- 登录页 ---- */
+.login{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;padding:56px 22px 24px;overflow-y:auto;background:linear-gradient(165deg,#4f46e5 0%,#7c3aed 55%,#312e81 100%)}
+.lg-top{text-align:center;margin-bottom:26px}
+.lg-logo{width:76px;height:76px;margin:0 auto 14px;border-radius:22px;background:linear-gradient(135deg,rgba(255,255,255,.95),rgba(255,255,255,.72));display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:900;color:#4f46e5;box-shadow:0 14px 34px rgba(0,0,0,.28)}
+.lg-name{color:#fff;font-size:26px;font-weight:800;letter-spacing:1px}
+.lg-sub{color:rgba(255,255,255,.75);font-size:13px;margin-top:6px}
+.lg-title{color:rgba(255,255,255,.92);font-size:15px;font-weight:600;margin:8px 2px 12px}
+.lg-list{display:flex;flex-direction:column;gap:10px}
+.luser{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:11px 12px;cursor:pointer;transition:.15s}
+.luser:hover{background:rgba(255,255,255,.22)}
+.lav{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.lumain{flex:1;min-width:0;display:flex;flex-direction:column}
+.lumain b{color:#fff;font-size:14px}
+.lumain span{color:rgba(255,255,255,.65);font-size:12px}
+.kpill{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;flex:none}
+.kpill.l0{background:#e2e8f0;color:#475569}
+.kpill.l1{background:#dbeafe;color:#1d4ed8}
+.kpill.l2{background:#ede9fe;color:#6d28d9}
+.lg-foot{text-align:center;color:rgba(255,255,255,.5);font-size:11px;margin-top:auto;padding-top:20px}
+.lg-loading{color:rgba(255,255,255,.7);font-size:13px;text-align:center;padding:20px 0}
+/* ---- 视图与底部 tab ---- */
+#appView{position:absolute;inset:0}
+.view{position:absolute;inset:0;overflow-y:auto;padding-bottom:90px;display:none}
+.view.on{display:block;animation:vin .18s ease}
+@keyframes vin{from{opacity:.3;transform:translateY(6px)}to{opacity:1}}
+.tabbar{position:absolute;left:0;right:0;bottom:0;z-index:20;display:flex;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:#94a3b8;cursor:pointer;padding:4px 0}
+.tab span{font-size:20px;line-height:1;filter:grayscale(1);opacity:.55}
+.tab.on{color:var(--pri);font-weight:700}
+.tab.on span{filter:none;opacity:1}
+.sec{margin:12px 14px 0}
+/* ---- 虚拟卡 ---- */
+.vcard{position:relative;border-radius:16px;padding:18px;color:#fff;overflow:hidden;box-shadow:0 18px 36px rgba(30,27,75,.35)}
+.vcard::before{content:'';position:absolute;inset:0;background:radial-gradient(120% 90% at 88% -12%,rgba(255,255,255,.30),transparent 55%),radial-gradient(90% 80% at -10% 112%,rgba(255,255,255,.14),transparent 55%);pointer-events:none}
+.vc-top{display:flex;justify-content:space-between;align-items:center;position:relative}
+.vc-logo{font-size:17px;font-weight:900;font-style:italic;letter-spacing:.5px}
+.vc-logo b{font-weight:300;margin-left:2px}
+.vc-lv{font-size:10px;letter-spacing:2px;font-weight:700;border:1px solid rgba(255,255,255,.5);border-radius:999px;padding:3px 9px}
+.vc-mid{display:flex;align-items:center;gap:10px;margin:16px 0 10px;position:relative}
+.vc-chip{font-size:26px;line-height:1}
+.vc-nfc{font-size:15px;animation:nfc 2.4s infinite}
+@keyframes nfc{0%,100%{opacity:.3}50%{opacity:1}}
+.vc-no{display:flex;align-items:center;gap:10px;font-family:Consolas,"SF Mono",Menlo,monospace;font-size:17.5px;font-weight:600;letter-spacing:1.5px;position:relative;text-shadow:0 2px 6px rgba(0,0,0,.25)}
+.eye{margin-left:auto;background:rgba(255,255,255,.2);border:none;border-radius:8px;font-size:14px;padding:4px 8px;cursor:pointer}
+.vc-bottom{display:flex;gap:18px;margin-top:14px;position:relative}
+.vc-bottom label{display:block;font-size:8px;letter-spacing:1.2px;opacity:.65;margin-bottom:3px}
+.vc-bottom b{font-size:12.5px;font-weight:600}
+.frozen-wm{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;letter-spacing:10px;padding-left:10px;color:rgba(255,255,255,.9);text-shadow:0 2px 10px rgba(0,0,0,.4);transform:rotate(-16deg);border:3px dashed rgba(255,255,255,.6);border-radius:16px;background:rgba(15,23,42,.35);backdrop-filter:blur(1.5px)}
+/* ---- 余额区 / 宫格 / 面板 ---- */
+.balcard{background:#fff;border-radius:16px;padding:16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.balcard label{font-size:10px;color:var(--mut);letter-spacing:1px;font-weight:700}
+.bal{font-size:31px;font-weight:900;margin-top:4px;letter-spacing:-.5px}
+.ptspill{background:#eef2ff;color:#4338ca;border-radius:12px;padding:8px 12px;font-size:12px;cursor:pointer;font-weight:600;flex:none}
+.ptspill b{font-size:15px}
+.qgrid{background:#fff;border-radius:16px;padding:14px 6px;display:flex;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.qgrid>div{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;color:#334155;cursor:pointer;font-weight:600}
+.qgrid span{font-size:22px;width:44px;height:44px;border-radius:14px;background:#f1f5f9;display:flex;align-items:center;justify-content:center}
+.qgrid>div:active span{background:#e0e7ff}
+.panel{background:#fff;border-radius:16px;padding:14px;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.phead{display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:800;margin-bottom:8px}
+.phead a{color:var(--pri);font-size:12px;font-weight:600;cursor:pointer}
+/* ---- 交易行 ---- */
+.tx{display:flex;align-items:center;gap:11px;padding:10px 2px;border-top:1px solid #f1f5f9}
+.txico{width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.txico.up{background:#dcfce7}
+.txico.dn{background:#f1f5f9}
+.txmain{flex:1;min-width:0;display:flex;flex-direction:column}
+.txmain b{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.txmain span{font-size:11px;color:var(--mut);margin-top:2px}
+.txamt{text-align:right;display:flex;flex-direction:column;flex:none}
+.txamt b{font-size:14px}
+.txamt span{font-size:10.5px;color:var(--mut);margin-top:2px}
+.up{color:var(--ok)}
+.dn{color:#334155}
+.tag-ref{font-style:normal;background:#fee2e2;color:#b91c1c;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px}
+.empty-s{color:#94a3b8;font-size:12.5px;text-align:center;padding:18px 0}
+/* ---- 底部弹层 / 表单 ---- */
+.mask{position:absolute;inset:0;z-index:50;background:rgba(2,6,23,.5);display:none;align-items:flex-end}
+.mask.on{display:flex}
+.sheet{width:100%;background:#fff;border-radius:22px 22px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom));max-height:88%;overflow-y:auto;animation:up .24s ease}
+@keyframes up{from{transform:translateY(46px);opacity:.4}}
+.sh-title{font-size:16px;font-weight:800;margin-bottom:14px}
+.sh-note{font-size:11.5px;color:var(--mut);margin-top:10px;line-height:1.6}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;color:var(--mut);font-weight:600;margin-bottom:6px}
+.inp{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-size:15px;outline:none;background:#f8fafc;font-family:inherit}
+.inp:focus{border-color:var(--pri);background:#fff}
+.mtabs{display:flex;background:#f1f5f9;border-radius:12px;padding:3px;gap:3px;margin-bottom:14px}
+.mtab{flex:1;text-align:center;padding:8px 4px;border-radius:9px;font-size:12.5px;color:var(--mut);cursor:pointer;font-weight:600}
+.mtab em{display:block;font-style:normal;font-size:10px;opacity:.8;font-weight:400}
+.mtab.on{background:#fff;color:var(--pri);box-shadow:0 2px 8px rgba(15,23,42,.08)}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.qbtn{flex:1;min-width:70px;text-align:center;padding:10px 0;border-radius:10px;border:1.5px solid var(--line);background:#f8fafc;font-weight:700;font-size:14px;cursor:pointer}
+.qbtn.on{border-color:var(--pri);color:var(--pri);background:#eef2ff}
+.estbox{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:12px;padding:10px 12px;font-size:12px;color:#475569;line-height:1.7;margin:12px 0}
+.estbox b{color:var(--pri)}
+.btn{width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;font-size:15.5px;font-weight:800;cursor:pointer;margin-top:6px;font-family:inherit}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{width:auto;padding:10px 18px;font-size:13px;border-radius:11px;margin-top:10px}
+.btn.ghost{background:#f1f5f9;color:#475569}
+.btn.danger{background:#fff;color:var(--bad);border:1.5px solid #fecaca}
+.usdt{display:flex;flex-direction:column;align-items:center;gap:10px;background:#f8fafc;border-radius:14px;padding:14px;margin-bottom:4px}
+.qr{display:grid;width:170px;padding:9px;background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1px #e2e8f0}
+.qr i{aspect-ratio:1;background:#fff}
+.qr i.d{background:#0f172a}
+.uaddr{display:flex;flex-direction:column;align-items:center;gap:6px}
+.uaddr code{font-size:11px;color:#334155;word-break:break-all;text-align:center}
+.copybtn{border:1.5px solid var(--pri);color:#4f46e5;background:#eef2ff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.copybtn.sm{padding:3px 9px;font-size:11px}
+.unote{font-size:11px;color:var(--warn);text-align:center}
+.switchrow{display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border-radius:12px;padding:12px;cursor:pointer}
+.switchrow b{font-size:13.5px;display:block}
+.switchrow span{font-size:11px;color:var(--mut);display:block;margin-top:2px}
+.switch{width:46px;height:26px;border-radius:13px;background:#cbd5e1;position:relative;transition:.2s;flex:none}
+.switch::after{content:'';position:absolute;width:22px;height:22px;border-radius:50%;background:#fff;top:2px;left:2px;transition:.2s;box-shadow:0 2px 5px rgba(0,0,0,.2)}
+.switch.on{background:var(--pri)}
+.switch.on::after{left:22px}
+.doc{display:flex;justify-content:space-between;align-items:center;border:1.5px dashed var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px;font-size:13px}
+.doc em{font-style:normal;color:var(--ok);font-size:12px;font-weight:700}
+.kbenefit{background:#eef2ff;color:#3730a3;border-radius:12px;padding:11px 13px;font-size:13px;margin-bottom:10px}
+.okwrap{display:flex;flex-direction:column;align-items:center;padding:8px 6px 4px;text-align:center}
+.okmark{font-size:52px}
+.okbig{font-size:19px;font-weight:900;margin-top:8px}
+.okamt{font-size:30px;font-weight:900;color:var(--pri);margin-top:4px}
+.okmeta{font-size:12px;color:var(--mut);margin-top:4px}
+.okline{font-size:13px;color:#475569;margin-top:8px;background:#f8fafc;border-radius:10px;padding:8px 14px;width:100%}
+.okline b{float:right}
+.okline.pts b{color:var(--ok)}
+.dn2{color:#b45309}
+.okwrap .btn{margin-top:14px}
+/* ---- 全屏子页 ---- */
+.fpage{position:absolute;inset:0;z-index:40;background:var(--bg);display:none;flex-direction:column}
+.fpage.on{display:flex}
+.fpage header{display:flex;align-items:center;gap:10px;background:#fff;padding:14px;border-bottom:1px solid var(--line)}
+.fback{font-size:26px;line-height:1;color:var(--ink);cursor:pointer;font-weight:300;padding:0 6px}
+.ftitle{font-size:15px;font-weight:800}
+.fbody{flex:1;overflow-y:auto;padding:12px 14px 24px}
+.ptshead{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;border-radius:14px;padding:14px;font-size:13px;margin-bottom:12px}
+.ptshead b{font-size:24px;margin:0 6px}
+/* ---- 商城 ---- */
+.mallban{background:linear-gradient(135deg,var(--pri),var(--pri2));border-radius:16px;color:#fff;padding:16px;display:flex;justify-content:space-between;align-items:center}
+.mallban label{font-size:11px;opacity:.85;letter-spacing:1px}
+.mallban b{font-size:26px;font-weight:900;display:block;margin-top:2px}
+.goTask{background:rgba(255,255,255,.2);border-radius:999px;padding:7px 13px;font-size:12px;cursor:pointer;font-weight:600}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.prod{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 14px rgba(15,23,42,.05);cursor:pointer}
+.ppic{height:92px;display:flex;align-items:center;justify-content:center;font-size:42px;position:relative}
+.soldout{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,250,252,.72);color:#64748b;font-size:15px;font-weight:800}
+.lowstock{position:absolute;right:7px;top:7px;background:var(--bad);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px}
+.pbody{padding:10px 11px 12px}
+.pbody b{font-size:13px;display:block;line-height:1.35;height:2.7em;overflow:hidden}
+.pcat{display:inline-block;background:#f1f5f9;color:#64748b;font-size:10px;padding:2px 7px;border-radius:6px;margin:6px 0 3px}
+.pprice{color:#4338ca;font-weight:800;font-size:13.5px}
+.pcash{color:#94a3b8;font-size:10.5px;margin-top:2px}
+.pdetail{display:flex;flex-direction:column;align-items:center;text-align:center}
+.pdbig{width:120px;height:120px;border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:60px;margin-bottom:12px}
+.pdname{font-size:17px;font-weight:800}
+.pdname .pcat{vertical-align:middle;margin-left:8px}
+.pddesc{font-size:12.5px;color:var(--mut);margin-top:6px}
+.pdprice{margin:12px 0;font-size:15px}
+.pdprice b{font-size:22px;color:#4338ca}
+.pdprice em{font-style:normal;font-size:11.5px;color:#94a3b8;margin-left:6px}
+.pdrules{width:100%;text-align:left;background:#f8fafc;border-radius:12px;padding:11px 13px;font-size:11.5px;color:#475569;line-height:1.9;margin-bottom:4px}
+.pdrules .phead{margin-bottom:0;font-size:12.5px}
+.pdetail .sh-note{width:100%}
+.pdetail .btn{width:100%}
+/* ---- 任务 ---- */
+.signcard{background:linear-gradient(135deg,var(--pri),var(--pri2));border-radius:16px;color:#fff;padding:16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sg-t{font-size:16px;font-weight:800}
+.sg-d{font-size:11.5px;opacity:.85;margin-top:4px}
+.sgbtn{border:none;border-radius:12px;padding:11px 18px;font-weight:800;font-size:13px;cursor:pointer;background:#fff;color:var(--pri);flex:none;font-family:inherit}
+.sgbtn.done{background:rgba(255,255,255,.22);color:rgba(255,255,255,.85);cursor:default}
+.mypts{font-size:11px;color:var(--mut);font-weight:600}
+.mypts b{color:#4338ca;font-size:13px}
+.task{display:flex;align-items:center;gap:11px;padding:11px 2px;border-top:1px solid #f1f5f9}
+.tico{width:38px;height:38px;border-radius:12px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+.tmain{flex:1;min-width:0}
+.tmain b{font-size:13.5px;display:block}
+.tmain span{font-size:11px;color:var(--mut)}
+.tright{text-align:right;flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.tright>b{font-size:13px;color:var(--ok)}
+.tt{font-style:normal;font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:700}
+.tt.daily{background:#dbeafe;color:#1d4ed8}
+.tt.once{background:#fef3c7;color:#b45309}
+.mini{border:none;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.mini.done{background:#f1f5f9;color:#94a3b8;cursor:default}
+.rulebar{background:#fff;border-radius:14px;padding:12px 14px;font-size:11.5px;color:#64748b;line-height:1.8;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+/* ---- 订单 ---- */
+.ocard{margin-bottom:12px}
+.ohead{display:flex;align-items:center;gap:11px}
+.oico{width:44px;height:44px;border-radius:13px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.omain{flex:1;min-width:0}
+.omain b{font-size:14px;display:block}
+.omain span{font-size:11px;color:var(--mut)}
+.pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;flex:none}
+.pill.warn{background:#fef3c7;color:#b45309}
+.pill.info{background:#dbeafe;color:#1d4ed8}
+.pill.ok{background:#dcfce7;color:#15803d}
+.oline{margin-top:11px;padding-top:11px;border-top:1px dashed var(--line);font-size:12.5px;color:#475569;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.oline code{background:#f1f5f9;border-radius:7px;padding:3px 8px;font-size:12px}
+.rcode{margin-top:11px;padding-top:11px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.rcode span{font-size:11.5px;color:var(--mut)}
+.rcode b{border:2px dashed var(--pri);border-radius:10px;padding:6px 13px;color:#4338ca;font-size:15px;letter-spacing:1px}
+.rcode.center{justify-content:center}
+.bigempty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding-top:120px;text-align:center}
+.be-ico{font-size:60px}
+.be-t{color:#94a3b8;font-size:14px;margin-top:12px}
+/* ---- 我的 ---- */
+.mehead{display:flex;align-items:center;gap:13px;background:linear-gradient(135deg,var(--pri),var(--pri2));border-radius:18px;padding:18px 16px;color:#fff;margin:12px 14px 0}
+.meav{width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:28px;flex:none}
+.memain{flex:1;min-width:0}
+.memain b{font-size:17px;display:block}
+.memain span{display:block;font-size:11.5px;opacity:.85;margin-top:3px}
+.mehead .kpill{background:rgba(255,255,255,.2);color:#fff}
+.kdots{display:flex;align-items:center;justify-content:center;gap:6px;margin:6px 0 12px}
+.kdot{width:34px;height:34px;border-radius:50%;background:#f1f5f9;color:#94a3b8;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
+.kdot.done{background:#c7d2fe;color:#4338ca}
+.kdot.cur{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;box-shadow:0 4px 10px rgba(79,70,229,.35)}
+.kline{width:34px;height:2px;background:#e2e8f0}
+.lim{width:100%;border-collapse:collapse;font-size:12.5px}
+.lim th{text-align:left;color:var(--mut);font-size:11px;font-weight:600;padding:6px 4px;border-bottom:1px solid var(--line)}
+.lim td{padding:8px 4px;border-bottom:1px solid #f1f5f9;color:#475569}
+.lim tr.cur td{color:var(--pri);font-weight:800;background:#eef2ff}
+.kbadge{background:#dcfce7;color:#15803d;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px}
+.kycst{border-radius:12px;padding:10px 12px;font-size:12px;margin-top:10px;line-height:1.6}
+.kycst.ok{background:#f0fdf4;color:#15803d}
+.kycst.wait{background:#fffbeb;color:#b45309}
+.kycst.bad{background:#fef2f2;color:#b91c1c}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px dashed var(--line);color:#475569}
+.ptsbig{font-size:13px;color:#475569;padding-bottom:6px}
+.ptsbig b{font-size:24px;color:#4338ca}
+.invcode{background:linear-gradient(135deg,#312e81,#4f46e5);border-radius:14px;padding:14px;color:#fff;margin-bottom:10px}
+.invcode label{font-size:11px;opacity:.8}
+.icrow{display:flex;align-items:center;justify-content:space-between;margin-top:6px}
+.icrow b{font-size:24px;letter-spacing:2px;font-weight:900}
+.invcode .copybtn{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4);color:#fff}
+.iclink{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;opacity:.9;flex-wrap:wrap}
+.invrules{font-size:11.5px;color:#64748b;line-height:1.7;padding:2px 2px 8px}
+.invrow{display:flex;align-items:center;gap:9px;padding:9px 2px;border-top:1px solid #f1f5f9;font-size:12.5px}
+.invrow span{width:30px;height:30px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.invrow b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.invrow em{font-style:normal;color:#94a3b8;font-size:10.5px}
+.invrow i{font-style:normal;color:var(--ok);font-weight:700}
+.invtot{border-top:1px dashed var(--line);margin-top:4px;padding-top:9px;font-size:12px;color:#475569;text-align:right}
+.ver{text-align:center;color:#94a3b8;font-size:10.5px;padding:16px 0 6px}
+/* ---- toast ---- */
+.toast{position:absolute;top:14px;left:50%;transform:translate(-50%,-90px);z-index:99;transition:transform .32s cubic-bezier(.2,.9,.3,1.2),opacity .3s;opacity:0;background:#111827;color:#fff;padding:10px 16px;border-radius:12px;font-size:12.5px;max-width:86%;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.35);line-height:1.5;pointer-events:none}
+.toast.on{transform:translate(-50%,0);opacity:1}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--bad)}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- 登录页 -->
+  <div class="login" id="loginView" style="display:none">
+    <div class="lg-top">
+      <div class="lg-logo">U</div>
+      <div class="lg-name">U-Card</div>
+      <div class="lg-sub">虚拟信用卡 · 持卡人端 H5</div>
+    </div>
+    <div class="lg-title">选择演示账号快速登录</div>
+    <div class="lg-list" id="userList"><div class="lg-loading">加载账号中…</div></div>
+    <div class="lg-foot">Demo 演示环境 · 数据重启还原<br><a href="/app/pc" style="color:rgba(255,255,255,.75);text-decoration:underline;font-size:11.5px">🖥 切换电脑版 →</a></div>
+  </div>
+
+  <!-- 应用主体 -->
+  <div id="appView" style="display:none">
+    <main class="view on" id="v-card"><div class="empty-s" style="padding-top:40px">加载中…</div></main>
+    <main class="view" id="v-mall"></main>
+    <main class="view" id="v-task"></main>
+    <main class="view" id="v-order"></main>
+    <main class="view" id="v-me"></main>
+    <nav class="tabbar">
+      <div class="tab on" data-t="card" onclick="switchTab('card')"><span>💳</span>卡包</div>
+      <div class="tab" data-t="mall" onclick="switchTab('mall')"><span>🛒</span>商城</div>
+      <div class="tab" data-t="task" onclick="switchTab('task')"><span>🎯</span>任务</div>
+      <div class="tab" data-t="order" onclick="switchTab('order')"><span>📦</span>订单</div>
+      <div class="tab" data-t="me" onclick="switchTab('me')"><span>👤</span>我的</div>
+    </nav>
+  </div>
+
+  <!-- 全屏子页 -->
+  <div class="fpage" id="fpage">
+    <header><div class="fback" onclick="closePage()">‹</div><div class="ftitle" id="fpTitle"></div></header>
+    <div class="fbody" id="fpBody"></div>
+  </div>
+
+  <!-- 底部弹层 -->
+  <div class="mask" id="mask"><div class="sheet" id="sheet"></div></div>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+'use strict';
+/* ================= 基础配置与工具 ================= */
+var BASE = (location.port === '5177') ? '' : 'http://localhost:5177';
+var MERCHANTS = ['Amazon','Apple Store','Noon','Careem','Starbucks','Talabat','Netflix','Booking.com'];
+var LEVELS = {
+  standard: { label:'STANDARD', rate:1,   grad:'linear-gradient(135deg,#64748b 0%,#3b4a63 55%,#1e293b 100%)' },
+  gold:     { label:'GOLD',     rate:1.5, grad:'linear-gradient(135deg,#f4c74a 0%,#d4941c 58%,#8a5a08 100%)' },
+  platinum: { label:'PLATINUM', rate:2,   grad:'linear-gradient(135deg,#4f46e5 0%,#7c3aed 52%,#0ea5e9 100%)' }
+};
+var KYC_LIM = { 0:[100,300], 1:[1000,3000], 2:[10000,50000] };
+var WALLET = '0x3f8aC92bD14e67B05F3a2C9d84e06b175d3f9c2B';
+var OSTAT = { pending:['待发货','warn'], shipped:['已发货','info'], redeemed:['已核销','ok'] };
+var PICO = {'每日签到':'📅','消费返积分':'🛍️','充值奖励':'💰','消费抵扣':'➕','商城兑换':'🛒','KYC 认证奖励':'🪪','任务奖励':'🎯','运营发放':'🎁'};
+var CATG = {
+  '充值券':'linear-gradient(135deg,#06b6d4,#2563eb)', '卡券':'linear-gradient(135deg,#f59e0b,#ea580c)',
+  '实物':'linear-gradient(135deg,#10b981,#0d9488)',   '权益':'linear-gradient(135deg,#8b5cf6,#d946ef)',
+  '周边':'linear-gradient(135deg,#f43f5e,#fb7185)'
+};
+var AVS = ['🧑🏽‍💼','👩🏽‍💻','🧕🏽','👨🏽‍🦱','👱🏽','🤵🏽','👨🏽‍🍳','👩🏽‍🎓','🧔🏽','👸🏽','🤠','💁🏽‍♀️'];
+
+var S = { uid:null, me:null, txs:[], tasks:null, products:[], orders:[], points:[], invite:null,
+          tab:'card', revealed:false, usePts:false, prevBal:0, prevPts:0, claimed:{}, tqMethod:'fiat' };
+
+function $(id){ return document.getElementById(id); }
+function p2(n){ return String(n).padStart(2,'0'); }
+function fmtUSD(n){ return '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtPts(n){ return Number(n||0).toLocaleString('en-US'); }
+function fmtTime(ts){ var d = new Date(ts||0); return p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes()); }
+function maskCard(no){
+  var g = String(no||'').split(' ');
+  if (g.length !== 4) return '5533 68** **** 1234';
+  return g[0] + ' ' + g[1].slice(0,2) + '** **** ' + g[3];
+}
+function avatar(s){ var h = 0; for (var ch of String(s)) h = (h*31 + ch.codePointAt(0)) >>> 0; return AVS[h % AVS.length]; }
+function catGrad(c){ return CATG[c] || 'linear-gradient(135deg,#64748b,#475569)'; }
+
+async function api(path, opts){
+  opts = opts || {};
+  var headers = { 'Content-Type':'application/json' };
+  if (S.uid) headers['x-user'] = S.uid;
+  var res = await fetch(BASE + path, { method: opts.method || 'GET', headers: headers, body: opts.body || null });
+  var data = {};
+  try { data = await res.json(); } catch(e) {}
+  return data;
+}
+
+/* ================= toast / 弹层 / 全屏页 / 动画 ================= */
+var toastTimer = null;
+function toast(msg, type){
+  var t = $('toast'); t.textContent = msg;
+  var cls = 'toast' + (type==='ok' ? ' ok' : type==='err' ? ' err' : '');
+  t.className = cls + ' on';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.className = cls; }, type==='err' ? 3600 : 2600);
+}
+function openSheet(html){ $('sheet').innerHTML = html; $('mask').classList.add('on'); }
+function closeSheet(){ $('mask').classList.remove('on'); }
+function openPage(title, html){ $('fpTitle').textContent = title; $('fpBody').innerHTML = html; $('fpage').classList.add('on'); }
+function closePage(){ $('fpage').classList.remove('on'); }
+async function copyText(t, tip){
+  try { await navigator.clipboard.writeText(t); }
+  catch(e){
+    var ta = document.createElement('textarea'); ta.value = t;
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e2) {}
+    ta.remove();
+  }
+  toast(tip || '已复制', 'ok');
+}
+function tween(el, from, to, fmt, dur){
+  if (!el) return;
+  dur = dur || 700;
+  if (from === to) { el.textContent = fmt(to); return; }
+  var t0 = performance.now();
+  function step(t){
+    var p = Math.min(1, (t - t0) / dur);
+    var e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(from + (to - from) * e);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* 假二维码: 21x21 CSS 网格 + 三个定位角 */
+function qrHTML(seedStr){
+  var h = 0; for (var ch of seedStr) h = (h*33 + ch.codePointAt(0)) >>> 0;
+  function rnd(){ h = (h*1103515245 + 12345) >>> 0; return h / 4294967296; }
+  var N = 21, html = '';
+  function inFinder(x, y){ return (x<7 && y<7) || (x>=N-7 && y<7) || (x<7 && y>=N-7); }
+  for (var y = 0; y < N; y++) for (var x = 0; x < N; x++){
+    var dark;
+    if (inFinder(x, y)) {
+      var lx = x >= N-7 ? x-(N-7) : x, ly = y >= N-7 ? y-(N-7) : y;
+      var dx = Math.min(lx, 6-lx), dy = Math.min(ly, 6-ly);
+      dark = (dx===0 || dy===0) || (dx>=2 && dy>=2);
+    } else dark = rnd() < 0.45;
+    html += '<i' + (dark ? ' class="d"' : '') + '></i>';
+  }
+  return '<div class="qr" style="grid-template-columns:repeat(21,1fr)">' + html + '</div>';
+}
+
+/* ================= 登录 / 启动 ================= */
+function showLogin(){ $('loginView').style.display = 'flex'; $('appView').style.display = 'none'; renderLogin(); }
+async function renderLogin(){
+  var list = $('userList');
+  try {
+    var us = await api('/api/app/users');
+    list.innerHTML = us.map(function(u){
+      return '<div class="luser" onclick="loginAs(' + u.id + ')">' +
+        '<span class="lav">' + avatar(u.name) + '</span>' +
+        '<div class="lumain"><b>' + u.name + '</b><span>' + u.phone + ' · 🪙 ' + fmtPts(u.points) + ' 分</span></div>' +
+        '<span class="kpill l' + u.kycLevel + '">KYC L' + u.kycLevel + '</span></div>';
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="lg-loading">⚠️ 无法连接后端，请先运行 node server.js</div>';
+  }
+}
+function loginAs(id){ localStorage.setItem('uc_uid', id); S.uid = id; boot(); }
+function logout(){ localStorage.removeItem('uc_uid'); location.reload(); }
+
+async function loadMe(){
+  S.prevBal = S.me ? S.me.card.balance : 0;
+  S.prevPts = S.me ? S.me.points : 0;
+  var me = await api('/api/app/me');
+  if (me.error || !me.id) { logout(); return false; }
+  S.me = me; return true;
+}
+
+async function boot(){
+  S.uid = localStorage.getItem('uc_uid');
+  if (!S.uid) { showLogin(); return; }
+  if (!await loadMe()) return;
+  $('loginView').style.display = 'none';
+  $('appView').style.display = 'block';
+  switchTab('card');
+}
+
+/* ================= Tab 切换与数据加载 ================= */
+async function loadTasks(){ S.tasks = await api('/api/app/tasks'); }
+async function refreshCard(animate){
+  if (!await loadMe()) return;
+  S.txs = await api('/api/app/transactions') || [];
+  renderCard(animate);
+}
+async function switchTab(t){
+  S.tab = t;
+  document.querySelectorAll('.tab').forEach(function(el){ el.classList.toggle('on', el.dataset.t === t); });
+  document.querySelectorAll('.view').forEach(function(el){ el.classList.toggle('on', el.id === 'v-' + t); });
+  try {
+    if (t === 'card') { await refreshCard(false); }
+    else if (t === 'mall') { S.products = await api('/api/app/products') || []; if (!await loadMe()) return; renderMall(); }
+    else if (t === 'task') { await loadTasks(); if (!await loadMe()) return; renderTask(); }
+    else if (t === 'order') { S.orders = await api('/api/app/orders') || []; renderOrders(); }
+    else if (t === 'me') { if (!await loadMe()) return; S.points = await api('/api/app/points') || []; S.invite = await api('/api/app/invite'); renderMe(); }
+  } catch(e) { toast('网络错误，请确认后端已启动 (node server.js)', 'err'); }
+}
+</script>
+<script>
+'use strict';
+/* ================= Tab1 卡包 ================= */
+function txRow(t){
+  var up = t.type === 'topup';
+  var title = up ? ('充值 · ' + (t.method === 'usdt' ? 'USDT' : '银行卡')) : (t.merchant || '消费');
+  var pts = t.pointsEarned ? ('+' + fmtPts(t.pointsEarned) + ' 分') : (t.pointsUsed ? ('-' + fmtPts(t.pointsUsed) + ' 分') : '');
+  return '<div class="tx">' +
+    '<div class="txico ' + (up ? 'up' : 'dn') + '">' + (up ? '⬆️' : '⬇️') + '</div>' +
+    '<div class="txmain"><b>' + title + (t.status === 'refunded' ? ' <i class="tag-ref">已退款</i>' : '') + '</b>' +
+      '<span>' + fmtTime(t.createdAt) + '</span></div>' +
+    '<div class="txamt"><b class="' + (up ? 'up' : 'dn') + '">' + (up ? '+' : '-') + fmtUSD(t.amount) + '</b>' +
+      (pts ? '<span>' + pts + '</span>' : '') + '</div></div>';
+}
+function txRowFull(t){
+  var up = t.type === 'topup';
+  var title = up ? ('充值 · ' + (t.method === 'usdt' ? 'USDT-TRC20' : '银行卡')) : (t.merchant || '消费');
+  var pts = t.pointsEarned ? ('+' + fmtPts(t.pointsEarned) + ' 分') : (t.pointsUsed ? ('-' + fmtPts(t.pointsUsed) + ' 分') : '');
+  return '<div class="tx">' +
+    '<div class="txico ' + (up ? 'up' : 'dn') + '">' + (up ? '⬆️' : '⬇️') + '</div>' +
+    '<div class="txmain"><b>' + title + (t.status === 'refunded' ? ' <i class="tag-ref">已退款</i>' : '') + '</b>' +
+      '<span>单号 ' + (t.ref || '-') + ' · 手续费 ' + fmtUSD(t.fee) + ' · ' + fmtTime(t.createdAt) + '</span></div>' +
+    '<div class="txamt"><b class="' + (up ? 'up' : 'dn') + '">' + (up ? '+' : '-') + fmtUSD(t.amount) + '</b>' +
+      (pts ? '<span>' + pts + '</span>' : '') + '</div></div>';
+}
+function pointsRow(l){
+  var up = l.delta > 0;
+  return '<div class="tx">' +
+    '<div class="txico ' + (up ? 'up' : 'dn') + '">' + (PICO[l.source] || '⚡') + '</div>' +
+    '<div class="txmain"><b>' + l.source + '</b><span>余额 ' + fmtPts(l.balanceAfter) + ' · ' + fmtTime(l.createdAt) + '</span></div>' +
+    '<div class="txamt"><b class="' + (up ? 'up' : 'dn') + '">' + (up ? '+' : '') + fmtPts(l.delta) + '</b></div></div>';
+}
+function renderCard(animate){
+  var me = S.me, c = me.card, lv = LEVELS[c.level] || LEVELS.standard;
+  var num = S.revealed ? c.cardNo : maskCard(c.cardNo);
+  var exp = S.revealed ? (p2(c.expMonth) + '/' + String(c.expYear).slice(-2)) : '**/**';
+  var cvv = S.revealed ? c.cvv : '***';
+  var txs = S.txs.slice(0, 5);
+  $('v-card').innerHTML =
+    '<div class="sec"><div class="vcard" style="background:' + lv.grad + '">' +
+      '<div class="vc-top"><span class="vc-logo">U<b>Card</b></span><span class="vc-lv">' + lv.label + '</span></div>' +
+      '<div class="vc-mid"><span class="vc-chip">🔲</span><span class="vc-nfc">📶</span></div>' +
+      '<div class="vc-no">' + num + '<button class="eye" onclick="toggleEye()">' + (S.revealed ? '🙈' : '👁') + '</button></div>' +
+      '<div class="vc-bottom">' +
+        '<div><label>CARD HOLDER</label><b>' + me.name.toUpperCase() + '</b></div>' +
+        '<div><label>VALID THRU</label><b>' + exp + '</b></div>' +
+        '<div><label>CVV</label><b>' + cvv + '</b></div>' +
+      '</div>' +
+      (c.status === 'frozen' ? '<div class="frozen-wm">已冻结</div>' : '') +
+    '</div></div>' +
+    '<div class="sec"><div class="balcard">' +
+      '<div><label>BALANCE · 可用余额</label><div class="bal" id="balNum">' + fmtUSD(c.balance) + '</div></div>' +
+      '<div class="ptspill" onclick="openPoints()">🪙 <b id="ptsNum">' + fmtPts(me.points) + '</b> 积分 ›</div>' +
+    '</div></div>' +
+    '<div class="sec"><div class="qgrid">' +
+      '<div onclick="openTopup()"><span>➕</span>充值</div>' +
+      '<div onclick="openPay()"><span>🛍️</span>消费</div>' +
+      '<div onclick="openFreeze()"><span>❄️</span>冻结挂失</div>' +
+      '<div onclick="openLimits()"><span>📋</span>限额说明</div>' +
+    '</div></div>' +
+    '<div class="sec"><div class="panel">' +
+      '<div class="phead">最近交易 <a onclick="openTxAll()">查看全部 ›</a></div>' +
+      (txs.length ? txs.map(txRow).join('') : '<div class="empty-s">暂无交易，先去充值或消费吧</div>') +
+    '</div></div>';
+  if (animate) {
+    if (Math.abs(S.prevBal - c.balance) > 0.001) tween($('balNum'), S.prevBal, c.balance, fmtUSD);
+    if (S.prevPts !== me.points) tween($('ptsNum'), S.prevPts, me.points, function(v){ return fmtPts(Math.round(v)); });
+  }
+}
+function toggleEye(){ S.revealed = !S.revealed; renderCard(false); }
+async function openTxAll(){
+  S.txs = await api('/api/app/transactions') || [];
+  openPage('全部交易 · ' + S.txs.length + ' 笔', S.txs.map(txRowFull).join('') || '<div class="empty-s">暂无交易</div>');
+}
+async function openPoints(){
+  S.points = await api('/api/app/points') || [];
+  openPage('积分明细', '<div class="ptshead">当前积分<b>' + fmtPts(S.me.points) + '</b>分</div>' +
+    (S.points.map(pointsRow).join('') || '<div class="empty-s">暂无积分记录</div>'));
+}
+
+/* ---- 充值 ---- */
+function openTopup(){
+  if (S.me.card.status !== 'active') { toast('卡已冻结，无法充值', 'err'); return; }
+  S.tqMethod = 'fiat';
+  renderTopupSheet();
+}
+function renderTopupSheet(){
+  openSheet(
+    '<div class="sh-title">➕ 充值</div>' +
+    '<div class="mtabs">' +
+      '<div class="mtab' + (S.tqMethod === 'fiat' ? ' on' : '') + '" onclick="setTqm(\'fiat\')">🏦 银行卡<em>法币 · 2% 手续费</em></div>' +
+      '<div class="mtab' + (S.tqMethod === 'usdt' ? ' on' : '') + '" onclick="setTqm(\'usdt\')">₮ USDT-TRC20<em>1% 手续费</em></div>' +
+    '</div>' +
+    '<div class="field"><label>充值金额 (USD)</label>' +
+      '<div class="quick">' + [50,100,200,500].map(function(v){ return '<div class="qbtn" onclick="setTqa(' + v + ',this)">$' + v + '</div>'; }).join('') + '</div>' +
+      '<input id="tqAmt" class="inp" type="number" inputmode="decimal" placeholder="或输入自定义金额" oninput="updTq()">' +
+    '</div>' +
+    (S.tqMethod === 'usdt' ?
+      '<div class="usdt">' + qrHTML(WALLET) +
+        '<div class="uaddr"><code>' + WALLET + '</code>' +
+        '<button class="copybtn" onclick="copyText(\'' + WALLET + '\',\'钱包地址已复制\')">复制钱包地址</button></div>' +
+        '<div class="unote">⚠️ 仅支持 TRC20 网络，请勿向该地址发送其他资产</div>' +
+      '</div>' : '') +
+    '<div class="estbox" id="tqEst">请选择或输入充值金额</div>' +
+    '<button class="btn" id="tqBtn" disabled onclick="doTopup()">确认充值</button>' +
+    '<div class="sh-note">💡 充值额外返 5 积分/USD，到账后可在「积分明细」查看</div>');
+}
+function setTqm(m){ S.tqMethod = m; renderTopupSheet(); }
+function setTqa(v, el){
+  $('tqAmt').value = v;
+  document.querySelectorAll('.qbtn').forEach(function(b){ b.classList.remove('on'); });
+  if (el) el.classList.add('on');
+  updTq();
+}
+function updTq(){
+  var amt = parseFloat($('tqAmt') && $('tqAmt').value) || 0;
+  var feeRate = S.tqMethod === 'usdt' ? 0.01 : 0.02;
+  var fee = +(amt * feeRate).toFixed(2);
+  $('tqEst').innerHTML = amt > 0
+    ? '手续费 ' + fmtUSD(fee) + '(' + (feeRate*100) + '%) · 实际到账 <b>' + fmtUSD(+(amt - fee).toFixed(2)) + '</b> · 返 <b>' + fmtPts(Math.floor(amt*5)) + '</b> 积分'
+    : '请选择或输入充值金额';
+  $('tqBtn').disabled = !(amt > 0);
+  $('tqBtn').textContent = amt > 0 ? ('确认充值 $' + amt) : '确认充值';
+}
+async function doTopup(){
+  var amt = parseFloat($('tqAmt') && $('tqAmt').value) || 0;
+  if (!(amt > 0)) { toast('请输入充值金额', 'err'); return; }
+  var r = await api('/api/app/topup', { method:'POST', body: JSON.stringify({ amount: amt, method: S.tqMethod }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  await refreshCard(true);
+  toast('充值成功 · 实际到账 ' + fmtUSD(+(amt - r.tx.fee).toFixed(2)) + '(手续费 ' + fmtUSD(r.tx.fee) + ') · 返 ' + fmtPts(Math.floor(amt*5)) + ' 积分', 'ok');
+}
+
+/* ---- 消费 ---- */
+function openPay(){
+  if (S.me.card.status !== 'active') { toast('卡已冻结，无法支付', 'err'); return; }
+  S.usePts = false;
+  openSheet(
+    '<div class="sh-title">🛍️ 消费支付</div>' +
+    '<div class="field"><label>消费金额 (USD)</label>' +
+      '<input id="payAmt" class="inp" type="number" inputmode="decimal" step="0.01" placeholder="如 25.50" oninput="updPayEst()">' +
+    '</div>' +
+    '<div class="field"><label>商户</label>' +
+      '<select id="payMer" class="inp">' + MERCHANTS.map(function(m){ return '<option>' + m + '</option>'; }).join('') + '</select>' +
+    '</div>' +
+    '<div class="switchrow" onclick="toggleUsePts()">' +
+      '<div><b>使用积分抵扣</b><span>100 积分 = $1 · 最多抵扣 30%</span></div>' +
+      '<div class="switch" id="ptSwitch"></div>' +
+    '</div>' +
+    '<div class="estbox" id="payEst"></div>' +
+    '<button class="btn" id="payBtn" disabled onclick="doPay()">确认支付</button>');
+  updPayEst();
+}
+function toggleUsePts(){
+  S.usePts = !S.usePts;
+  $('ptSwitch').classList.toggle('on', S.usePts);
+  updPayEst();
+}
+function payCalc(amt){
+  var used = 0;
+  if (S.usePts) used = Math.min(S.me.points, Math.floor(amt * 0.3 * 100));
+  return { used: used, payUsd: +(amt - used / 100).toFixed(2) };
+}
+function updPayEst(){
+  var amt = parseFloat($('payAmt') && $('payAmt').value) || 0;
+  var rate = (LEVELS[S.me.card.level] || LEVELS.standard).rate;
+  var est = $('payEst'), btn = $('payBtn');
+  var html = '卡内余额 ' + fmtUSD(S.me.card.balance) + ' · 单笔限额 $' + KYC_LIM[S.me.kycLevel][0].toLocaleString();
+  if (amt > 0) {
+    var cc = payCalc(amt);
+    html = (S.usePts && cc.used > 0
+        ? '积分抵扣 ' + fmtPts(cc.used) + ' 分(-' + fmtUSD(cc.used/100) + ') · 实付 <b>' + fmtUSD(cc.payUsd) + '</b><br>'
+        : '') +
+      '预计返 <b>' + fmtPts(Math.floor(cc.payUsd * 10 * rate)) + '</b> 积分(按 x' + rate + ' 倍率)<br>' + html;
+  }
+  est.innerHTML = html;
+  btn.disabled = !(amt > 0);
+}
+async function doPay(){
+  var amt = parseFloat($('payAmt') && $('payAmt').value) || 0;
+  if (!(amt > 0)) { toast('请输入消费金额', 'err'); return; }
+  var r = await api('/api/app/pay', { method:'POST', body: JSON.stringify({ amount: amt, merchant: $('payMer').value, usePoints: S.usePts }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  await refreshCard(true);
+  openSheet(payOKHtml(r));
+}
+function payOKHtml(d){
+  var used = d.pointsUsed || 0;
+  var payUsd = +(d.tx.amount - used / 100).toFixed(2);
+  return '<div class="okwrap">' +
+    '<div class="okmark">✅</div>' +
+    '<div class="okbig">支付成功</div>' +
+    '<div class="okamt">-' + fmtUSD(d.tx.amount) + '</div>' +
+    '<div class="okmeta">' + d.tx.merchant + ' · ' + fmtTime(d.tx.createdAt) + '</div>' +
+    (used ? '<div class="okline">积分抵扣<b class="dn2">-' + fmtPts(used) + ' 分</b></div>' : '') +
+    '<div class="okline">实付金额<b>' + fmtUSD(payUsd) + '</b></div>' +
+    '<div class="okline pts">🎉 返还积分<b>+' + fmtPts(d.pointsEarned) + ' 分</b></div>' +
+    '<button class="btn" onclick="closeSheet()">完成</button></div>';
+}
+
+/* ---- 冻结挂失 / 限额说明 ---- */
+function openFreeze(){
+  var c = S.me.card;
+  openSheet(
+    '<div class="sh-title">❄️ 冻结 / 挂失</div>' +
+    '<div class="kv"><span>卡号</span><b>' + maskCard(c.cardNo) + '</b></div>' +
+    '<div class="kv"><span>当前状态</span><b>' + (c.status === 'active' ? '✅ 正常使用中' : '❄️ 已冻结') + '</b></div>' +
+    '<div class="sh-note">冻结后卡片将无法充值与消费， 可有效防止盗刷。<br>挂失后卡号作废并补发新卡。<br><br>🔒 演示环境： 冻结/解冻/挂失请由运营后台「卡片管理」操作， 用户端展示状态联动。</div>' +
+    '<button class="btn ghost" onclick="closeSheet()">我知道了</button>');
+}
+function openLimits(){
+  var me = S.me, c = me.card, rate = (LEVELS[c.level] || LEVELS.standard).rate;
+  openSheet(
+    '<div class="sh-title">📋 限额与费率说明</div>' +
+    '<div class="kv"><span>当前 KYC 等级</span><b>L' + me.kycLevel + '</b></div>' +
+    '<div class="kv"><span>卡片等级</span><b>' + (LEVELS[c.level] || LEVELS.standard).label + ' · 积分 x' + rate + '</b></div>' +
+    '<table class="lim"><tr><th>KYC 等级</th><th>单笔限额</th><th>单日限额</th></tr>' +
+      [0,1,2].map(function(l){
+        return '<tr' + (l === me.kycLevel ? ' class="cur"' : '') + '><td>L' + l + (l === me.kycLevel ? ' ← 当前' : '') + '</td>' +
+          '<td>$' + KYC_LIM[l][0].toLocaleString() + '</td><td>$' + KYC_LIM[l][1].toLocaleString() + '</td></tr>';
+      }).join('') + '</table>' +
+    '<div class="sh-note">💡 在「我的」页升级 KYC 可提升限额； 消费返 10 积分/USD × 卡等级倍率； 充值手续费： 法币 2% / USDT 1%。</div>' +
+    '<button class="btn ghost" onclick="closeSheet()">我知道了</button>');
+}
+</script>
+<script>
+'use strict';
+/* ================= Tab2 商城 ================= */
+function prodCard(p){
+  var low = p.stock > 0 && p.stock <= 15;
+  return '<div class="prod" onclick="openProduct(' + p.id + ')">' +
+    '<div class="ppic" style="background:' + catGrad(p.category) + '">' + p.icon +
+      (p.stock <= 0 ? '<span class="soldout">已兑完</span>' : (low ? '<span class="lowstock">仅剩 ' + p.stock + ' 件</span>' : '')) +
+    '</div>' +
+    '<div class="pbody"><b>' + p.name + '</b>' +
+      '<div class="pcat">' + p.category + '</div>' +
+      '<div class="pprice">🪙 ' + fmtPts(p.points) + ' 分</div>' +
+      '<div class="pcash">' + (p.cash ? ('+$' + p.cash + ' 现金加价') : '纯积分兑换') + '</div>' +
+    '</div></div>';
+}
+function renderMall(){
+  $('v-mall').innerHTML =
+    '<div class="sec"><div class="mallban">' +
+      '<div><label>我的积分 · POINTS</label><b><span id="mallPts">' + fmtPts(S.me.points) + '</span> 分</b></div>' +
+      '<div class="goTask" onclick="switchTab(\'task\')">🎯 去赚积分 ›</div>' +
+    '</div></div>' +
+    '<div class="sec"><div class="pgrid">' + (S.products.map(prodCard).join('') || '<div class="empty-s">商城暂无商品</div>') + '</div></div>';
+}
+function openProduct(id){
+  var p = S.products.find(function(x){ return x.id === id; });
+  if (!p) return;
+  if (p.stock <= 0) { toast('该商品已兑完', 'err'); return; }
+  openSheet(
+    '<div class="pdetail">' +
+      '<div class="pdbig" style="background:' + catGrad(p.category) + '">' + p.icon + '</div>' +
+      '<div class="pdname">' + p.name + '<span class="pcat">' + p.category + '</span></div>' +
+      '<div class="pddesc">' + (p.desc || '') + '</div>' +
+      '<div class="pdprice">🪙 <b>' + fmtPts(p.points) + '</b> 积分<em>' + (p.cash ? ('+ $' + p.cash + ' 现金加价') : '纯积分') + '</em></div>' +
+      '<div class="pdrules"><div class="phead">兑换须知</div>' +
+        '· 卡券 / 充值券 / 权益类兑换后立即生成核销码<br>' +
+        '· 实物类商品 3-7 个工作日发货， 发货后可在订单页查看物流<br>' +
+        '· 积分一经兑换不予退还' + (p.cash ? '<br>· 演示环境： 现金加价部分不实际扣款' : '') + '</div>' +
+      '<div class="sh-note">当前积分 ' + fmtPts(S.me.points) + ' 分 · 库存 ' + p.stock + ' 件</div>' +
+      '<button class="btn" onclick="doRedeem(' + p.id + ')">立即兑换 · 🪙 ' + fmtPts(p.points) + ' 分' + (p.cash ? (' + $' + p.cash) : '') + '</button>' +
+    '</div>');
+}
+async function doRedeem(id){
+  var r = await api('/api/app/redeem', { method:'POST', body: JSON.stringify({ id: id }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  S.products = await api('/api/app/products') || [];
+  if (!await loadMe()) return;
+  renderMall();
+  var p = S.products.find(function(x){ return x.id === id; });
+  openSheet(
+    '<div class="okwrap">' +
+      '<div class="okmark">🎉</div>' +
+      '<div class="okbig">兑换成功</div>' +
+      '<div class="okmeta">' + (p ? p.name : '商品') + ' · 消耗 ' + fmtPts(r.order.pointsCost) + ' 积分 · 订单号 #' + r.order.id + '</div>' +
+      (r.order.redeemCode
+        ? '<div class="rcode center"><span>核销码</span><b>' + r.order.redeemCode + '</b>' +
+          '<button class="copybtn sm" onclick="copyText(\'' + r.order.redeemCode + '\',\'核销码已复制\')">复制</button></div>'
+        : '<div class="okline">📦 实物商品待发货， 发货后可在订单页查看物流单号</div>') +
+      '<button class="btn" onclick="closeSheet();switchTab(\'order\')">查看订单</button>' +
+      '<button class="btn ghost" onclick="closeSheet()">留在商城</button>' +
+    '</div>');
+}
+
+/* ================= Tab3 任务 ================= */
+function taskRow(t){
+  var claimed = !!S.claimed[t.id];
+  return '<div class="task">' +
+    '<div class="tico">' + t.icon + '</div>' +
+    '<div class="tmain"><b>' + t.title + '</b><span>' + t.desc + '</span></div>' +
+    '<div class="tright"><em class="tt ' + t.type + '">' + (t.type === 'daily' ? '每日' : '一次') + '</em>' +
+      '<b>+' + fmtPts(t.points) + ' 分</b>' +
+      '<button class="mini' + (claimed ? ' done' : '') + '"' + (claimed ? ' disabled' : '') + ' onclick="claimTask(' + t.id + ')">' + (claimed ? '已领取' : '领取') + '</button>' +
+    '</div></div>';
+}
+function renderTask(){
+  var T = S.tasks, me = S.me;
+  $('v-task').innerHTML =
+    '<div class="sec"><div class="signcard">' +
+      '<div><div class="sg-t">📅 每日签到</div><div class="sg-d">每日登录即得， 连续签到奖励更多</div></div>' +
+      (T.signedToday
+        ? '<button class="sgbtn done" disabled>今日已签到 ✓</button>'
+        : '<button class="sgbtn" onclick="doSign()">签到 +20 分</button>') +
+    '</div></div>' +
+    '<div class="sec"><div class="panel">' +
+      '<div class="phead">任务中心<span class="mypts">当前积分 <b id="taskPts">' + fmtPts(me.points) + '</b></span></div>' +
+      T.tasks.map(taskRow).join('') +
+    '</div></div>' +
+    '<div class="sec"><div class="rulebar">📖 积分获取规则： 消费返 10 分/USD × 卡等级倍率 · 充值返 5 分/USD · 签到/任务/KYC/邀请均可获得积分</div></div>';
+}
+async function doSign(){
+  var r = await api('/api/app/sign', { method:'POST', body: '{}' });
+  if (r.error) { toast(r.error, 'err'); await loadTasks(); renderTask(); return; }
+  toast('签到成功 +20 积分', 'ok');
+  await loadMe(); await loadTasks(); renderTask();
+  tween($('taskPts'), S.prevPts, S.me.points, function(v){ return fmtPts(Math.round(v)); });
+}
+async function claimTask(id){
+  var t = S.tasks.tasks.find(function(x){ return x.id === id; });
+  var r = await api('/api/app/task/claim', { method:'POST', body: JSON.stringify({ id: id }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  S.claimed[id] = true;
+  toast('领取成功 +' + (t ? t.points : '?') + ' 积分', 'ok');
+  await loadMe(); renderTask();
+  tween($('taskPts'), S.prevPts, S.me.points, function(v){ return fmtPts(Math.round(v)); });
+}
+
+/* ================= Tab4 订单 ================= */
+function orderRow(o){
+  var st = OSTAT[o.status] || ['未知', 'warn'];
+  return '<div class="panel ocard">' +
+    '<div class="ohead">' +
+      '<div class="oico">' + (o.product ? o.product.icon : '🎁') + '</div>' +
+      '<div class="omain"><b>' + (o.product ? o.product.name : '商品') + '</b>' +
+        '<span>-' + fmtPts(o.pointsCost) + ' 积分 · ' + fmtTime(o.createdAt) + '</span></div>' +
+      '<span class="pill ' + st[1] + '">' + st[0] + '</span>' +
+    '</div>' +
+    (o.status === 'shipped' && o.trackingNo
+      ? '<div class="oline">🚚 物流单号 <code>' + o.trackingNo + '</code>' +
+        '<button class="copybtn sm" onclick="copyText(\'' + o.trackingNo + '\',\'物流单号已复制\')">复制</button></div>' : '') +
+    (o.status === 'redeemed' && o.redeemCode
+      ? '<div class="rcode"><span>核销码</span><b>' + o.redeemCode + '</b>' +
+        '<button class="copybtn sm" onclick="copyText(\'' + o.redeemCode + '\',\'核销码已复制\')">复制</button></div>' : '') +
+  '</div>';
+}
+function renderOrders(){
+  if (!S.orders.length) {
+    $('v-order').innerHTML = '<div class="bigempty"><div class="be-ico">📦</div><div class="be-t">暂无兑换订单</div>' +
+      '<button class="btn sm" style="margin-top:16px" onclick="switchTab(\'mall\')">去商城逛逛</button></div>';
+    return;
+  }
+  $('v-order').innerHTML = '<div style="height:12px"></div><div class="sec">' + S.orders.map(orderRow).join('') + '</div>';
+}
+</script>
+<script>
+'use strict';
+/* ================= Tab5 我的 ================= */
+function kycSection(){
+  var me = S.me, lv = me.kycLevel, st = me.kycStatus;
+  var dots = [0,1,2].map(function(l){
+    return '<span class="kdot ' + (l < lv ? 'done' : l === lv ? 'cur' : '') + '">L' + l + '</span>';
+  }).join('<span class="kline"></span>');
+  var stateHtml = '', btn = '';
+  if (st === 'pending_upgrade') {
+    stateHtml = '<div class="kycst wait">⏳ 升级审核中 — 已申请 L' + (lv+1) + '， 请在运营后台「KYC 审核」通过</div>';
+    btn = '<button class="btn sm" disabled>升级审核中 ⏳</button>';
+  } else if (st === 'rejected') {
+    stateHtml = '<div class="kycst bad">❌ 上次审核未通过， 请检查资料后重新提交</div>';
+    btn = '<button class="btn sm" onclick="openKyc()">重新提交升级</button>';
+  } else if (lv >= 2) {
+    stateHtml = '<div class="kycst ok">✅ 已完成高级认证 — 单笔 $10,000 / 单日 $50,000</div>';
+    btn = '<button class="btn sm ghost" disabled>已认证 L2 ✅</button>';
+  } else {
+    btn = '<button class="btn sm" onclick="openKyc()">升级 KYC 至 L' + (lv+1) + '</button>';
+  }
+  return '<div class="sec"><div class="panel">' +
+    '<div class="phead">KYC 认证' + (st === 'approved' ? '<span class="kbadge">已认证 L' + lv + ' ✅</span>' : '') + '</div>' +
+    '<div class="kdots">' + dots + '</div>' +
+    '<table class="lim"><tr><th>等级</th><th>单笔限额</th><th>单日限额</th></tr>' +
+      [0,1,2].map(function(l){
+        return '<tr' + (l === lv ? ' class="cur"' : '') + '><td>L' + l + '</td>' +
+          '<td>$' + KYC_LIM[l][0].toLocaleString() + '</td><td>$' + KYC_LIM[l][1].toLocaleString() + '</td></tr>';
+      }).join('') + '</table>' +
+    stateHtml + btn +
+  '</div></div>';
+}
+function inviteSection(){
+  var inv = S.invite || { code: '-', link: '-', invited: [], totalReward: 0 };
+  return '<div class="sec"><div class="panel">' +
+    '<div class="phead">邀请推广</div>' +
+    '<div class="invcode"><label>我的邀请码 · INVITE CODE</label>' +
+      '<div class="icrow"><b>' + inv.code + '</b>' +
+      '<button class="copybtn" onclick="copyText(\'' + inv.code + '\',\'邀请码已复制\')">复制</button></div>' +
+      '<div class="iclink">🔗 ' + inv.link +
+      '<button class="copybtn sm" style="background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4);color:#fff" onclick="copyText(\'' + inv.link + '\',\'邀请链接已复制\')">复制</button></div>' +
+    '</div>' +
+    '<div class="invrules">🎁 好友通过邀请码注册成功， 你与好友各得 <b>800 积分</b>； 好友后续消费你还可获得消费返佣。</div>' +
+    (inv.invited.length
+      ? inv.invited.map(function(i){
+          return '<div class="invrow"><span>' + avatar(i.name) + '</span><b>' + i.name + '</b>' +
+            '<em>' + fmtTime(i.at) + '</em><i>+' + fmtPts(i.reward) + ' 分</i></div>';
+        }).join('') + '<div class="invtot">累计邀请奖励 <b>' + fmtPts(inv.totalReward) + ' 分</b></div>'
+      : '<div class="empty-s">还没有好友加入， 快去邀请吧</div>') +
+  '</div></div>';
+}
+function renderMe(){
+  var me = S.me;
+  $('v-me').innerHTML =
+    '<div class="mehead">' +
+      '<div class="meav">' + avatar(me.name) + '</div>' +
+      '<div class="memain"><b>' + me.name + '</b>' +
+        '<span>' + me.country + ' · ' + me.city + ' · ' + me.phone + '</span>' +
+        '<span>👤 专属顾问： ' + (me.salesRep || '—') + '</span></div>' +
+      '<span class="kpill">KYC L' + me.kycLevel + '</span>' +
+    '</div>' +
+    kycSection() +
+    '<div class="sec"><div class="panel">' +
+      '<div class="phead">我的积分<a onclick="openPoints()">全部明细 ›</a></div>' +
+      '<div class="ptsbig">🪙 <b>' + fmtPts(me.points) + '</b> 分</div>' +
+      (S.points.slice(0, 10).map(pointsRow).join('') || '<div class="empty-s">暂无积分记录</div>') +
+    '</div></div>' +
+    inviteSection() +
+    '<div class="sec"><button class="btn danger" onclick="logout()">退出登录</button></div>' +
+    '<div class="ver">U-Card App · Demo v1.0</div>';
+}
+function openKyc(){
+  var lv = S.me.kycLevel;
+  openSheet(
+    '<div class="sh-title">🪪 升级 KYC 至 L' + (lv+1) + '</div>' +
+    '<div class="kbenefit">升级后限额： 单笔 <b>$' + KYC_LIM[lv+1][0].toLocaleString() + '</b> / 单日 <b>$' + KYC_LIM[lv+1][1].toLocaleString() + '</b></div>' +
+    '<div class="doc"><span>📄 passport.jpg</span><em>已上传 ✓</em></div>' +
+    '<div class="doc"><span>🤳 selfie.jpg</span><em>已上传 ✓</em></div>' +
+    '<div class="sh-note">演示环境已自动生成证件文件； 提交后将由运营后台「KYC 审核」通过， 通过后自动发放 200 积分认证奖励。</div>' +
+    '<button class="btn" onclick="submitKyc()">提交审核</button>');
+}
+async function submitKyc(){
+  var r = await api('/api/app/kyc', { method:'POST', body: '{}' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  toast('已提交升级申请， 可在运营后台「KYC 审核」通过', 'ok');
+  if (!await loadMe()) return;
+  renderMe();
+}
+
+/* ================= 初始化 ================= */
+$('mask').addEventListener('click', function(e){ if (e.target === this) closeSheet(); });
+boot();
+</script>
+</body>
+</html>
