@@ -265,12 +265,77 @@ function doRedeem(userId, productId) {
   const user = users.find(u => u.id === userId);
   if (!p || p.status !== 'on') return { error: '商品不可兑换' };
   if (p.stock <= 0) return { error: '库存不足' };
+  const limit = productLimit(p);
+  if (limit > 0) { // limitPerUser 默认 0=不限购; 演示部分商品在 PRODUCT_LIMITS 配置
+    const mine = orders.filter(o => o.userId === userId && o.productId === p.id && o.status !== 'cancelled').length;
+    if (mine >= limit) return { error: `该商品每人限兑 ${limit} 件, 你已兑换 ${mine} 件` };
+  }
   if (user.points < p.points) return { error: `积分不足(还差 ${p.points - user.points} 分)` };
   p.stock--;
   const order = { id: nid(), userId, productId, pointsCost: p.points, status: p.category === '实物' ? 'pending' : 'redeemed', redeemCode: p.category !== '实物' ? 'UC-' + ri(1000, 9999) + '-' + ri(1000, 9999) : '', trackingNo: '', createdAt: now() };
   orders.unshift(order);
   addPointsLog(userId, -p.points, '商城兑换', order.id, now());
   return { order };
+}
+
+// ---------------- P2: 用户端扩展工具(模块级, 调用时才读冷数据) ----------------
+// 演示限购配置(每人限兑件数); 商品自带 limitPerUser 字段优先, 缺省 0=不限
+const PRODUCT_LIMITS = { 6: 1, 8: 2 };
+const productLimit = (p) => p.limitPerUser || PRODUCT_LIMITS[p.id] || 0;
+// 商品平均评分(来自已评价订单)
+function productRating(productId) {
+  const rs = orders.filter(o => o.productId === productId && o.review);
+  if (!rs.length) return null;
+  return { avg: +(rs.reduce((a, o) => a + o.review.stars, 0) / rs.length).toFixed(1), count: rs.length };
+}
+// 积分中心汇总: 可用/冻结(当月获得 10% 演示口径)/即将过期(每笔 90 天有效期, 30 天内到期)/来源分类/任务进度
+function pointsSummary(uid) {
+  const u = users.find(x => x.id === uid);
+  const logs = pointsLogs.filter(l => l.userId === uid);
+  const gain = logs.filter(l => l.delta > 0);
+  const total = gain.reduce((a, l) => a + l.delta, 0);
+  const d = new Date();
+  const inMonth = (ts) => { const t = new Date(ts); return t.getFullYear() === d.getFullYear() && t.getMonth() === d.getMonth(); };
+  const frozen = Math.round(gain.filter(l => inMonth(l.createdAt)).reduce((a, l) => a + l.delta, 0) * 0.1);
+  const EXP = 90 * 864e5, SOON = 30 * 864e5;
+  const expiringSoon = gain.filter(l => { const e = l.createdAt + EXP; return e > now() && e <= now() + SOON; }).reduce((a, l) => a + l.delta, 0);
+  const bySource = { '消费返积分': 0, '充值奖励': 0, '签到': 0, '任务与其他': 0, '兑换与抵扣': 0 };
+  logs.forEach(l => {
+    const s = String(l.source);
+    if (s === '消费返积分') bySource['消费返积分'] += l.delta;
+    else if (s === '充值奖励') bySource['充值奖励'] += l.delta;
+    else if (s === '每日签到') bySource['签到'] += l.delta;
+    else if (s === '商城兑换' || s === '消费抵扣') bySource['兑换与抵扣'] += l.delta;
+    else bySource['任务与其他'] += l.delta;
+  });
+  const day = new Date().toDateString();
+  const signedToday = logs.some(l => l.source === '每日签到' && new Date(l.createdAt).toDateString() === day);
+  const taskProgress = tasks.map(t => ({ id: t.id, title: t.title, type: t.type, points: t.points,
+    done: t.type === 'daily' ? signedToday : logs.some(l => String(l.refNo) === 'TASK' + t.id) }));
+  return { available: u ? u.points : 0, frozen, expiringSoon, total, bySource, signedToday, taskProgress,
+    rules: { earnPerUsd: POINTS_PER_USD, pointsPerUsd: 100, maxOff: '30%', validityDays: 90 } };
+}
+// 消息通知: 种子+事件(交易/系统/营销 3 类), 已读状态按 uid 存内存(重启还原)
+let notifRead = {};
+function appNotificationsFor(uid) {
+  const u = users.find(x => x.id === uid);
+  if (!u) return { list: [], unread: 0 };
+  const read = notifRead[uid] || (notifRead[uid] = {});
+  const list = [];
+  transactions.filter(t => t.userId === uid).slice(0, 3).forEach(t => {
+    list.push(t.type === 'topup'
+      ? { id: 'tx' + t.id, type: '交易', icon: '💰', title: '充值到账', body: `充值 $${t.amount} 已到账(手续费 $${t.fee}), 返还积分请在积分中心查看。`, createdAt: t.createdAt }
+      : { id: 'tx' + t.id, type: '交易', icon: '🛍️', title: '消费交易提醒', body: `在 ${t.merchant} 消费 $${t.amount}, 本笔返还 ${t.pointsEarned} 积分。`, createdAt: t.createdAt });
+  });
+  const card = cards.find(c => c.userId === uid);
+  list.push({ id: 'sys' + u.id + 'a', type: '系统', icon: '🛡️', title: '安全中心提醒', body: '如发现非本人交易, 请立即在「卡包 → 冻结挂失」冻结卡片并联系客服。', createdAt: daysAgo(2) });
+  list.push({ id: 'sys' + u.id + 'b', type: '系统', icon: '🪪', title: 'KYC 等级通知', body: `当前 KYC L${u.kycLevel}, 单笔限额 $${KYC_LIMITS[u.kycLevel].perTx}, 升级认证可提升限额。`, createdAt: daysAgo(4) });
+  if (card && card.status !== 'active') list.push({ id: 'sys' + u.id + 'c', type: '系统', icon: card.status === 'lost' ? '🚨' : '❄️', title: card.status === 'lost' ? '卡片已挂失' : '卡片已冻结', body: '卡片暂不可用于充值与消费, 恢复需联系客服或在运营后台处理。', createdAt: daysAgo(1) });
+  list.push({ id: 'mkt1', type: '营销', icon: '🎁', title: '积分商城上新', body: 'AirPods 4 / 白金卡升级券等好礼已上架, 快去商城看看吧!', createdAt: daysAgo(1, 5) });
+  list.push({ id: 'mkt2', type: '营销', icon: '⚡', title: '双倍积分周', body: '本周消费返积分加成, 金卡/白金卡可叠加等级倍率, 更快攒满好礼。', createdAt: daysAgo(3) });
+  list.sort((a, b) => b.createdAt - a.createdAt);
+  const out = list.map(n => ({ ...n, read: !!read[n.id] }));
+  return { list: out, unread: out.filter(n => !n.read).length };
 }
 
 // ---------------- 视图辅助 ----------------
@@ -623,15 +688,65 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       if (act === 'lost') { if (card.status === 'lost') return J({ error: '卡已处于挂失状态' }, 400); card.status = 'lost'; }
       return J({ status: card.status });
     }
-    if (p === '/api/app/products') return J(products.filter(pr => pr.status === 'on'));
+    if (p === '/api/app/products') { // P2.3: 返回商品(含限购/评分) + 分类列表
+      const on = products.filter(pr => pr.status === 'on').map(pr => ({ ...pr, limitPerUser: productLimit(pr), rating: productRating(pr.id) }));
+      return J({ products: on, categories: ['全部', ...new Set(on.map(pr => pr.category))] });
+    }
     if (p === '/api/app/redeem' && method === 'POST') return J(doRedeem(uid, +b.id));
     if (p === '/api/app/orders') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(orders.filter(o => o.userId === uid).map(pubOrder)); }
+    // P2.3 订单动作: 取消(退分+回补库存) / 售后 / 评价
+    if (p === '/api/app/orders/cancel' && method === 'POST') {
+      const u = me(); if (!u) return J({ error: '未登录' }, 401);
+      const o = orders.find(x => x.id === +b.id && x.userId === uid); if (!o) return J({ error: '订单不存在' }, 404);
+      if (o.status !== 'pending') return J({ error: '仅待发货的实物订单可取消' }, 400);
+      o.status = 'cancelled';
+      const pr = products.find(x => x.id === o.productId); if (pr) pr.stock++; // 库存回补
+      addPointsLog(uid, o.pointsCost, '订单取消退回', o.id, now()); // 积分退回
+      return J({ ok: true, order: pubOrder(o) });
+    }
+    if (p === '/api/app/orders/aftersale' && method === 'POST') {
+      const u = me(); if (!u) return J({ error: '未登录' }, 401);
+      const o = orders.find(x => x.id === +b.id && x.userId === uid); if (!o) return J({ error: '订单不存在' }, 404);
+      if (o.status !== 'shipped' && o.status !== 'redeemed') return J({ error: '当前状态的订单不可申请售后' }, 400);
+      o.status = 'aftersale';
+      o.aftersale = { no: 'AS-' + ri(100000, 999999), type: b.type || '退货退款', reason: String(b.reason || '').slice(0, 200), appliedAt: now() };
+      return J({ ok: true, order: pubOrder(o) });
+    }
+    if (p === '/api/app/orders/review' && method === 'POST') {
+      const u = me(); if (!u) return J({ error: '未登录' }, 401);
+      const o = orders.find(x => x.id === +b.id && x.userId === uid); if (!o) return J({ error: '订单不存在' }, 404);
+      if (o.status !== 'redeemed') return J({ error: '订单完成后才能评价' }, 400);
+      if (o.review) return J({ error: '该订单已评价过' }, 400);
+      const stars = Math.min(5, Math.max(1, Math.round(+b.stars) || 5));
+      o.review = { stars, text: String(b.text || '').slice(0, 200), createdAt: now() };
+      return J({ ok: true, order: pubOrder(o) });
+    }
     if (p === '/api/app/points') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(pointsLogs.filter(l => l.userId === uid).slice(0, 50)); }
+    if (p === '/api/app/points/summary') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(pointsSummary(uid)); }
     if (p === '/api/app/invite') { const u = me(); if (!u) return J({ error: '未登录' }, 401);
       const invited = users.filter(x => x.invitedBy === uid);
       return J({ code: 'UC' + String(uid).padStart(4, '0') + String(ri(100, 999)), link: `https://u-card.app/i/UC${String(uid).padStart(4, '0')}`, invited: invited.map(x => ({ name: x.name, at: x.createdAt, reward: 800 })), totalReward: invited.length * 800 });
     }
     if (p === '/api/app/kyc' && method === 'POST') { const u = me(); u.kycStatus = 'pending_upgrade'; return J({ ok: true }); }
+    // P2.1 安全设置: 修改密码 Demo(仅校验非空+两次一致, 不真鉴权)
+    if (p === '/api/app/password' && method === 'POST') {
+      const u = me(); if (!u) return J({ error: '未登录' }, 401);
+      const oldP = String(b.oldPassword || ''), n1 = String(b.newPassword || ''), n2 = String(b.newPassword2 || '');
+      if (!oldP || !n1) return J({ error: '请填写旧密码与新密码' }, 400);
+      if (n1 !== n2) return J({ error: '两次输入的新密码不一致' }, 400);
+      return J({ ok: true });
+    }
+    // P2.1 消息通知: 种子+事件通知(交易/系统/营销), 点击标记已读
+    if (p === '/api/app/notifications') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(appNotificationsFor(uid)); }
+    if (p === '/api/app/notifications/read' && method === 'POST') {
+      const u = me(); if (!u) return J({ error: '未登录' }, 401);
+      const read = notifRead[uid] || (notifRead[uid] = {});
+      const r = appNotificationsFor(uid);
+      if (b.all) r.list.forEach(n => { read[n.id] = true; });
+      else if (b.id) read[b.id] = true;
+      const after = appNotificationsFor(uid);
+      return J({ ok: true, unread: after.unread });
+    }
     return J({ error: 'not found' }, 404);
   }
   return null; // 非 API
