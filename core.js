@@ -75,8 +75,7 @@ users = userSeed.map(([name, phone, country, cc, city, kyc, repId], i) => ({
 }));
 users[2].kycStatus = 'pending_upgrade'; users[4].kycStatus = 'pending_upgrade'; users[10].kycStatus = 'pending_upgrade';
 
-const cardBins = ['5533', '5299', '4571'];
-const genCardNo = (i) => cardBins[i % 3] + ' ' + String(ri(1000, 9999)) + ' ' + String(ri(1000, 9999)) + ' ' + String(ri(1000, 9999));
+// (genCardNo/cardBins 已移至模块级, 供 initSeed 种子与开户发卡共用)
 cards = users.map((u, i) => ({
   id: i + 1, userId: u.id, cardNo: genCardNo(i),
   cvv: String(ri(100, 999)), expMonth: ri(1, 12), expYear: ri(28, 31),
@@ -175,6 +174,8 @@ tasks = [
 }
 
 // ---------------- 业务动作工具(模块级, 依赖 initSeed 填充的数据数组) ----------------
+const cardBins = ['5533', '5299', '4571'];
+const genCardNo = () => cardBins[ri(0, 2)] + ' ' + String(ri(1000, 9999)) + ' ' + String(ri(1000, 9999)) + ' ' + String(ri(1000, 9999));
 function addPointsLog(userId, delta, source, refNo, ts) {
   const u = users.find(x => x.id === userId);
   u.points = Math.max(0, u.points + delta);
@@ -218,6 +219,7 @@ const scopeOf = (headers) => { // 数据范围: 未传=总监全量; 传销售 i
 function doTopup(userId, amount, method) {
   const card = cards.find(c => c.userId === userId);
   if (!card) return { error: '未找到卡' };
+  if (card.status === 'lost') return { error: '卡已挂失, 无法充值, 请联系客服' };
   if (card.status !== 'active') return { error: '卡已冻结, 无法充值' };
   const fee = +(amount * (method === 'usdt' ? 0.01 : 0.02)).toFixed(2);
   card.balance = +(card.balance + amount - fee).toFixed(2);
@@ -231,6 +233,7 @@ function doPay(userId, amount, merchant, usePoints) {
   const card = cards.find(c => c.userId === userId);
   const user = users.find(u => u.id === userId);
   if (!card) return { error: '未找到卡' };
+  if (card.status === 'lost') return { error: '卡已挂失, 无法支付, 请联系客服' };
   if (card.status !== 'active') return { error: '卡已冻结, 无法支付' };
   const lim = KYC_LIMITS[user.kycLevel];
   if (amount > lim.perTx) return { error: `超出单笔限额($${lim.perTx}), 请升级 KYC` };
@@ -312,6 +315,8 @@ function recentChains(scopeIds, n = 10) {
 export function handleApi(method, p, q = {}, b = {}, h = {}) {
   if (!inited) initSeed(); // 懒初始化: 首个请求时生成种子(此时 Date.now() 为真实时间)
   const J = (data, status = 200) => ({ status, json: data });
+  // 演示数据一键重置: 重建全部种子, 清空现场操作产生的数据(须在 J 声明后)
+  if (p === '/api/demo/reset' && method === 'POST') { inited = false; initSeed(); return J({ ok: true, at: now() }); }
 
   // ============ 运营后台 / 销售工作台 ============
   if (p.startsWith('/api/admin')) {
@@ -366,7 +371,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     if (p.startsWith('/api/admin/cards/') && method === 'PATCH') {
       if (sid !== 1) return J({ error: '仅运营总监可执行冻结/调账' }, 403);
       const card = cards.find(c => c.id === +p.split('/').pop()); if (!card) return J({ error: 'not found' }, 404);
-      if (b.action === 'freeze') card.status = card.status === 'frozen' ? 'active' : 'frozen';
+      if (b.action === 'freeze') card.status = (card.status === 'frozen' || card.status === 'lost') ? 'active' : 'frozen'; // 冻结/解冻/解除挂失
       if (b.action === 'adjust') { card.balance = +(card.balance + +b.amount).toFixed(2); transactions.unshift({ id: nid(), type: 'adjust', userId: card.userId, cardId: card.id, amount: +b.amount, fee: 0, method: 'adjust', ref: 'OP-' + ri(10000, 99999), pointsEarned: 0, status: 'success', createdAt: now() }); }
       return J({ card });
     }
@@ -425,7 +430,39 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     if (p.startsWith('/api/admin/products/') && method === 'PATCH') { if (sid !== 1) return J({ error: '仅运营总监可上下架商品' }, 403); const pr = products.find(x => x.id === +p.split('/').pop()); if (pr) pr.status = pr.status === 'on' ? 'off' : 'on'; return J({ ok: true }); }
     if (p === '/api/admin/orders') return J(orders.filter(o => sid === 1 || scopedUserIds.includes(o.userId)).map(pubOrder));
     if (p === '/api/admin/orders/ship' && method === 'POST') { if (sid !== 1) return J({ error: '仅运营总监可发货' }, 403); const o = orders.find(x => x.id === +b.id); if (o) { o.status = 'shipped'; o.trackingNo = b.trackingNo || 'SF' + ri(100000000, 999999999); } return J({ ok: true }); }
-    if (p === '/api/admin/users') return J(users.filter(u => ids.includes(u.salesRepId)).map(pubUser));
+    if (p === '/api/admin/users') {
+      if (method === 'POST') { // 新建客户账号(开户即发标准卡, 可选等级)
+        const name = String(b.name || '').trim(); if (!name) return J({ error: '请填写客户姓名' }, 400);
+        const phone = String(b.phone || '').trim();
+        if (phone && users.some(u => u.phone === phone)) return J({ error: '手机号已存在: ' + name }, 409);
+        let repId = +b.salesRepId || (sid === 1 ? 30 : sid);
+        if (!repById(repId)) return J({ error: '归属销售不存在' }, 400);
+        if (sid !== 1 && !subtreeIds(sid).includes(repId)) return J({ error: '只能为本人或下级团队的客户开户' }, 403);
+        const uid = Math.max(0, ...users.map(u => u.id)) + 1;
+        users.push({ id: uid, name, phone: phone || ('+966 5' + ri(10000000, 99999999)), email: name.toLowerCase().replace(/[^a-z]+/g, '.') + '@ucard.io',
+          country: b.country || 'Saudi Arabia', cc: 'SA', city: b.city || 'Riyadh', kycLevel: 0, kycStatus: 'pending_upgrade', salesRepId: repId, invitedBy: null, points: 200, createdAt: now() });
+        let card = null;
+        if (b.issueCard !== false) {
+          card = { id: Math.max(0, ...cards.map(c => c.id)) + 1, userId: uid, cardNo: genCardNo(), cvv: String(ri(100, 999)), expMonth: ri(1, 12), expYear: ri(28, 31), level: b.level || 'standard', status: 'active', balance: 0, salesRepId: repId, createdAt: now() };
+          cards.push(card);
+          addCommissions(repId, 'card', 1, card.id, now());
+        }
+        return J({ user: pubUser(users.find(u => u.id === uid)), card });
+      }
+      return J(users.filter(u => ids.includes(u.salesRepId)).map(pubUser));
+    }
+    if (p === '/api/admin/sales' && method === 'POST') { // 新建销售/客服账号(总监专属)
+      if (sid !== 1) return J({ error: '仅运营总监可创建销售账号' }, 403);
+      const name = String(b.name || '').trim(); if (!name) return J({ error: '请填写姓名' }, 400);
+      if (salesReps.some(s => s.name === name)) return J({ error: '同名销售已存在' }, 409);
+      const parent = repById(+b.parentId); if (!parent) return J({ error: '请选择上级(挂靠的组织节点)' }, 400);
+      const level = parent.level + 1; if (level > 3) return J({ error: '三级销售下不能再挂下级(演示上限三级)' }, 400);
+      const ROLE_BY_LEVEL = { 1: '一级销售', 2: '二级销售', 3: '三级销售' };
+      const TARGET_BY_LEVEL = { 1: 120000, 2: 60000, 3: 25000 };
+      const id = Math.max(0, ...salesReps.map(s => s.id)) + 1;
+      salesReps.push({ id, name, role: b.role || ROLE_BY_LEVEL[level], parentId: parent.id, level, region: b.region || parent.region, target: +b.target || TARGET_BY_LEVEL[level] });
+      return J({ sales: salesReps.find(s => s.id === id) });
+    }
     return J({ error: 'not found: ' + p }, 404);
   }
 
@@ -438,9 +475,22 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     if (p === '/api/app/transactions') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(transactions.filter(t => t.userId === uid).slice(0, 50)); }
     if (p === '/api/app/topup' && method === 'POST') return J(doTopup(uid, +b.amount, b.method));
     if (p === '/api/app/pay' && method === 'POST') return J(doPay(uid, +b.amount, b.merchant || 'Amazon', b.usePoints));
-    if (p === '/api/app/tasks') { const u = me(); if (!u) return J({ error: '未登录' }, 401); const day = new Date().toDateString(); return J({ tasks, signedToday: pointsLogs.some(l => l.userId === uid && l.source === '每日签到' && new Date(l.createdAt).toDateString() === day) }); }
+    if (p === '/api/app/tasks') { const u = me(); if (!u) return J({ error: '未登录' }, 401); const day = new Date().toDateString();
+      return J({ tasks, signedToday: pointsLogs.some(l => l.userId === uid && l.source === '每日签到' && new Date(l.createdAt).toDateString() === day),
+        claimed: pointsLogs.filter(l => l.userId === uid && String(l.refNo).startsWith('TASK')).map(l => +String(l.refNo).slice(4)) }); }
     if (p === '/api/app/sign' && method === 'POST') { const u = me(); const day = new Date().toDateString(); if (pointsLogs.some(l => l.userId === uid && l.source === '每日签到' && new Date(l.createdAt).toDateString() === day)) return J({ error: '今日已签到' }, 400); addPointsLog(uid, 20, '每日签到', 'SIGN', now()); return J({ ok: true }); }
-    if (p === '/api/app/task/claim' && method === 'POST') { const t = tasks.find(x => x.id === +b.id); addPointsLog(uid, t.points, '任务奖励:' + t.title, 'TASK', now()); return J({ ok: true }); }
+    if (p === '/api/app/task/claim' && method === 'POST') { const t = tasks.find(x => x.id === +b.id);
+      if (t.type === 'once' && pointsLogs.some(l => l.userId === uid && l.refNo === 'TASK' + t.id)) return J({ error: '该任务奖励已领取过, 不能重复领取' }, 400);
+      addPointsLog(uid, t.points, '任务奖励:' + t.title, 'TASK' + t.id, now()); return J({ ok: true }); }
+    // 卡片自助管控: 冻结/解冻/挂失(挂失需后台解除)
+    if ((p === '/api/app/card/freeze' || p === '/api/app/card/unfreeze' || p === '/api/app/card/lost') && method === 'POST') {
+      const card = cards.find(c => c.userId === uid); if (!card) return J({ error: '未找到卡' }, 404);
+      const act = p.split('/').pop();
+      if (act === 'freeze') { if (card.status !== 'active') return J({ error: '当前状态不可冻结' }, 400); card.status = 'frozen'; }
+      if (act === 'unfreeze') { if (card.status !== 'frozen') return J({ error: '只有冻结状态可自助解冻, 挂失请联系客服' }, 400); card.status = 'active'; }
+      if (act === 'lost') { if (card.status === 'lost') return J({ error: '卡已处于挂失状态' }, 400); card.status = 'lost'; }
+      return J({ status: card.status });
+    }
     if (p === '/api/app/products') return J(products.filter(pr => pr.status === 'on'));
     if (p === '/api/app/redeem' && method === 'POST') return J(doRedeem(uid, +b.id));
     if (p === '/api/app/orders') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(orders.filter(o => o.userId === uid).map(pubOrder)); }
