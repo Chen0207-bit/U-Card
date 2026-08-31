@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>U-Card · 电脑网页版</title>
+<style>
+:root{--pri:#4f46e5;--pri2:#7c3aed;--ok:#16a34a;--warn:#f59e0b;--bad:#dc2626;--ink:#0f172a;--mut:#64748b;--bg:#f1f5f9;--line:#e5e9f2;}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{min-height:100vh;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+button{font-family:inherit}
+a{color:var(--pri)}
+.num,.stat b,.bal,.amt-up,.amt-dn,.mallban b,.code-chip{font-variant-numeric:tabular-nums}
+
+/* ===== 整体骨架: 左 sidebar + 右内容区 ===== */
+#appView{display:flex;min-height:100vh;align-items:stretch}
+.sidebar{
+  width:240px;flex:none;position:sticky;top:0;height:100vh;
+  background:#0f172a;display:flex;flex-direction:column;
+  padding:18px 14px 16px;overflow:hidden;
+}
+.sb-logo{display:flex;align-items:center;gap:10px;padding:4px 6px 16px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:14px}
+.sb-logo .blogo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--pri),var(--pri2));display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:20px;box-shadow:0 6px 14px rgba(79,70,229,.45);flex:none}
+.sb-logo .lt b{color:#fff;font-size:18px;font-weight:900;letter-spacing:.4px;display:block}
+.sb-logo .lt span{display:block;font-size:10px;color:rgba(255,255,255,.45);margin-top:1px}
+.sb-nav{display:flex;flex-direction:column;gap:5px}
+.sb-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:11px;color:rgba(255,255,255,.62);font-size:14px;font-weight:700;cursor:pointer;transition:.15s}
+.sb-item i{font-style:normal;font-size:17px;width:22px;text-align:center;flex:none}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,.07)}
+.sb-item.on{color:#fff;background:linear-gradient(135deg,var(--pri),var(--pri2));box-shadow:0 6px 16px rgba(79,70,229,.4)}
+.sb-user{margin-top:auto;border-top:1px solid rgba(255,255,255,.08);padding-top:14px}
+.sb-ur{display:flex;align-items:center;gap:10px;padding:0 4px}
+.sb-av{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:21px;flex:none}
+.sb-un{min-width:0}
+.sb-un b{color:#fff;font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px}
+.sb-pts{display:inline-block;background:rgba(124,58,237,.4);color:#c4b5fd;font-size:11px;padding:3px 10px;border-radius:999px;font-weight:800;margin-top:4px}
+.sb-out{margin-top:12px;width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.82);border-radius:10px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer;transition:.15s}
+.sb-out:hover{background:rgba(220,38,38,.25);border-color:rgba(220,38,38,.5);color:#fff}
+.sb-sw{display:block;text-align:center;margin-top:8px;font-size:11px;color:rgba(255,255,255,.42);text-decoration:none}
+.sb-sw:hover{color:#fff}
+@media (max-width:900px){
+  .sidebar{width:74px;padding:18px 10px 14px}
+  .sb-logo .lt,.sb-item b,.sb-un,.sb-sw{display:none}
+  .sb-item{justify-content:center;padding:12px 0}
+  .sb-item i{width:auto}
+  .sb-ur{justify-content:center}
+  .sb-out{font-size:15px;padding:8px 0}
+  .content{padding:20px 16px 32px}
+}
+.content{flex:1;min-width:0;padding:26px 32px 44px}
+.view{display:none}
+.view.on{display:block;animation:vin .18s ease}
+@keyframes vin{from{opacity:.25;transform:translateY(6px)}to{opacity:1}}
+.card{background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(15,23,42,.08)}
+.phead{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 20px 6px;font-size:15px;font-weight:800}
+.psub{font-size:12px;color:var(--mut);font-weight:500}
+.empty-s{color:#94a3b8;font-size:13px;text-align:center;padding:24px 0}
+
+/* ===== 页头 ===== */
+.pagehead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.pagehead h1{font-size:24px;font-weight:800;margin:0;letter-spacing:-.2px}
+.pagehead p{margin:5px 0 0;font-size:13px;color:var(--mut)}
+.ph-actions{display:flex;gap:10px}
+.abtn{border:none;border-radius:11px;padding:11px 20px;font-size:13.5px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;box-shadow:0 6px 14px rgba(79,70,229,.3);transition:.15s}
+.abtn:hover{transform:translateY(-1px);box-shadow:0 9px 20px rgba(79,70,229,.38)}
+.abtn.ghost{background:#fff;color:#334155;border:1.5px solid var(--line);box-shadow:none}
+.abtn.ghost:hover{border-color:var(--pri);color:var(--pri)}
+/* ===== 卡包仪表盘: stat 卡带 ===== */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:20px}
+.stat{position:relative;background:#fff;border-radius:14px;padding:18px 18px 16px;display:flex;gap:14px;align-items:flex-start;box-shadow:0 1px 3px rgba(15,23,42,.08);overflow:hidden}
+.stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--pri),var(--pri2))}
+.stat .s-ico{width:46px;height:46px;border-radius:13px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.stat label{font-size:12px;color:var(--mut);font-weight:800;letter-spacing:.3px;display:block}
+.stat b{font-size:26px;font-weight:800;letter-spacing:-.4px;display:block;margin-top:5px;line-height:1.1}
+.stat span{font-size:11.5px;color:#94a3b8;display:block;margin-top:5px}
+.stat.s2::before{background:linear-gradient(180deg,#f59e0b,#d97706)}
+.stat.s2 .s-ico{background:#fef3c7}
+.stat.s3::before{background:linear-gradient(180deg,#f43f5e,#dc2626)}
+.stat.s3 .s-ico{background:#ffe4e6}
+.stat.s4::before{background:linear-gradient(180deg,#16a34a,#059669)}
+.stat.s4 .s-ico{background:#dcfce7}
+
+/* ===== 主区两栏 ===== */
+.dashmain{display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start}
+@media (min-width:1500px){.dashmain{grid-template-columns:420px 1fr}}
+@media (max-width:1020px){.dashmain{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:16px}
+.vcard{position:relative;border-radius:18px;padding:26px;color:#fff;overflow:hidden;box-shadow:0 18px 40px rgba(30,27,75,.32);aspect-ratio:1.62}
+.vcard::before{content:'';position:absolute;inset:0;background:radial-gradient(120% 90% at 88% -12%,rgba(255,255,255,.30),transparent 55%),radial-gradient(90% 80% at -10% 112%,rgba(255,255,255,.14),transparent 55%);pointer-events:none}
+.vc-top{display:flex;justify-content:space-between;align-items:center;position:relative}
+.vc-logo{font-size:19px;font-weight:900;font-style:italic;letter-spacing:.5px}
+.vc-logo b{font-weight:300;margin-left:2px}
+.vc-lv{font-size:10px;letter-spacing:2px;font-weight:700;border:1px solid rgba(255,255,255,.5);border-radius:999px;padding:3px 10px}
+.vc-mid{display:flex;align-items:center;gap:10px;margin:22px 0 12px;position:relative}
+.vc-chip{font-size:29px;line-height:1}
+.vc-nfc{font-size:16px;animation:nfc 2.4s infinite}
+@keyframes nfc{0%,100%{opacity:.3}50%{opacity:1}}
+.vc-no{display:flex;align-items:center;gap:10px;font-family:Consolas,"SF Mono",Menlo,monospace;font-size:20px;font-weight:600;letter-spacing:2px;position:relative;text-shadow:0 2px 6px rgba(0,0,0,.25)}
+.eye{margin-left:auto;background:rgba(255,255,255,.2);border:none;border-radius:8px;font-size:15px;padding:5px 9px;cursor:pointer}
+.vc-bottom{display:flex;gap:22px;margin-top:18px;position:relative}
+.vc-bottom label{display:block;font-size:8.5px;letter-spacing:1.2px;opacity:.65;margin-bottom:3px}
+.vc-bottom b{font-size:13px;font-weight:600}
+.frozen-wm{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;letter-spacing:11px;padding-left:11px;color:rgba(255,255,255,.9);text-shadow:0 2px 10px rgba(0,0,0,.4);transform:rotate(-16deg);border:3px dashed rgba(255,255,255,.6);border-radius:18px;background:rgba(15,23,42,.35);backdrop-filter:blur(1.5px)}
+.actrow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bigbtn{padding:17px 10px;border-radius:13px;font-size:15px;font-weight:800;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:.15s}
+.bigbtn.primary{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;box-shadow:0 8px 18px rgba(79,70,229,.32)}
+.bigbtn.primary:hover{transform:translateY(-1px);box-shadow:0 11px 22px rgba(79,70,229,.4)}
+.bigbtn.second{background:#fff;color:#334155;border:1.5px solid var(--line)}
+.bigbtn.second:hover{border-color:var(--pri);color:var(--pri)}
+.minirow{display:flex;gap:10px;margin-top:2px}
+.minilink{flex:1;background:#fff;border:1.5px dashed var(--line);border-radius:11px;padding:11px 8px;font-size:12.5px;color:#475569;cursor:pointer;font-weight:700;text-align:center;transition:.15s}
+.minilink:hover{border-color:var(--pri);color:var(--pri);border-style:solid}
+.kvtable{width:100%;border-collapse:collapse;font-size:13px}
+.kvtable td{padding:11px 4px;border-bottom:1px solid #f1f5f9}
+.kvtable tr:last-child td{border-bottom:none}
+.kvtable td:first-child{color:var(--mut)}
+.kvtable td:last-child{text-align:right;font-weight:800}
+
+/* ===== 交易面板 ===== */
+.txpanel{display:flex;flex-direction:column;min-width:0}
+.txhead{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 20px 12px;flex-wrap:wrap}
+.txhead .ht{font-size:15px;font-weight:800}
+.chips{display:flex;gap:8px}
+.chip{padding:6px 14px;border-radius:999px;background:#f1f5f9;color:#475569;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid transparent;transition:.15s}
+.chip:hover{color:var(--pri)}
+.chip.on{background:#eef2ff;color:#4338ca;border-color:#c7d2fe}
+.tblwrap{max-height:calc(100vh - 380px);min-height:320px;overflow:auto;border-radius:0 0 14px 14px}
+table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{position:sticky;top:0;background:#f8fafc;text-align:left;color:var(--mut);font-size:11.5px;font-weight:800;padding:11px 18px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:2;letter-spacing:.3px}
+.tbl td{padding:14px 18px;border-bottom:1px solid #f1f5f9;white-space:nowrap;height:52px}
+.tbl tbody tr:nth-child(even){background:#fafbfd}
+.tbl tbody tr:hover{background:#eef2ff}
+.ta-r{text-align:right}
+.td-time{color:var(--mut);font-size:12px}
+.tico2{display:inline-flex;align-items:center;gap:8px}
+.tico2 i{font-style:normal;width:27px;height:27px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.tico2 i.up{background:#dcfce7}
+.tico2 i.dn{background:#f1f5f9}
+.amt-up{color:var(--ok);font-weight:800}
+.amt-dn{color:#334155;font-weight:800}
+.st{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+.st.ok{background:#dcfce7;color:#15803d}
+.st.bad{background:#fee2e2;color:#b91c1c}
+.up{color:var(--ok)}
+.dn{color:#334155}
+.dn2{color:#b45309}
+/* ===== 居中 modal(充值/消费保持不变) ===== */
+.mask{position:fixed;inset:0;z-index:80;background:rgba(2,6,23,.5);display:none;align-items:center;justify-content:center;padding:20px}
+.mask.on{display:flex}
+.modal{background:#fff;border-radius:16px;width:480px;max-width:96vw;max-height:92vh;overflow-y:auto;padding:22px 24px;animation:pop .18s ease}
+@keyframes pop{from{transform:scale(.94);opacity:0}}
+.mtitle{font-size:16px;font-weight:800;margin:0 0 16px;display:flex;justify-content:space-between;align-items:center}
+.mclose{border:none;background:#f1f5f9;width:28px;height:28px;border-radius:8px;cursor:pointer;font-size:13px;color:#64748b}
+.mclose:hover{background:#e2e8f0}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--mut);font-weight:700;margin:0 0 6px}
+.inp{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;font-size:14px;outline:none;background:#f8fafc;font-family:inherit}
+.inp:focus{border-color:var(--pri);background:#fff}
+.quick{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.qbtn{flex:1;min-width:76px;text-align:center;padding:9px 0;border-radius:9px;border:1.5px solid var(--line);background:#f8fafc;font-weight:700;font-size:13.5px;cursor:pointer;transition:.15s}
+.qbtn:hover{border-color:var(--pri);color:var(--pri)}
+.qbtn.on{border-color:var(--pri);color:var(--pri);background:#eef2ff}
+.mtabs{display:flex;background:#f1f5f9;border-radius:11px;padding:3px;gap:3px;margin-bottom:14px}
+.mtab{flex:1;text-align:center;padding:9px 4px;border-radius:8px;font-size:13px;color:var(--mut);cursor:pointer;font-weight:700}
+.mtab em{display:block;font-style:normal;font-size:10.5px;opacity:.8;font-weight:400}
+.mtab.on{background:#fff;color:var(--pri);box-shadow:0 2px 8px rgba(15,23,42,.08)}
+.estbox{background:#f8fafc;border:1px dashed #cbd5e1;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#475569;line-height:1.7;margin:12px 0}
+.estbox b{color:var(--pri)}
+.errbox{background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:12.5px;margin:10px 0;line-height:1.6;display:none}
+.errbox.on{display:block}
+.btn{width:100%;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;font-size:14.5px;font-weight:800;cursor:pointer;margin-top:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{width:auto;padding:9px 18px;font-size:12.5px;border-radius:10px;margin-top:10px}
+.btn.ghost{background:#f1f5f9;color:#475569}
+.mnote{font-size:11.5px;color:var(--mut);margin-top:10px;line-height:1.6}
+.usdt{display:flex;flex-direction:column;align-items:center;gap:10px;background:#f8fafc;border-radius:14px;padding:14px;margin-bottom:4px}
+.qr{display:grid;width:172px;padding:9px;background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1px #e2e8f0}
+.qr i{aspect-ratio:1;background:#fff}
+.qr i.d{background:#0f172a}
+.uaddr{display:flex;flex-direction:column;align-items:center;gap:6px}
+.uaddr code{font-size:11px;color:#334155;word-break:break-all;text-align:center}
+.copybtn{border:1.5px solid var(--pri);color:#4f46e5;background:#eef2ff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.copybtn.sm{padding:3px 9px;font-size:11px}
+.unote{font-size:11px;color:var(--warn);text-align:center}
+.switchrow{display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border-radius:11px;padding:12px;cursor:pointer}
+.switchrow b{font-size:13.5px;display:block}
+.switchrow span{font-size:11px;color:var(--mut);display:block;margin-top:2px}
+.switch{width:46px;height:26px;border-radius:13px;background:#cbd5e1;position:relative;transition:.2s;flex:none}
+.switch::after{content:'';position:absolute;width:22px;height:22px;border-radius:50%;background:#fff;top:2px;left:2px;transition:.2s;box-shadow:0 2px 5px rgba(0,0,0,.2)}
+.switch.on{background:var(--pri)}
+.switch.on::after{left:22px}
+.doc{display:flex;justify-content:space-between;align-items:center;border:1.5px dashed var(--line);border-radius:11px;padding:11px 13px;margin-bottom:8px;font-size:13px}
+.doc em{font-style:normal;color:var(--ok);font-size:12px;font-weight:700}
+.kbenefit{background:#eef2ff;color:#3730a3;border-radius:11px;padding:11px 13px;font-size:13px;margin-bottom:10px}
+.okwrap{display:flex;flex-direction:column;align-items:center;padding:8px 6px 4px;text-align:center}
+.okmark{font-size:52px}
+.okbig{font-size:19px;font-weight:900;margin-top:8px}
+.okamt{font-size:30px;font-weight:900;color:var(--pri);margin-top:4px}
+.okmeta{font-size:12px;color:var(--mut);margin-top:4px;line-height:1.6}
+.okline{font-size:13px;color:#475569;margin-top:8px;background:#f8fafc;border-radius:10px;padding:8px 14px;width:100%}
+.okline b{float:right}
+.okline.pts b{color:var(--ok)}
+.rcode{margin-top:12px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:center}
+.rcode span{font-size:11.5px;color:var(--mut)}
+.rcode b{border:2px dashed var(--pri);border-radius:10px;padding:6px 13px;color:#4338ca;font-size:15px;letter-spacing:1px}
+/* ===== 商城 ===== */
+.mallban{background:linear-gradient(135deg,var(--pri),var(--pri2));border-radius:14px;color:#fff;padding:24px 30px;display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:16px;flex-wrap:wrap;box-shadow:0 10px 26px rgba(79,70,229,.28)}
+.mallban label{font-size:11.5px;opacity:.85;letter-spacing:1px;font-weight:700}
+.mallban b{font-size:34px;font-weight:800;display:block;margin-top:3px;letter-spacing:-.5px}
+.mallban .msub{font-size:12.5px;opacity:.8;margin-top:4px}
+.gotask{background:rgba(255,255,255,.22);border:none;border-radius:999px;padding:11px 20px;font-size:13px;cursor:pointer;font-weight:800;color:#fff;transition:.15s}
+.gotask:hover{background:rgba(255,255,255,.34)}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.prod{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.08);cursor:pointer;transition:.15s;display:flex;flex-direction:column}
+.prod:hover{transform:translateY(-3px);box-shadow:0 12px 26px rgba(15,23,42,.12)}
+.ppic{height:140px;display:flex;align-items:center;justify-content:center;font-size:58px;position:relative}
+.soldout{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(248,250,252,.78);color:#64748b;font-size:15px;font-weight:800}
+.lowstock{position:absolute;right:9px;top:9px;background:var(--bad);color:#fff;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px}
+.pbody{padding:13px 15px 15px;display:flex;flex-direction:column;flex:1}
+.pbody>b{font-size:14px;line-height:1.4;min-height:2.8em}
+.prow2{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.pcat{display:inline-block;background:#f1f5f9;color:#64748b;font-size:10.5px;padding:3px 9px;border-radius:6px;font-weight:700}
+.pstock{font-size:11px;color:#94a3b8}
+.pstock.low{color:var(--bad);font-weight:700}
+.pprice{color:#4338ca;font-weight:800;font-size:17px;margin-top:10px}
+.pcash{color:#94a3b8;font-size:11.5px;margin-top:2px;flex:none}
+.rdbtn{margin-top:12px;width:100%;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:800;cursor:pointer;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;transition:.15s}
+.rdbtn:hover{box-shadow:0 8px 16px rgba(79,70,229,.35)}
+.rdbtn:disabled{background:#f1f5f9;color:#94a3b8;cursor:not-allowed}
+.pdetail{display:flex;flex-direction:column;align-items:center;text-align:center}
+.pdbig{width:110px;height:110px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:56px;margin-bottom:12px}
+.pdname{font-size:17px;font-weight:800}
+.pdname .pcat{vertical-align:middle;margin-left:8px}
+.pddesc{font-size:12.5px;color:var(--mut);margin-top:6px}
+.pdprice{margin:12px 0;font-size:15px}
+.pdprice b{font-size:22px;color:#4338ca}
+.pdprice em{font-style:normal;font-size:11.5px;color:#94a3b8;margin-left:6px}
+.pdrules{width:100%;text-align:left;background:#f8fafc;border-radius:11px;padding:11px 13px;font-size:11.5px;color:#475569;line-height:1.9;margin-bottom:4px}
+.pdrules .ptitle2{font-weight:800;margin-bottom:2px}
+.pdetail .mnote{width:100%}
+.pdetail .btn{width:100%}
+
+/* ===== 任务 ===== */
+.signban{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,var(--pri),var(--pri2));border-radius:14px;color:#fff;padding:22px 28px;margin-bottom:20px;flex-wrap:wrap;box-shadow:0 10px 26px rgba(79,70,229,.28)}
+.sb-cal{width:58px;height:58px;border-radius:16px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:30px;flex:none}
+.signban .sgm{flex:1;min-width:200px}
+.sg-t{font-size:18px;font-weight:800}
+.sg-d{font-size:12.5px;opacity:.85;margin-top:4px}
+.sg-pts{font-size:12.5px;background:rgba(255,255,255,.16);border-radius:12px;padding:10px 16px}
+.sg-pts b{font-size:19px;display:block;margin-top:2px}
+.sgbtn{border:none;border-radius:12px;padding:13px 24px;font-weight:800;font-size:14px;cursor:pointer;background:#fff;color:var(--pri);flex:none}
+.sgbtn.done{background:rgba(255,255,255,.22);color:rgba(255,255,255,.85);cursor:default}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}
+.tcard{background:#fff;border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(15,23,42,.08);display:flex;flex-direction:column;gap:10px}
+.thead2{display:flex;align-items:center;gap:12px}
+.tico{width:44px;height:44px;border-radius:13px;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:21px;flex:none}
+.thead2 b{font-size:15px;display:block}
+.tdesc{font-size:12.5px;color:var(--mut);line-height:1.6;flex:1}
+.tfoot{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #f1f5f9;padding-top:12px}
+.tt{font-style:normal;font-size:10px;padding:2px 8px;border-radius:6px;font-weight:800}
+.tt.daily{background:#dbeafe;color:#1d4ed8}
+.tt.once{background:#fef3c7;color:#b45309}
+.tpt{font-size:16px;font-weight:800;color:var(--ok)}
+.mini{border:none;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;border-radius:10px;padding:9px 20px;font-size:12.5px;font-weight:800;cursor:pointer;transition:.15s}
+.mini.done{background:#f1f5f9;color:#94a3b8;cursor:default}
+.mini:hover:not(.done){box-shadow:0 6px 14px rgba(79,70,229,.32)}
+.rulebar{background:#fff;border-radius:14px;padding:14px 20px;font-size:12.5px;color:#64748b;line-height:1.8;box-shadow:0 1px 3px rgba(15,23,42,.08);margin-top:16px}
+/* ===== 订单 ===== */
+.pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.pill.warn{background:#fef3c7;color:#b45309}
+.pill.info{background:#dbeafe;color:#1d4ed8}
+.pill.ok{background:#dcfce7;color:#15803d}
+.code-chip{background:#f1f5f9;border-radius:7px;padding:4px 9px;font-size:12px;font-family:Consolas,Menlo,monospace}
+.bigempty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:90px 20px;text-align:center}
+.be-ico{font-size:64px}
+.be-t{color:#94a3b8;font-size:14px;margin-top:14px}
+
+/* ===== 我的(多列网格) ===== */
+.megrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:20px;align-items:start}
+.mebox{padding:20px;display:flex;align-items:center;gap:15px;flex-wrap:wrap}
+.meav{width:60px;height:60px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:30px;flex:none}
+.memain{flex:1;min-width:200px}
+.memain b{font-size:17px;display:block}
+.memain span{display:block;font-size:12px;color:var(--mut);margin-top:3px}
+.kpill{font-size:10px;font-weight:800;padding:4px 9px;border-radius:999px;flex:none;white-space:nowrap}
+.kpill.l0{background:#e2e8f0;color:#475569}
+.kpill.l1{background:#dbeafe;color:#1d4ed8}
+.kpill.l2{background:#ede9fe;color:#6d28d9}
+.pbody2{padding:16px 20px 18px}
+.kdots{display:flex;align-items:center;justify-content:center;gap:6px;margin:10px 0 14px}
+.kdot{width:36px;height:36px;border-radius:50%;background:#f1f5f9;color:#94a3b8;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800}
+.kdot.done{background:#c7d2fe;color:#4338ca}
+.kdot.cur{background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;box-shadow:0 4px 10px rgba(79,70,229,.35)}
+.kline{width:36px;height:2px;background:#e2e8f0}
+.lim{width:100%;border-collapse:collapse;font-size:12.5px}
+.lim th{text-align:left;color:var(--mut);font-size:11px;font-weight:800;padding:6px 4px;border-bottom:1px solid var(--line)}
+.lim td{padding:9px 4px;border-bottom:1px solid #f1f5f9;color:#475569}
+.lim tr.cur td{color:var(--pri);font-weight:800;background:#eef2ff}
+.kbadge{background:#dcfce7;color:#15803d;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:999px}
+.kycst{border-radius:11px;padding:10px 12px;font-size:12px;margin-top:10px;line-height:1.6}
+.kycst.ok{background:#f0fdf4;color:#15803d}
+.kycst.wait{background:#fffbeb;color:#b45309}
+.kycst.bad{background:#fef2f2;color:#b91c1c}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:8px 0;border-bottom:1px dashed var(--line);color:#475569}
+.ptsbig{font-size:13px;color:#475569;padding:4px 20px 8px}
+.ptsbig b{font-size:24px;color:#4338ca}
+.plist{max-height:460px;overflow-y:auto}
+.lrow{display:flex;align-items:center;gap:11px;padding:11px 20px;border-top:1px solid #f1f5f9}
+.lrow .lico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.lico.up{background:#dcfce7}
+.lico.dn{background:#f1f5f9}
+.lrow .lm{flex:1;min-width:0}
+.lrow .lm b{font-size:13px;display:block}
+.lrow .lm span{font-size:11px;color:var(--mut)}
+.lrow .la{font-size:13.5px;font-weight:800;flex:none}
+.invcode{background:linear-gradient(135deg,#312e81,#4f46e5);border-radius:13px;padding:16px;color:#fff;margin-bottom:12px}
+.invcode label{font-size:11px;opacity:.8}
+.icrow{display:flex;align-items:center;justify-content:space-between;margin-top:6px;gap:10px;flex-wrap:wrap}
+.icrow b{font-size:25px;letter-spacing:2px;font-weight:900}
+.invcode .copybtn{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.4);color:#fff}
+.iclink{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;opacity:.9;flex-wrap:wrap}
+.invrules{font-size:12px;color:#64748b;line-height:1.7;padding:2px 2px 8px}
+.invrow{display:flex;align-items:center;gap:9px;padding:10px 2px;border-top:1px solid #f1f5f9;font-size:12.5px}
+.invrow .iav{width:30px;height:30px;border-radius:50%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.invrow b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.invrow em{font-style:normal;color:#94a3b8;font-size:10.5px}
+.invrow i{font-style:normal;color:var(--ok);font-weight:700}
+.invtot{border-top:1px dashed var(--line);padding:10px 0 2px;font-size:12px;color:#475569;text-align:right}
+.ver{text-align:center;color:#94a3b8;font-size:11px;padding:20px 0 4px}
+
+/* ===== toast(右上角) ===== */
+.toast{position:fixed;top:18px;right:18px;z-index:99;transform:translateX(120%);transition:transform .3s cubic-bezier(.2,.9,.3,1.1),opacity .3s;opacity:0;background:#111827;color:#fff;padding:11px 16px;border-radius:12px;font-size:13px;max-width:380px;box-shadow:0 10px 26px rgba(0,0,0,.32);line-height:1.5;pointer-events:none}
+.toast.on{transform:none;opacity:1}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--bad)}
+
+/* ===== 登录页 ===== */
+.pclogin{position:fixed;inset:0;z-index:60;display:flex;background:var(--bg)}
+.pl-left{width:45%;background:linear-gradient(160deg,#4f46e5 0%,#7c3aed 60%,#312e81 100%);color:#fff;display:flex;flex-direction:column;justify-content:center;padding:48px 56px}
+.pl-logo{width:84px;height:84px;border-radius:24px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.32);display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:900;box-shadow:0 14px 40px rgba(0,0,0,.22)}
+.pl-h1{font-size:33px;font-weight:900;margin:26px 0 8px;letter-spacing:.5px}
+.pl-sub{font-size:15px;opacity:.8;margin:0 0 30px}
+.pl-point{display:flex;align-items:center;gap:14px;margin-top:18px;font-size:14.5px}
+.pl-point i{font-style:normal;width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:21px;flex:none}
+.pl-right{flex:1;display:flex;align-items:center;justify-content:center;padding:40px;position:relative}
+.pl-box{width:100%;max-width:760px}
+.pl-title{font-size:20px;font-weight:800;margin:0 0 16px}
+.pl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.acct{display:flex;align-items:center;gap:12px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;transition:.15s;text-align:left}
+.acct:hover{border-color:var(--pri);box-shadow:0 8px 20px rgba(79,70,229,.13);transform:translateY(-2px)}
+.acct .aav{width:44px;height:44px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+.acct .am{flex:1;min-width:0}
+.acct .am b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acct .am span{font-size:12px;color:var(--mut)}
+.pl-sw{position:absolute;right:26px;bottom:18px;font-size:12.5px;color:var(--mut)}
+.pl-sw a{color:var(--pri);text-decoration:none;font-weight:700}
+</style>
+</head>
+<body>
+
+<!-- ===== 登录页 ===== -->
+<div class="pclogin" id="loginView" style="display:none">
+  <div class="pl-left">
+    <div class="pl-logo">U</div>
+    <h1 class="pl-h1">U-Card 全球虚拟信用卡</h1>
+    <p class="pl-sub">一卡在手 · 全球消费 · 积分当钱花</p>
+    <div class="pl-point"><i>🔐</i><span>加密货币 / 法币双重充值, 秒级到账</span></div>
+    <div class="pl-point"><i>🎁</i><span>消费返积分, 积分商城兑换好礼</span></div>
+    <div class="pl-point"><i>🤝</i><span>邀请好友注册, 赚取积分与消费返佣</span></div>
+  </div>
+  <div class="pl-right">
+    <div class="pl-box">
+      <h2 class="pl-title">选择演示账号快速登录</h2>
+      <div class="pl-grid" id="acctGrid"><div class="empty-s">加载账号中…</div></div>
+    </div>
+    <div class="pl-sw">↩ <a href="/app/m">使用手机版</a></div>
+  </div>
+</div>
+
+<!-- ===== 主界面: sidebar + 内容区 ===== -->
+<div id="appView" style="display:none">
+  <aside class="sidebar">
+    <div class="sb-logo"><span class="blogo">U</span><div class="lt"><b>U-Card</b><span>持卡人端 · Web</span></div></div>
+    <nav class="sb-nav">
+      <div class="sb-item on" data-t="card" onclick="switchTab('card')"><i>💳</i><b>卡包</b></div>
+      <div class="sb-item" data-t="mall" onclick="switchTab('mall')"><i>🛒</i><b>商城</b></div>
+      <div class="sb-item" data-t="task" onclick="switchTab('task')"><i>🎯</i><b>任务</b></div>
+      <div class="sb-item" data-t="order" onclick="switchTab('order')"><i>📦</i><b>订单</b></div>
+      <div class="sb-item" data-t="me" onclick="switchTab('me')"><i>👤</i><b>我的</b></div>
+    </nav>
+    <div class="sb-user">
+      <div class="sb-ur"><span class="sb-av" id="sbAv">🙂</span>
+        <div class="sb-un"><b id="sbName">—</b><span class="sb-pts">🪙 <span id="navPts">0</span> 分</span></div></div>
+      <button class="sb-out" onclick="logout()">🚪 退出登录</button>
+      <a class="sb-sw" href="/app/m">📱 切换手机版</a>
+    </div>
+  </aside>
+
+  <div class="content">
+    <header class="pagehead">
+      <div><h1 id="phTitle">卡包</h1><p id="phSub"></p></div>
+      <div class="ph-actions" id="phActions"></div>
+    </header>
+    <section class="view on" id="v-card"><div class="empty-s" style="padding-top:60px">加载中…</div></section>
+    <section class="view" id="v-mall"></section>
+    <section class="view" id="v-task"></section>
+    <section class="view" id="v-order"></section>
+    <section class="view" id="v-me"></section>
+  </div>
+</div>
+
+<!-- 居中 modal -->
+<div class="mask" id="pmodal"><div class="modal" id="pmodalBox"></div></div>
+
+<div class="toast" id="toast"></div>
+<script>
+'use strict';
+/* ================= 基础配置与工具 ================= */
+var MERCHANTS = ['Amazon','Apple Store','Noon','Careem','Starbucks','Talabat','Netflix','Booking.com'];
+var LEVELS = {
+  standard: { label:'STANDARD', cn:'标准卡', rate:1,   fee:1,  grad:'linear-gradient(135deg,#64748b 0%,#3b4a63 55%,#1e293b 100%)' },
+  gold:     { label:'GOLD',     cn:'金卡',   rate:1.5, fee:5,  grad:'linear-gradient(135deg,#f4c74a 0%,#d4941c 58%,#8a5a08 100%)' },
+  platinum: { label:'PLATINUM', cn:'白金卡', rate:2,   fee:15, grad:'linear-gradient(135deg,#4f46e5 0%,#7c3aed 52%,#0ea5e9 100%)' }
+};
+var KYC_LIM = { 0:[100,300], 1:[1000,3000], 2:[10000,50000] };
+var WALLET = '0x3f8aC92bD14e67B05F3a2C9d84e06b175d3f9c2B';
+var OSTAT = { pending:['待发货','warn'], shipped:['已发货','info'], redeemed:['已核销','ok'] };
+var PICO = {'每日签到':'📅','消费返积分':'🛍️','充值奖励':'💰','消费抵扣':'➕','商城兑换':'🛒','KYC 认证奖励':'🪪','任务奖励':'🎯','运营发放':'🎁'};
+var CATG = {
+  '充值券':'linear-gradient(135deg,#06b6d4,#2563eb)', '卡券':'linear-gradient(135deg,#f59e0b,#ea580c)',
+  '实物':'linear-gradient(135deg,#10b981,#0d9488)',   '权益':'linear-gradient(135deg,#8b5cf6,#d946ef)',
+  '周边':'linear-gradient(135deg,#f43f5e,#fb7185)'
+};
+var AVS = ['🧑🏽‍💼','👩🏽‍💻','🧕🏽','👨🏽‍🦱','👱🏽','🤵🏽','👨🏽‍🍳','👩🏽‍🎓','🧔🏽','👸🏽','🤠','💁🏽‍♀️'];
+
+var S = { uid:null, me:null, txs:[], tasks:null, products:[], orders:[], points:[], invite:null,
+          tab:'card', revealed:false, usePts:false, txFilter:'all', prevBal:0, prevPts:0, claimed:{}, tqMethod:'fiat' };
+
+function $(id){ return document.getElementById(id); }
+function p2(n){ return String(n).padStart(2,'0'); }
+function fmtUSD(n){ return '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtPts(n){ return Number(n||0).toLocaleString('en-US'); }
+function fmtTime(ts){ var d = new Date(ts||0); return p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes()); }
+function maskCard(no){
+  var g = String(no||'').split(' ');
+  if (g.length !== 4) return '5533 68** **** 1234';
+  return g[0] + ' ' + g[1].slice(0,2) + '** **** ' + g[3];
+}
+function avatar(s){ var h = 0; for (var ch of String(s)) h = (h*31 + ch.codePointAt(0)) >>> 0; return AVS[h % AVS.length]; }
+function catGrad(c){ return CATG[c] || 'linear-gradient(135deg,#64748b,#475569)'; }
+
+/* 同源相对路径, 与手机版共用 uc_uid 登录态 */
+async function api(path, opts){
+  opts = opts || {};
+  var headers = { 'Content-Type':'application/json' };
+  if (S.uid) headers['x-user'] = S.uid;
+  var res = await fetch(path, { method: opts.method || 'GET', headers: headers, body: opts.body || null });
+  var data = {};
+  try { data = await res.json(); } catch(e) {}
+  return data;
+}
+
+/* ================= toast / modal / 动画 ================= */
+var toastTimer = null;
+function toast(msg, type){
+  var t = $('toast'); t.textContent = msg;
+  var cls = 'toast' + (type==='ok' ? ' ok' : type==='err' ? ' err' : '');
+  t.className = cls + ' on';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.className = cls; }, type==='err' ? 3600 : 2600);
+}
+function openM(html){ $('pmodalBox').innerHTML = html; $('pmodal').classList.add('on'); }
+function closeM(){ $('pmodal').classList.remove('on'); }
+function showMErr(id, msg){ var el = $(id); if (el){ el.textContent = '⚠️ ' + msg; el.classList.add('on'); } }
+async function copyText(t, tip){
+  try { await navigator.clipboard.writeText(t); }
+  catch(e){
+    var ta = document.createElement('textarea'); ta.value = t;
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e2) {}
+    ta.remove();
+  }
+  toast(tip || '已复制', 'ok');
+}
+function tween(el, from, to, fmt, dur){
+  if (!el) return;
+  dur = dur || 700;
+  if (from === to) { el.textContent = fmt(to); return; }
+  var t0 = performance.now();
+  function step(t){
+    var p = Math.min(1, (t - t0) / dur);
+    var e = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmt(from + (to - from) * e);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+/* 假二维码: 21x21 CSS 网格 + 三个定位角 */
+function qrHTML(seedStr){
+  var h = 0; for (var ch of seedStr) h = (h*33 + ch.codePointAt(0)) >>> 0;
+  function rnd(){ h = (h*1103515245 + 12345) >>> 0; return h / 4294967296; }
+  var N = 21, html = '';
+  function inFinder(x, y){ return (x<7 && y<7) || (x>=N-7 && y<7) || (x<7 && y>=N-7); }
+  for (var y = 0; y < N; y++) for (var x = 0; x < N; x++){
+    var dark;
+    if (inFinder(x, y)) {
+      var lx = x >= N-7 ? x-(N-7) : x, ly = y >= N-7 ? y-(N-7) : y;
+      var dx = Math.min(lx, 6-lx), dy = Math.min(ly, 6-ly);
+      dark = (dx===0 || dy===0) || (dx>=2 && dy>=2);
+    } else dark = rnd() < 0.45;
+    html += '<i' + (dark ? ' class="d"' : '') + '></i>';
+  }
+  return '<div class="qr" style="grid-template-columns:repeat(21,1fr)">' + html + '</div>';
+}
+
+/* ================= 登录 / 启动 / 导航 ================= */
+function showLogin(){ $('loginView').style.display = 'flex'; $('appView').style.display = 'none'; renderLogin(); }
+async function renderLogin(){
+  var grid = $('acctGrid');
+  try {
+    var us = await api('/api/app/users');
+    grid.innerHTML = us.map(function(u){
+      return '<div class="acct" onclick="loginAs(' + u.id + ')">' +
+        '<span class="aav">' + avatar(u.name) + '</span>' +
+        '<div class="am"><b>' + u.name + '</b><span>' + u.phone + ' · 🪙 ' + fmtPts(u.points) + ' 分</span></div>' +
+        '<span class="kpill l' + u.kycLevel + '">KYC L' + u.kycLevel + '</span></div>';
+    }).join('');
+  } catch(e) {
+    grid.innerHTML = '<div class="empty-s" style="grid-column:1/-1">⚠️ 无法连接后端, 请先运行 node server.js</div>';
+  }
+}
+function loginAs(id){ localStorage.setItem('uc_uid', id); S.uid = id; boot(); }
+function logout(){ localStorage.removeItem('uc_uid'); location.reload(); }
+
+function updateNav(){
+  if (!S.me) return;
+  if ($('navPts')) $('navPts').textContent = fmtPts(S.me.points);
+  if ($('sbName')) $('sbName').textContent = S.me.name;
+  if ($('sbAv')) $('sbAv').textContent = avatar(S.me.name);
+}
+async function loadMe(){
+  S.prevBal = S.me ? S.me.card.balance : 0;
+  S.prevPts = S.me ? S.me.points : 0;
+  var me = await api('/api/app/me');
+  if (me.error || !me.id) { logout(); return false; }
+  S.me = me; updateNav(); return true;
+}
+async function boot(){
+  S.uid = localStorage.getItem('uc_uid');
+  if (!S.uid) { showLogin(); return; }
+  if (!await loadMe()) return;
+  $('loginView').style.display = 'none';
+  $('appView').style.display = 'flex';
+  switchTab('card');
+}
+
+/* ================= Tab 切换 / 页头 ================= */
+function setHead(t, s, actions){
+  $('phTitle').textContent = t;
+  $('phSub').textContent = s;
+  $('phActions').innerHTML = actions || '';
+}
+async function switchTab(t){
+  S.tab = t;
+  document.querySelectorAll('.sb-item').forEach(function(el){ el.classList.toggle('on', el.dataset.t === t); });
+  document.querySelectorAll('.view').forEach(function(el){ el.classList.toggle('on', el.id === 'v-' + t); });
+  try {
+    if (t === 'card') {
+      setHead('卡包', '虚拟卡 · 余额与交易总览', '<button class="abtn" onclick="openTopupM()">➕ 充值</button><button class="abtn ghost" onclick="openPayM()">🛍️ 消费</button>');
+      await refreshCardPage(false);
+    } else if (t === 'mall') {
+      setHead('积分商城', '用积分兑换好礼, 消费返积分', '');
+      S.products = await api('/api/app/products') || [];
+      if (!await loadMe()) return;
+      renderMall();
+    } else if (t === 'task') {
+      setHead('任务中心', '签到与做任务, 每天赚积分', '');
+      await loadTasks();
+      if (!await loadMe()) return;
+      renderTask();
+    } else if (t === 'order') {
+      setHead('兑换订单', '实物发货与核销码管理', '<button class="abtn ghost" onclick="switchTab(\'mall\')">🛒 去商城逛逛</button>');
+      S.orders = await api('/api/app/orders') || [];
+      renderOrders();
+    } else if (t === 'me') {
+      setHead('我的', '账户 · KYC · 积分明细与邀请推广', '');
+      if (!await loadMe()) return;
+      S.points = await api('/api/app/points') || [];
+      S.invite = await api('/api/app/invite');
+      renderMe();
+    }
+  } catch(e) { toast('网络错误, 请确认后端已启动 (node server.js)', 'err'); }
+}
+async function loadTasks(){ S.tasks = await api('/api/app/tasks'); }
+async function refreshCardPage(animate){
+  if (!await loadMe()) return;
+  S.txs = await api('/api/app/transactions') || [];
+  renderCardPage(animate);
+}
+</script>
+<script>
+'use strict';
+/* ================= 卡包: 仪表盘渲染 ================= */
+function monthConsume(){
+  var now = new Date(), sum = 0;
+  S.txs.forEach(function(t){
+    if (t.type !== 'consume' || t.status !== 'success') return;
+    var d = new Date(t.time || 0);
+    if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) sum += t.amount;
+  });
+  return sum;
+}
+function totalEarned(){
+  var sum = 0;
+  S.txs.forEach(function(t){ sum += (t.pointsEarned || 0); });
+  return sum;
+}
+
+function renderCardPage(animate){
+  var me = S.me, cd = me.card, lv = LEVELS[cd.level] || LEVELS.standard;
+  var lim = KYC_LIM[me.kycLevel] || KYC_LIM[0];
+
+  var html =
+  '<div class="stats">' +
+    '<div class="stat"><span class="s-ico">💵</span><div><label>可用余额</label><b id="stBal">0</b><span>卡号 ' + maskCard(S.revealed ? cd.cardNo : '') + '</span></div></div>' +
+    '<div class="stat s2"><span class="s-ico">🪙</span><div><label>积分余额</label><b id="stPts">0</b><span>100 分 = $1, 消费最高抵 30%</span></div></div>' +
+    '<div class="stat s3"><span class="s-ico">📊</span><div><label>本月消费</label><b>' + fmtUSD(monthConsume()) + '</b><span>按近 50 笔交易统计</span></div></div>' +
+    '<div class="stat s4"><span class="s-ico">🎁</span><div><label>累计返积分</label><b>' + fmtPts(totalEarned()) + '</b><span>按近 50 笔交易统计</span></div></div>' +
+  '</div>' +
+
+  '<div class="dashmain"><div class="col">' +
+    '<div class="vcard" style="background:' + lv.grad + '">' +
+      (cd.status === 'frozen' ? '<div class="frozen-wm">FROZEN</div>' : '') +
+      '<div class="vc-top"><span class="vc-logo">U<b>Card</b></span><span class="vc-lv">' + lv.label + '</span></div>' +
+      '<div class="vc-mid"><span class="vc-chip">💠</span><span class="vc-nfc">📶</span></div>' +
+      '<div class="vc-no">' + (S.revealed ? cd.cardNo : maskCard(cd.cardNo)) +
+        '<button class="eye" onclick="toggleReveal()" title="显示/隐藏卡号">' + (S.revealed ? '🙈' : '👁') + '</button></div>' +
+      '<div class="vc-bottom">' +
+        '<div><label>CARD HOLDER</label><b>' + me.name.toUpperCase() + '</b></div>' +
+        '<div><label>VALID THRU</label><b>' + p2(cd.expMonth) + '/' + String(cd.expYear).slice(-2) + '</b></div>' +
+        '<div><label>CVV</label><b>' + (S.revealed ? cd.cvv : '***') + '</b></div>' +
+        '<div><label>BALANCE</label><b id="vcBal">' + fmtUSD(cd.balance) + '</b></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="actrow">' +
+      '<button class="bigbtn primary" onclick="openTopupM()">➕ 充值</button>' +
+      '<button class="bigbtn second" onclick="openPayM()">🛍️ 消费</button>' +
+    '</div>' +
+    '<div class="minirow">' +
+      '<button class="minilink" onclick="openLimitsM()">🛡 单笔/日限额</button>' +
+      '<button class="minilink" onclick="openFreezeM()">' + (cd.status === 'frozen' ? '🔓 解冻卡片' : '❄️ 冻结卡片') + '</button>' +
+    '</div>' +
+    '<div class="card" style="padding:6px 18px"><table class="kvtable">' +
+      '<tr><td>卡片等级</td><td>' + lv.label + ' · ' + lv.cn + '</td></tr>' +
+      '<tr><td>月费</td><td>' + fmtUSD(lv.fee) + ' / 月</td></tr>' +
+      '<tr><td>积分倍率</td><td>消费 ' + lv.rate + 'x 返积分</td></tr>' +
+      '<tr><td>单笔限额</td><td>' + fmtUSD(lim[0]) + '</td></tr>' +
+      '<tr><td>日累计限额</td><td>' + fmtUSD(lim[1]) + '</td></tr>' +
+      '<tr><td>可用余额</td><td style="color:var(--pri)">' + fmtUSD(cd.balance) + '</td></tr>' +
+    '</table></div>' +
+  '</div>' +
+
+  '<div class="card txpanel">' +
+    '<div class="txhead"><span class="ht">最近交易</span><div class="chips" id="txChips">' +
+      '<span class="chip' + (S.txFilter==='all'?' on':'') + '" onclick="setTxFilter(\'all\')">全部</span>' +
+      '<span class="chip' + (S.txFilter==='topup'?' on':'') + '" onclick="setTxFilter(\'topup\')">充值</span>' +
+      '<span class="chip' + (S.txFilter==='consume'?' on':'') + '" onclick="setTxFilter(\'consume\')">消费</span>' +
+    '</div></div>' +
+    '<div class="tblwrap"><table class="tbl"><thead><tr>' +
+      '<th>时间</th><th>类型</th><th>金额</th><th>返积分</th><th>状态</th>' +
+    '</tr></thead><tbody id="txBody"></tbody></table></div>' +
+  '</div></div>';
+
+  $('v-card').innerHTML = html;
+  renderTxRows();
+  if (animate) {
+    tween($('stBal'), S.prevBal, cd.balance, fmtUSD);
+    tween($('stPts'), S.prevPts, me.points, fmtPts);
+    tween($('vcBal'), S.prevBal, cd.balance, fmtUSD);
+  } else {
+    $('stBal').textContent = fmtUSD(cd.balance);
+    $('stPts').textContent = fmtUSD(me.points);
+  }
+}
+function toggleReveal(){ S.revealed = !S.revealed; renderCardPage(false); }
+function setTxFilter(f){ S.txFilter = f; renderCardPage(false); }
+
+function renderTxRows(){
+  var rows = S.txs.filter(function(t){ return S.txFilter === 'all' || t.type === S.txFilter; });
+  if (!rows.length) {
+    $('txBody').innerHTML = '<tr><td colspan="5"><div class="bigempty"><div class="be-ico">🧾</div><div class="be-t">暂无' + (S.txFilter==='all' ? '' : S.txFilter==='topup' ? '充值' : '消费') + '交易记录</div></div></td></tr>';
+    return;
+  }
+  $('txBody').innerHTML = rows.map(function(t){
+    var isUp = t.type === 'topup';
+    var icon = isUp ? '💰' : '🛍️';
+    var name = isUp ? ('充值 · ' + (t.method === 'usdt' ? 'USDT' : '法币')) : (t.merchant || '消费');
+    var st = t.status === 'success' ? '<span class="st ok">成功</span>' : t.status === 'failed' ? '<span class="st bad">失败</span>' : '<span class="st" style="background:#fef3c7;color:#b45309">处理中</span>';
+    var pts = t.pointsEarned > 0 ? '<span class="up">+' + fmtPts(t.pointsEarned) + ' 分</span>' : (t.pointsUsed > 0 ? '<span class="dn2">-' + fmtPts(t.pointsUsed) + ' 分</span>' : '<span style="color:#cbd5e1">—</span>');
+    return '<tr>' +
+      '<td class="td-time">' + fmtTime(t.time) + '</td>' +
+      '<td><span class="tico2"><i class="' + (isUp?'up':'dn') + '">' + icon + '</i>' + name + '</span></td>' +
+      '<td class="ta-r"><span class="' + (isUp?'amt-up':'amt-dn') + '">' + (isUp?'+':'-') + fmtUSD(t.amount) + '</span></td>' +
+      '<td class="ta-r">' + pts + '</td>' +
+      '<td>' + st + '</td></tr>';
+  }).join('');
+}
+
+/* ================= 充值 modal ================= */
+function openTopupM(){
+  S.tqMethod = 'fiat';
+  openM(
+  '<h3 class="mtitle">充值 <button class="mclose" onclick="closeM()">✕</button></h3>' +
+  '<div class="mtabs">' +
+    '<div class="mtab on" id="tmFiat" onclick="tqSetMethod(\'fiat\')">🏦 法币充值<em>银行卡 · 费率 2%</em></div>' +
+    '<div class="mtab" id="tmUsdt" onclick="tqSetMethod(\'usdt\')">₮ USDT 充值<em>加密货币 · 费率 1%</em></div>' +
+  '</div>' +
+  '<div id="tqBody"></div>' +
+  '<div class="errbox" id="tqErr"></div>' +
+  '<button class="btn" id="tqGo" onclick="doTopup()">确认充值</button>' +
+  '<div class="mnote">充值实时到账; 返积分按充值金额 5 分/美元 计, 充值 $100 = 500 分。单笔限额见「单笔/日限额」。</div>');
+  tqRenderBody();
+}
+function tqSetMethod(m){ S.tqMethod = m; tqRenderBody(); }
+function tqRenderBody(){
+  $('tmFiat').classList.toggle('on', S.tqMethod === 'fiat');
+  $('tmUsdt').classList.toggle('on', S.tqMethod === 'usdt');
+  $('tqErr').classList.remove('on');
+  var amt = $('tqAmt') ? $('tqAmt').value : '';
+  var body =
+    '<div class="field"><label>充值金额 (USD)</label><input class="inp" id="tqAmt" type="number" min="1" step="0.01" placeholder="10.00" value="' + amt + '" oninput="tqEst()">' +
+    '<div class="quick">' +
+      '<div class="qbtn" onclick="tqQuick(50)">\$50</div>' +
+      '<div class="qbtn" onclick="tqQuick(100)">\$100</div>' +
+      '<div class="qbtn" onclick="tqQuick(300)">\$300</div>' +
+      '<div class="qbtn" onclick="tqQuick(1000)">\$1000</div>' +
+    '</div></div>';
+  if (S.tqMethod === 'usdt') {
+    body += '<div class="usdt">' + qrHTML(WALLET) +
+      '<div class="uaddr"><code>' + WALLET + '</code>' +
+      '<button class="copybtn" onclick="copyText(\'' + WALLET + '\',\'收款地址已复制\')">📋 复制地址</button></div>' +
+      '<div class="unote">⚠️ 仅支持 TRC20 网络, 转错网络资产将丢失</div></div>';
+  }
+  body += '<div class="estbox" id="tqEstBox">输入金额查看费用估算</div>';
+  $('tqBody').innerHTML = body;
+  tqEst();
+}
+function tqQuick(n){ $('tqAmt').value = n; tqEst(); }
+function tqEst(){
+  var amt = parseFloat($('tqAmt').value) || 0;
+  var rate = S.tqMethod === 'usdt' ? 0.01 : 0.02;
+  if (amt <= 0) { $('tqEstBox').textContent = '输入金额查看费用估算'; return; }
+  var fee = amt * rate;
+  $('tqEstBox').innerHTML = '手续费 (' + (rate*100) + '%): <b>' + fmtUSD(fee) + '</b> · 实际到账: <b>' + fmtUSD(amt - fee) + '</b> · 预计返积分: <b>' + fmtPts(Math.floor(amt * 5)) + ' 分</b>';
+}
+async function doTopup(){
+  var amt = parseFloat($('tqAmt').value) || 0;
+  if (amt <= 0) return showMErr('tqErr', '请输入正确的充值金额');
+  var lim = KYC_LIM[S.me.kycLevel] || KYC_LIM[0];
+  if (amt > lim[0]) return showMErr('tqErr', '超过单笔限额 ' + fmtUSD(lim[0]) + ', 请先提升 KYC 等级');
+  $('tqGo').disabled = true; $('tqGo').textContent = '充值中…';
+  var r = await api('/api/app/topup', { method:'POST', body: JSON.stringify({ amount: amt, method: S.tqMethod }) });
+  $('tqGo').disabled = false; $('tqGo').textContent = '确认充值';
+  if (r.error) return showMErr('tqErr', r.error);
+  closeM();
+  openOkM('充值成功', '💰 到账金额', fmtUSD(amt * (1 - (S.tqMethod==='usdt' ? 0.01 : 0.02))),
+    '返积分 <b>+' + fmtPts(r.pointsEarned) + ' 分</b>', null);
+  toast('充值成功, ' + fmtUSD(amt) + ' 已到账', 'ok');
+  refreshCardPage(true);
+}
+
+/* ================= 成功结果 modal ================= */
+function openOkM(title, amtLabel, amt, ptsLine, code){
+  openM('<div class="okwrap">' +
+    '<div class="okmark">✅</div><div class="okbig">' + title + '</div>' +
+    '<div class="okamt">' + amt + '</div><div class="okmeta">' + amtLabel + '</div>' +
+    (ptsLine ? '<div class="okline pts">积分变动 <b>' + ptsLine + '</b></div>' : '') +
+    (code ? '<div class="rcode"><span>核销码</span><b>' + code + '</b><button class="copybtn sm" onclick="copyText(\'' + code + '\',\'核销码已复制\')">复制</button></div>' : '') +
+    '<button class="btn" onclick="closeM()">完成</button></div>');
+}
+
+/* ================= 消费 modal ================= */
+function openPayM(){
+  S.usePts = false;
+  openM(
+  '<h3 class="mtitle">消费支付 <button class="mclose" onclick="closeM()">✕</button></h3>' +
+  '<div class="field"><label>商户</label><select class="inp" id="pyMer">' +
+    MERCHANTS.map(function(m){ return '<option>' + m + '</option>'; }).join('') +
+  '</select></div>' +
+  '<div class="field"><label>金额 (USD)</label><input class="inp" id="pyAmt" type="number" min="0.5" step="0.01" placeholder="0.00" oninput="pyCalc()">' +
+  '<div class="quick">' +
+    '<div class="qbtn" onclick="pyQuick(4.99)">\$4.99</div>' +
+    '<div class="qbtn" onclick="pyQuick(19.9)">\$19.9</div>' +
+    '<div class="qbtn" onclick="pyQuick(59)">\$59</div>' +
+    '<div class="qbtn" onclick="pyQuick(129)">\$129</div>' +
+  '</div></div>' +
+  '<div class="switchrow" onclick="toggleUsePts()"><div><b>🪙 使用积分抵扣</b><span>100 分抵 $1, 最高抵消费金额 30% · 当前 ' + fmtPts(S.me.points) + ' 分</span></div><span class="switch" id="pySw"></span></div>' +
+  '<div class="estbox" id="pyEst">输入金额查看支付明细</div>' +
+  '<div class="errbox" id="pyErr"></div>' +
+  '<button class="btn" id="pyGo" onclick="doPay()">确认支付</button>' +
+  '<div class="mnote">模拟线上刷卡; 返积分 = 实付金额 × 10 × 卡片等级倍率, 支付成功后即时入账。</div>');
+}
+function pyQuick(n){ $('pyAmt').value = n; pyCalc(); }
+function toggleUsePts(){ S.usePts = !S.usePts; $('pySw').classList.toggle('on', S.usePts); pyCalc(); }
+function pyCalc(){
+  var amt = parseFloat($('pyAmt').value) || 0;
+  if (amt <= 0) { $('pyEst').textContent = '输入金额查看支付明细'; return; }
+  var lv = LEVELS[S.me.card.level] || LEVELS.standard;
+  var maxDeduct = amt * 0.3;
+  var ptsCapUSD = S.me.points / 100;
+  var deduct = S.usePts ? Math.min(maxDeduct, ptsCapUSD) : 0;
+  var pay = amt - deduct;
+  var earn = Math.round(pay * 10 * lv.rate);
+  $('pyEst').innerHTML =
+    '商品金额: <b>' + fmtUSD(amt) + '</b><br>' +
+    '积分抵扣: <b>-' + fmtUSD(deduct) + '</b> (' + fmtPts(Math.round(deduct * 100)) + ' 分)<br>' +
+    '实际支付: <b>' + fmtUSD(pay) + '</b><br>' +
+    '预计返积分: <b>+' + fmtPts(earn) + ' 分</b> (' + lv.rate + 'x)';
+}
+async function doPay(){
+  var amt = parseFloat($('pyAmt').value) || 0;
+  var mer = $('pyMer').value;
+  if (amt <= 0) return showMErr('pyErr', '请输入正确的消费金额');
+  var lim = KYC_LIM[S.me.kycLevel] || KYC_LIM[0];
+  if (amt > lim[0]) return showMErr('pyErr', '超过单笔限额 ' + fmtUSD(lim[0]) + ', 请先提升 KYC 等级');
+  if (amt > S.me.card.balance) return showMErr('pyErr', '余额不足, 请先充值');
+  $('pyGo').disabled = true; $('pyGo').textContent = '支付中…';
+  var r = await api('/api/app/pay', { method:'POST', body: JSON.stringify({ amount: amt, merchant: mer, usePoints: S.usePts }) });
+  $('pyGo').disabled = false; $('pyGo').textContent = '确认支付';
+  if (r.error) return showMErr('pyErr', r.error);
+  closeM();
+  var ptsLine = (r.pointsEarned > 0 ? '+' : '') + fmtPts(r.pointsEarned - (r.pointsUsed || 0)) + ' 分' +
+    (r.pointsUsed > 0 ? ' (抵扣 ' + fmtPts(r.pointsUsed) + ')' : '');
+  openOkM('支付成功 · ' + mer, '🛍️ 实付金额', fmtUSD(r.paid || (amt - (r.deduct || 0))), ptsLine, null);
+  toast('支付成功', 'ok');
+  refreshCardPage(true);
+}
+
+/* ================= 限额 / 冻结 ================= */
+function openLimitsM(){
+  var lim = KYC_LIM[S.me.kycLevel] || KYC_LIM[0];
+  openM('<h3 class="mtitle">单笔 / 日限额 <button class="mclose" onclick="closeM()">✕</button></h3>' +
+    '<table class="lim"><tr><th>KYC 等级</th><th>单笔限额</th><th>日累计限额</th></tr>' +
+    [0,1,2].map(function(l){
+      var v = KYC_LIM[l];
+      return '<tr' + (l === S.me.kycLevel ? ' class="cur"' : '') + '><td>L' + l + (l === S.me.kycLevel ? ' · 当前' : '') + '</td><td>' + fmtUSD(v[0]) + '</td><td>' + fmtUSD(v[1]) + '</td></tr>';
+    }).join('') + '</table>' +
+    '<div class="kycst wait">当前 KYC L' + S.me.kycLevel + ' · 单笔 ' + fmtUSD(lim[0]) + ' / 日累计 ' + fmtUSD(lim[1]) + '。前往「我的 → KYC 认证」提交证件可提升限额。</div>' +
+    '<button class="btn ghost" onclick="closeM();switchTab(\'me\')">去完成 KYC</button>');
+}
+function openFreezeM(){
+  var frozen = S.me.card.status === 'frozen';
+  openM('<h3 class="mtitle">' + (frozen ? '解冻卡片' : '冻结卡片') + ' <button class="mclose" onclick="closeM()">✕</button></h3>' +
+    (frozen
+      ? '<div class="kbenefit">🔓 解冻后卡片立即恢复消费能力, 历史交易与余额不受影响。</div><button class="btn" onclick="closeM();toast(\'卡片已解冻(Demo)\',\'ok\')">确认解冻</button>'
+      : '<div class="kbenefit">❄️ 冻结后卡片暂停所有消费; 充值与还款不受影响。适合卡片信息泄露时应急。</div><button class="btn" style="background:linear-gradient(135deg,#dc2626,#b91c1c)" onclick="closeM();toast(\'卡片已冻结(Demo)\',\'ok\')">确认冻结</button>'));
+}
+</script>
+<script>
+'use strict';
+/* ================= 商城 ================= */
+function renderMall(){
+  var on = S.products.filter(function(p){ return p.on !== false; });
+  var html =
+  '<div class="mallban"><div><label>我的积分</label><b>🪙 ' + fmtPts(S.me.points) + ' 分</b>' +
+    '<div class="msub">消费返积分 · 积分当钱花 · 100 分 = $1</div></div>' +
+    '<button class="gotask" onclick="switchTab(\'task\')">🎯 去做任务赚积分</button></div>' +
+  '<div class="pgrid">' +
+    on.map(function(p){
+      var enough = S.me.points >= p.points;
+      var stockTxt = p.stock <= 0 ? '已兑完' : p.stock <= 5 ? '仅剩 ' + p.stock + ' 件' : '库存 ' + p.stock;
+      return '<div class="prod" onclick="openPdM(' + p.id + ')">' +
+        '<div class="ppic" style="background:' + catGrad(p.category) + '">' + (p.emoji || '🎁') +
+          (p.stock <= 0 ? '<div class="soldout">已兑完</div>' : (p.stock <= 5 ? '<div class="lowstock">⚠️ 仅剩 ' + p.stock + '</div>' : '')) + '</div>' +
+        '<div class="pbody"><b>' + p.name + '</b>' +
+        '<div class="prow2"><span class="pcat">' + (p.category || '卡券') + '</span><span class="pstock' + (p.stock <= 5 ? ' low' : '') + '">' + stockTxt + '</span></div>' +
+        '<div class="pprice">' + fmtPts(p.points) + ' 分</div>' +
+        '<div class="pcash">≈ ' + fmtUSD(p.points / 100) + ' · ' + (p.category === '实物' ? '邮寄到家' : '电子核销码') + '</div>' +
+        '<button class="rdbtn"' + ((p.stock <= 0 || !enough) ? ' disabled' : '') + ' onclick="event.stopPropagation();doRedeem(' + p.id + ')">' +
+          (p.stock <= 0 ? '已兑完' : (!enough ? '积分不足' : '立即兑换')) + '</button></div></div>';
+    }).join('') +
+  '</div>';
+  if (!on.length) html += '<div class="bigempty card" style="grid-column:1/-1"><div class="be-ico">🛒</div><div class="be-t">商城暂无上架商品</div></div>';
+  $('v-mall').innerHTML = html;
+}
+function openPdM(id){
+  var p = S.products.find(function(x){ return x.id === id; });
+  if (!p) return;
+  var enough = S.me.points >= p.points;
+  openM('<div class="pdetail"><div class="pdbig" style="background:' + catGrad(p.category) + '">' + (p.emoji || '🎁') + '</div>' +
+    '<div class="pdname">' + p.name + ' <span class="pcat">' + (p.category || '卡券') + '</span></div>' +
+    '<div class="pddesc">' + (p.description || '精选好礼, 积分免费兑') + '</div>' +
+    '<div class="pdprice"><b>' + fmtPts(p.points) + ' 分</b><em>≈ ' + fmtUSD(p.points / 100) + '</em></div>' +
+    '<div class="pdrules"><div class="ptitle2">📖 兑换说明</div>' +
+      '· 实物类: 兑换后进入「订单」等待发货<br>' +
+      '· 卡券/权益类: 兑换后即时发放核销码<br>' +
+      '· 剩余库存: ' + (p.stock <= 0 ? '已兑完' : p.stock + ' 件') + '</div>' +
+    '<div class="errbox" id="rdErr"></div>' +
+    '<button class="btn"' + ((p.stock <= 0 || !enough) ? ' disabled' : '') + ' onclick="doRedeem(' + p.id + ')">' +
+      (p.stock <= 0 ? '已兑完' : (!enough ? '积分不足 (还差 ' + fmtPts(p.points - S.me.points) + ' 分)' : '确认兑换')) + '</button>' +
+    '<div class="mnote">兑换后积分即时扣除, 不可撤销; 当前积分 ' + fmtPts(S.me.points) + ' 分</div></div>');
+}
+async function doRedeem(id){
+  var p = S.products.find(function(x){ return x.id === id; });
+  if (!p) return;
+  if (p.stock <= 0) { showMErr('rdErr', '该商品已兑完'); return; }
+  if (S.me.points < p.points) { showMErr('rdErr', '积分不足, 还差 ' + fmtPts(p.points - S.me.points) + ' 分'); return; }
+  var r = await api('/api/app/redeem', { method:'POST', body: JSON.stringify({ id: id }) });
+  if (r.error) { showMErr('rdErr', r.error); return; }
+  closeM();
+  var isPhysical = p.category === '实物';
+  openOkM('兑换成功 · ' + p.name, isPhysical ? '📦 消耗积分' : '🎉 消耗积分',
+    fmtPts(p.points) + ' 分', '-' + fmtPts(p.points) + ' 分', isPhysical ? null : (r.code || ''));
+  toast(isPhysical ? '兑换成功, 等待发货' : '兑换成功, 核销码已生成', 'ok');
+  await loadMe();
+  S.products = await api('/api/app/products') || [];
+  renderMall();
+}
+
+/* ================= 任务中心 ================= */
+function renderTask(){
+  var t = S.tasks || { tasks: [], signedToday: false };
+  var earned = (t.tasks || []).reduce(function(a, x){ return a + (x.claimed ? x.points : 0); }, 0);
+  var html =
+  '<div class="signban">' +
+    '<div class="sb-cal">📅</div>' +
+    '<div class="sgm"><div class="sg-t">每日签到</div><div class="sg-d">连签越久奖励越多 · 签到即得 10 积分</div></div>' +
+    '<div class="sg-pts">今日签到奖励<b>+10 分</b></div>' +
+    '<button class="sgbtn' + (t.signedToday ? ' done' : '') + '"' + (t.signedToday ? '' : ' onclick="doSign()"') + '>' +
+      (t.signedToday ? '✅ 今日已签到' : '立即签到') + '</button>' +
+  '</div>' +
+  '<div class="tgrid">' +
+    (t.tasks || []).map(function(k){
+      var done = !!k.claimed;
+      return '<div class="tcard">' +
+        '<div class="thead2"><span class="tico">' + (PICO[k.name] || '🎯') + '</span><div><b>' + k.name + '</b></div></div>' +
+        '<div class="tdesc">' + (k.description || '完成任务赚取积分奖励') + '</div>' +
+        '<div class="tfoot"><span class="tt ' + (k.type === 'daily' ? 'daily' : 'once') + '">' + (k.type === 'daily' ? '每日任务' : '一次性任务') + '</span>' +
+        '<span class="tpt">+' + fmtPts(k.points) + ' 分</span>' +
+        '<button class="mini' + (done ? ' done' : '') + '"' + (done ? '' : ' onclick="doClaim(' + k.id + ')"') + '>' +
+          (done ? '已完成' : '去领取') + '</button></div></div>';
+    }).join('') +
+  '</div>' +
+  '<div class="rulebar">💡 积分规则: 签到 +10/天 · 充值 5 分/USD · 消费 10 分/USD × 等级倍率(标准 1x / 金卡 1.5x / 白金 2x) · 100 分 = $1 可抵现金。积分可在「商城」兑换礼品。</div>';
+  $('v-task').innerHTML = html;
+  updateNav();
+}
+async function doSign(){
+  var r = await api('/api/app/sign', { method:'POST', body: '{}' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  toast('签到成功 +' + (r.points || 10) + ' 分', 'ok');
+  await loadTasks(); await loadMe(); renderTask();
+}
+async function doClaim(id){
+  var k = (S.tasks.tasks || []).find(function(x){ return x.id === id; });
+  var r = await api('/api/app/task/claim', { method:'POST', body: JSON.stringify({ id: id }) });
+  if (r.error) {
+    toast(r.error, 'err');
+    if (k && /完成/.test(r.error)) { S.claimed[id] = true; k.claimed = true; renderTask(); }
+    return;
+  }
+  toast('领取成功 +' + fmtPts(r.points || (k ? k.points : 0)) + ' 分', 'ok');
+  await loadTasks(); await loadMe(); renderTask();
+}
+
+/* ================= 订单 ================= */
+function renderOrders(){
+  var os = S.orders || [];
+  if (!os.length) {
+    $('v-order').innerHTML = '<div class="card bigempty"><div class="be-ico">📦</div><div class="be-t">还没有兑换订单</div>' +
+      '<button class="abtn" style="margin-top:16px" onclick="switchTab(\'mall\')">🛒 去商城逛逛</button></div>';
+    return;
+  }
+  $('v-order').innerHTML =
+  '<div class="card txpanel"><div class="tblwrap" style="max-height:calc(100vh - 260px)"><table class="tbl"><thead><tr>' +
+    '<th>时间</th><th>商品</th><th>消耗积分</th><th>参考价值</th><th>状态</th><th>核销码</th>' +
+  '</tr></thead><tbody>' +
+    os.map(function(o){
+      var st = OSTAT[o.status] || ['未知','info'];
+      return '<tr>' +
+        '<td class="td-time">' + fmtTime(o.time) + '</td>' +
+        '<td><span class="tico2"><i class="dn" style="background:' + catGrad(o.category) + ';border-radius:8px">' + (o.emoji || '🎁') + '</i>' + o.productName + '</span></td>' +
+        '<td class="ta-r amt-dn">' + fmtPts(o.points) + ' 分</td>' +
+        '<td class="ta-r" style="color:var(--mut)">≈ ' + fmtUSD(o.points / 100) + '</td>' +
+        '<td><span class="pill ' + st[1] + '">' + st[0] + '</span></td>' +
+        '<td>' + (o.code ? '<span class="code-chip">' + o.code + '</span>' : '<span style="color:#cbd5e1">—</span>') + '</td></tr>';
+    }).join('') +
+  '</tbody></table></div></div>';
+}
+</script>
+<script>
+'use strict';
+/* ================= 我的 ================= */
+function renderMe(){
+  var me = S.me, lim = KYC_LIM[me.kycLevel] || KYC_LIM[0];
+  var pts = S.points || [], inv = S.invite || { code:'—', invited:[], totalReward:0 };
+  var st = me.kycLevel >= 2 ? 'ok' : 'wait';
+  var kycTxt = me.kycLevel === 0 ? '未认证 · 限额较低, 建议尽快完成 L1' :
+               me.kycLevel === 1 ? '已通过基础认证, 可升级 L2 解锁更高限额' : '已完成高级认证, 限额已全面提升';
+
+  var html =
+  '<div class="megrid">' +
+
+  /* 账户信息 */
+  '<div class="card" style="grid-column:1/-1"><div class="mebox">' +
+    '<span class="meav">' + avatar(me.name) + '</span>' +
+    '<div class="memain"><b>' + me.name + '</b><span>' + me.phone + ' · 注册于 ' + fmtTime(me.createdAt) + '</span></div>' +
+    '<span class="kpill l' + me.kycLevel + '">KYC L' + me.kycLevel + '</span>' +
+    '<span class="kbadge">🪙 ' + fmtPts(me.points) + ' 分</span>' +
+  '</div></div>' +
+
+  /* KYC 认证 */
+  '<div class="card"><div class="pbody2">' +
+    '<div class="thead2"><span class="tico">🪪</span><div><b>KYC 实名认证</b></div></div>' +
+    '<div class="kdots">' +
+      '<span class="kdot' + (me.kycLevel >= 0 ? ' done' : '') + '">L0</span><span class="kline"></span>' +
+      '<span class="kdot' + (me.kycLevel >= 1 ? ' done' : ' cur') + '">L1</span><span class="kline"></span>' +
+      '<span class="kdot' + (me.kycLevel >= 2 ? ' done' : (me.kycLevel >= 1 ? ' cur' : '')) + '">L2</span>' +
+    '</div>' +
+    '<table class="lim">' +
+      '<tr><th>等级</th><th>证件要求</th><th>单笔</th><th>日累计</th></tr>' +
+      '<tr><td>L0 基础</td><td>手机号</td><td>' + fmtUSD(100) + '</td><td>' + fmtUSD(300) + '</td></tr>' +
+      '<tr><td>L1 初级</td><td>身份证件</td><td>' + fmtUSD(1000) + '</td><td>' + fmtUSD(3000) + '</td></tr>' +
+      '<tr><td>L2 高级</td><td>证件 + 人脸</td><td>' + fmtUSD(10000) + '</td><td>' + fmtUSD(50000) + '</td></tr>' +
+    '</table>' +
+    '<div class="kycst ' + st + '">当前 L' + me.kycLevel + ' · ' + kycTxt + ' · 认证奖励: L1 +200 分, L2 +500 分</div>' +
+    (me.kycLevel >= 2
+      ? '<button class="btn ghost" disabled style="margin-top:12px">🎉 已完成最高等级认证</button>'
+      : '<button class="btn" style="margin-top:12px" onclick="openKycM()">🚀 申请升级 L' + (me.kycLevel + 1) + '</button>') +
+  '</div></div>' +
+
+  /* 积分明细 */
+  '<div class="card" style="display:flex;flex-direction:column">' +
+    '<div class="ptsbig">当前积分 <b>🪙 ' + fmtPts(me.points) + ' 分</b></div>' +
+    '<div class="plist">' +
+      (pts.length ? pts.map(function(x){
+        var up = (x.change || x.points || 0) > 0;
+        return '<div class="lrow"><span class="lico ' + (up ? 'up' : 'dn') + '">' + (PICO[x.reason] || (up ? '➕' : '➖')) + '</span>' +
+          '<div class="lm"><b>' + (x.reason || '积分变动') + '</b><span>' + fmtTime(x.time) + '</span></div>' +
+          '<span class="la ' + (up ? 'up' : 'dn') + '">' + (up ? '+' : '') + fmtPts(x.change || x.points || 0) + '</span></div>';
+      }).join('') : '<div class="bigempty" style="padding:50px 20px"><div class="be-ico">🪙</div><div class="be-t">暂无积分明细</div></div>') +
+    '</div></div>' +
+
+  /* 邀请推广 */
+  '<div class="card" style="grid-column:1/-1"><div class="pbody2">' +
+    '<div class="thead2" style="margin-bottom:12px"><span class="tico">🤝</span><div><b>邀请好友 · 赚积分</b></div></div>' +
+    '<div class="invcode"><label>我的专属邀请码</label>' +
+      '<div class="icrow"><b>' + inv.code + '</b><button class="copybtn" onclick="copyText(\'' + inv.code + '\',\'邀请码已复制\')">📋 复制</button></div>' +
+      '<div class="iclink">🔗 ' + (inv.link || 'https://ucard.demo.app/r/' + inv.code) +
+        '<button class="copybtn sm" onclick="copyText(\'' + (inv.link || 'https://ucard.demo.app/r/' + inv.code) + '\',\'邀请链接已复制\')">复制链接</button></div></div>' +
+    '<div class="invrules">· 好友注册并完成首笔消费, 你得 <b>500 分</b>, 好友得 <b>200 分</b><br>· 好友每笔消费你再享 <b>5%</b> 消费积分返佣<br>· 上不封顶, 积分可直接当钱花</div>' +
+    ((inv.invited || []).length
+      ? (inv.invited).map(function(f){
+          return '<div class="invrow"><span class="iav">' + avatar(f.name) + '</span><b>' + f.name + '</b>' +
+            '<em>' + fmtTime(f.time) + '</em><i>+' + fmtPts(f.reward) + ' 分</i></div>';
+        }).join('') +
+        '<div class="invtot">共邀请 ' + (inv.invited).length + ' 人 · 累计奖励 ' + fmtPts(inv.totalReward) + ' 分</div>'
+      : '<div class="be-t" style="text-align:center;padding:18px 0">还没有好友接受邀请, 快去分享吧</div>') +
+  '</div></div></div>' +
+
+  '<div class="ver">U-Card Demo · 持卡人网页版 v2.0 · 数据重启还原</div>';
+
+  $('v-me').innerHTML = html;
+}
+
+/* ================= KYC modal ================= */
+function openKycM(){
+  var next = S.me.kycLevel + 1;
+  openM('<h3 class="mtitle">KYC 升级 · L' + next + ' <button class="mclose" onclick="closeM()">✕</button></h3>' +
+    '<div class="kbenefit">🎁 完成认证立得 ' + (next === 1 ? '200' : '500') + ' 积分 · 单笔限额提升至 ' + fmtUSD(KYC_LIM[next][0]) + ' · 日累计 ' + fmtUSD(KYC_LIM[next][1]) + '</div>' +
+    '<div class="doc"><span>📄 身份证件 (Demo 模拟)</span><em>已自动生成 ✓</em></div>' +
+    (next === 2 ? '<div class="doc"><span>🤳 人脸活体检测</span><em>已自动通过 ✓</em></div>' : '') +
+    '<div class="field" style="margin-top:12px"><label>证件号码</label><input class="inp" id="kycNo" placeholder="请输入任意证件号 (Demo)"></div>' +
+    '<div class="errbox" id="kycErr"></div>' +
+    '<button class="btn" onclick="submitKyc()">提交认证</button>' +
+    '<div class="mnote">Demo 环境模拟审核, 提交后立即通过并发放奖励积分。</div>');
+}
+async function submitKyc(){
+  var no = $('kycNo').value.trim();
+  if (!no) return showMErr('kycErr', '请输入证件号码 (任意字符即可)');
+  var r = await api('/api/app/kyc', { method:'POST', body: JSON.stringify({ docNumber: no }) });
+  if (r.error) return showMErr('kycErr', r.error);
+  closeM();
+  toast('KYC 认证通过, 奖励 ' + fmtPts(r.reward || 0) + ' 分', 'ok');
+  await loadMe();
+  S.points = await api('/api/app/points') || [];
+  renderMe();
+}
+
+/* ================= init ================= */
+$('pmodal').addEventListener('click', function(e){ if (e.target === this) closeM(); });
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeM(); });
+boot();
+</script>
+</body>
+</html>
