@@ -179,6 +179,82 @@ tasks = [
   { id: 4, code: 'profile', title: '完善个人资料', desc: '填写职业与地址', points: 100, type: 'once', icon: '📝' },
   { id: 5, code: 'invite', title: '邀请 1 位好友', desc: '好友完成注册', points: 800, type: 'once', icon: '🤝' },
 ];
+
+// ---------------- P1.5 风控中心 + P1.6 财务对账 种子 ----------------
+riskRules = [
+  { id: 1, name: '单笔超阈值', expr: 'tx.amount > 400', level: 'high', action: 'freeze', enabled: true, desc: '单笔消费/充值金额超过 $400, 自动冻结卡片并转人工处置' },
+  { id: 2, name: '24小时高频交易', expr: 'count(tx, 24h) > 10', level: 'mid', action: 'review', enabled: true, desc: '同一用户 24 小时内交易笔数超过 10 笔, 转人工审核' },
+  { id: 3, name: '短时跨国消费', expr: 'geo_hops(tx, 2h) >= 2', level: 'high', action: 'freeze', enabled: true, desc: '2 小时内刷卡位置跨越 2 个及以上国家/地区' },
+  { id: 4, name: '连续支付失败', expr: 'fail_streak(tx, 1h) >= 3', level: 'mid', action: 'review', enabled: true, desc: '1 小时内连续 3 笔支付失败(余额不足/风控拒绝)' },
+  { id: 5, name: '新设备大额充值', expr: 'tx.type == "topup" && tx.amount >= 500 && device.is_new', level: 'low', action: 'mark', enabled: false, desc: '新绑定设备首次充值 $500 以上, 仅标记观察(演示停用状态)' },
+];
+// 风险事件种子: [userIdx, ruleId, status, daysAgo, jitterH, amount, scene, reason] — 等级/动作继承规则
+const EVS = [
+  [0, 1, 'released', 12, 5, 620.00, 'Apple Store', '单笔消费 $620.00 超过阈值 $400, 复核确认为本人购买 iPhone'],
+  [1, 2, 'reviewed', 9, 3, 86.40, '24h 内 13 笔交易', '24 小时内累计 13 笔交易超过高频阈值 10 笔, 人工复核为正常小额'],
+  [2, 3, 'released', 8, 6, 156.40, 'Dubai → Doha', '2 小时内刷卡位置跨 2 国(Dubai → Doha), 复核为商旅通勤'],
+  [10, 3, 'frozen', 2, 4, 98.20, 'Cairo → Riyadh', '2 小时内刷卡位置跨 2 国(Cairo → Riyadh), 卡片已自动冻结待处置'],
+  [10, 4, 'frozen', 1, 6, 45.00, 'Talabat', '1 小时内连续 3 笔支付失败, 触发连续失败规则'],
+  [4, 5, 'pending', 3, 2, 800.00, 'USDT 充值', '新设备首次登录即充值 $800.00(USDT), 规则已停用, 事件留在观察池'],
+  [5, 1, 'pending', 1, 8, 512.00, 'Noon', '单笔消费 $512.00 超过阈值 $400, 待人工处置'],
+  [3, 4, 'reviewed', 6, 5, 67.30, 'Careem', '连续 3 笔支付失败后成功, 复核为余额不足所致'],
+  [6, 2, 'released', 15, 4, 44.10, '24h 内 11 笔小额消费', '24 小时内 11 笔小额消费, 复核为正常生活消费'],
+  [7, 1, 'released', 20, 7, 950.00, 'Emirates Airline', '单笔消费 $950.00 超过阈值, 复核确认为本人机票'],
+  [8, 4, 'pending', 0, 1, 32.50, 'Netflix', '1 小时内 3 笔支付失败(扣款渠道抖动), 待复核'],
+  [9, 3, 'reviewed', 5, 9, 210.00, 'Doha → Kuwait City', '跨国消费复核: 客户当日在多哈与科威特城往返'],
+  [11, 1, 'pending', 2, 10, 430.00, 'AliExpress', '单笔消费 $430.00 超过阈值 $400, 待人工处置'],
+  [1, 5, 'released', 18, 3, 600.00, '法币银行充值', '新设备充值 $600.00, 复核确认本人新手机'],
+  [3, 2, 'released', 11, 6, 120.00, '24h 内 12 笔交易', '24 小时内 12 笔交易, 复核为购物节集中消费'],
+];
+riskEvents = EVS.map(([ui, ruleId, status, d, jh, amount, scene, reason]) => {
+  const u = users[ui];
+  const card = cards.find(c => c.userId === u.id);
+  const rule = riskRules.find(r => r.id === ruleId);
+  const ts = daysAgo(d, jh);
+  // 风控时间轴: 事件产生 → (冻结类规则)自动冻结 → 人工复核 → 解除
+  const timeline = [{ ts, node: 'created', label: '事件产生', note: reason, operator: '风控引擎' }];
+  if (rule.action === 'freeze' && status !== 'pending') timeline.push({ ts: ts + 6e4, node: 'freeze', label: '自动冻结', note: '命中冻结类规则, 关联卡片已自动冻结', operator: '风控引擎' });
+  if (status === 'reviewed' || status === 'released') timeline.push({ ts: ts + 36e5, node: 'review', label: '人工复核', note: '风控专员调取交易与设备信息完成人工复核', operator: 'Noura Al-Faisal' });
+  if (status === 'released') timeline.push({ ts: ts + 72e5, node: 'release', label: '解除风控', note: '复核通过, 风险解除', operator: 'Noura Al-Faisal' });
+  return { id: nid(), userId: u.id, cardId: card.id, ruleId, level: rule.level, reason, status, amount, scene,
+    deviceId: 'DEV-' + ri(0x10000, 0xfffff).toString(16), createdAt: ts, timeline };
+});
+riskRules.forEach(r => { r.hits = riskEvents.filter(e => e.ruleId === r.id).length + { 1: 18, 2: 9, 3: 6, 4: 11, 5: 4 }[r.id]; }); // 历史+本月命中
+
+riskLists = [
+  { id: nid(), type: 'black', objType: 'user', target: 'Mahmoud Adel (UID 21)', reason: '多次伪冒申诉, 名下关联 3 张挂失卡', createdAt: daysAgo(22, 4), operator: 'Noura Al-Faisal' },
+  { id: nid(), type: 'black', objType: 'card', target: '5533 **** **** 8241', reason: '盗刷争议卡, 永久冻结', createdAt: daysAgo(15, 2), operator: 'Noura Al-Faisal' },
+  { id: nid(), type: 'black', objType: 'merchant', target: 'GoldSouq Exchange', reason: '疑似套现商户, 已终止合作', createdAt: daysAgo(9, 7), operator: 'Noura Al-Faisal' },
+  { id: nid(), type: 'black', objType: 'device', target: 'DEV-a3f92c (Android · 代理 IP)', reason: '自动化注册脚本设备指纹', createdAt: daysAgo(4, 3), operator: 'Noura Al-Faisal' },
+  { id: nid(), type: 'white', objType: 'user', target: 'Ahmed Al-Rashid (UID 1)', reason: '高净值老客户, 大额交易免拦截', createdAt: daysAgo(30, 5), operator: 'Noura Al-Faisal' },
+  { id: nid(), type: 'white', objType: 'merchant', target: 'Emirates Airline', reason: '官方直连商户, 豁免跨国消费规则', createdAt: daysAgo(26, 8), operator: 'Noura Al-Faisal' },
+  { id: nid(), type: 'white', objType: 'card', target: '5299 **** **** 1170', reason: '企业采购卡, 走白名单通道', createdAt: daysAgo(12, 6), operator: 'Noura Al-Faisal' },
+];
+riskTags = [
+  { id: 1, name: '高净值', color: '#16a34a', desc: '月均充值 > $5,000', count: 18 },
+  { id: 2, name: '跨境高频', color: '#0ea5e9', desc: '月跨国交易 ≥ 8 笔', count: 34 },
+  { id: 3, name: '疑似代理', color: '#f59e0b', desc: '多账户同设备登录', count: 7 },
+  { id: 4, name: '灰产风险', color: '#dc2626', desc: '命中黑名单关联网络', count: 3 },
+  { id: 5, name: '夜枭交易', color: '#7c3aed', desc: '0-5 点交易占比 > 60%', count: 11 },
+  { id: 6, name: '学生用户', color: '#64748b', desc: '年龄 < 25, 小额高频', count: 26 },
+];
+// 财务对账元数据: 结算周期 / 差异注入(渠道少入账 delta>0) / 商户结算预设
+financeMeta = { period: { topup: 'T+1', consume: 'T+2', refund: 'T+0' }, diffs: { topup: {}, consume: {}, refund: {} }, merchantSettled: { Amazon: true, Starbucks: true } };
+const reconTxOf = {
+  topup: (t) => t.type === 'topup' && t.status === 'success',
+  consume: (t) => t.type === 'consume' && t.status === 'success',
+  refund: (t) => t.type === 'consume' && t.status === 'refunded',
+};
+const injectDiffs = (type, specs) => { // specs: [距今天数序号(从最近往回数), 少入账金额, 原因]
+  const days = [...new Set(transactions.filter(reconTxOf[type]).map(t => dayKey(t.createdAt)))].sort();
+  specs.forEach(([fromEnd, delta, reason]) => {
+    const day = days[days.length - 1 - fromEnd];
+    if (day) financeMeta.diffs[type][day] = { delta, reason };
+  });
+};
+injectDiffs('topup', [[2, 61.40, '渠道延迟'], [6, 12.70, '手续费口径']]);
+injectDiffs('consume', [[1, 28.36, '手续费口径'], [5, 45.00, '渠道延迟']]);
+injectDiffs('refund', [[0, 45.00, '退款冲正'], [2, 19.50, '渠道延迟']]);
   inited = true;
 }
 
@@ -413,6 +489,61 @@ function buildTrend(range, topups, consumes) {
     if (cell) cell[t.type] += t.amount;
   });
   return buckets.map(b => ({ date: b.label, topup: +acc[b.key].topup.toFixed(0), consume: +acc[b.key].consume.toFixed(0) }));
+}
+
+// ---------------- P1.5 风控 + P1.6 财务 视图工具(模块级, 依赖 initSeed 填充的冷数据) ----------------
+const RISK_LEVEL_LABEL = { high: '高', mid: '中', low: '低' };
+const RISK_STATUS_LABEL = { pending: '待处理', frozen: '已冻结', reviewed: '已复核', released: '已解除' };
+const RISK_ACTION_LABEL = { block: '拦截', freeze: '冻结', review: '人工审核', mark: '标记' };
+const maskCardNo = (no) => { const d = String(no || '').replace(/\s/g, ''); return d.length >= 4 ? '**** **** **** ' + d.slice(-4) : '—'; };
+const pubRiskEvent = (e) => {
+  const u = users.find(x => x.id === e.userId);
+  const card = cards.find(c => c.id === e.cardId);
+  const rule = riskRules.find(r => r.id === e.ruleId);
+  return { ...e, levelLabel: RISK_LEVEL_LABEL[e.level] || e.level, statusLabel: RISK_STATUS_LABEL[e.status] || e.status,
+    user: u ? u.name : '—', cardNoMask: card ? maskCardNo(card.cardNo) : '—', cardStatus: card ? card.status : '—',
+    ruleName: rule ? rule.name : '已删除规则', ruleAction: rule ? rule.action : '', ruleExpr: rule ? rule.expr : '' };
+};
+// 对账: 三类交易按天(dayKey)分组; 应入账=平台口径, 实际=渠道回执(按 financeMeta.diffs 注入模拟差异), 差异=应入-实际
+const RECON_DEFS = {
+  topup:   { label: '充值对账', voucher: 'TP', tx: (t) => t.type === 'topup' && t.status === 'success' },
+  consume: { label: '消费对账', voucher: 'CS', tx: (t) => t.type === 'consume' && t.status === 'success' },
+  refund:  { label: '退款对账', voucher: 'RF', tx: (t) => t.type === 'consume' && t.status === 'refunded' },
+};
+function reconGroups(type) {
+  const def = RECON_DEFS[type] || RECON_DEFS.topup;
+  const byDay = {};
+  transactions.filter(def.tx).forEach(t => {
+    const k = dayKey(t.createdAt);
+    const g = byDay[k] = byDay[k] || { day: k, count: 0, due: 0, fee: 0 };
+    g.count++; g.due += t.amount; g.fee += t.fee;
+  });
+  return Object.values(byDay)
+    .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
+    .map((g, i) => {
+      const due = +g.due.toFixed(2);
+      const d = (financeMeta.diffs[type] || {})[g.day];
+      const actual = d ? +(due - d.delta).toFixed(2) : due;
+      const diff = +(due - actual).toFixed(2);
+      return { day: g.day, count: g.count, due, actual, fee: +g.fee.toFixed(2), diff,
+        status: Math.abs(diff) < 0.01 ? '平' : '差异', reason: d ? d.reason : '',
+        period: financeMeta.period[type] || 'T+1',
+        voucher: def.voucher + '-' + g.day.replace('-', '') + '-' + String(i + 1).padStart(2, '0') };
+    });
+}
+// 商户结算: 按消费商户汇总(平台手续费即消费交易 fee, 2%), 结算状态存 financeMeta.merchantSettled
+function merchantRows() {
+  const names = [...new Set(transactions.filter(t => t.type === 'consume' && t.merchant).map(t => t.merchant))];
+  return names.map((name, i) => {
+    const txs = transactions.filter(t => t.type === 'consume' && t.status === 'success' && t.merchant === name);
+    const amt = +txs.reduce((s, t) => s + t.amount, 0).toFixed(2);
+    const fee = +txs.reduce((s, t) => s + t.fee, 0).toFixed(2);
+    const lastTxAt = txs.length ? Math.max(...txs.map(t => t.createdAt)) : null;
+    return { merchant: name, txCount: txs.length, consumeAmt: amt, fee, net: +(amt - fee).toFixed(2),
+      settled: !!financeMeta.merchantSettled[name], period: 'T+2',
+      voucher: 'MC-' + String(i + 1).padStart(2, '0') + (lastTxAt ? '-' + dayKey(lastTxAt).replace('-', '') : ''),
+      lastTxAt };
+  }).sort((a, b) => b.consumeAmt - a.consumeAmt);
 }
 
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
@@ -659,6 +790,107 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
         },
         rows,
       });
+    }
+    // ============ P1.5 风控模拟中心 + P1.6 财务对账中心(均总监专属, 其他角色一律 403 防越权) ============
+    if (p === '/api/admin/risk' || p.startsWith('/api/admin/risk/') || p.startsWith('/api/admin/finance')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问风控与财务中心' }, 403);
+      if (p === '/api/admin/risk') { // ?level=&status= 筛选
+        const list = riskEvents.filter(e => (!q.level || e.level === q.level) && (!q.status || e.status === q.status))
+          .sort((a, b) => b.createdAt - a.createdAt).map(pubRiskEvent);
+        const cnt = (st) => riskEvents.filter(e => e.status === st).length;
+        return J({ list, summary: { total: riskEvents.length, pending: cnt('pending'), frozen: cnt('frozen'), reviewed: cnt('reviewed'), released: cnt('released') } });
+      }
+      const mRiskAct = p.match(/^\/api\/admin\/risk\/(\d+)\/action$/);
+      if (mRiskAct && method === 'POST') { // 处置: review=人工复核 / release=解除风控(解冻关联卡) / freeze=自动冻结演示
+        const ev = riskEvents.find(e => e.id === +mRiskAct[1]);
+        if (!ev) return J({ error: '事件不存在' }, 404);
+        const card = cards.find(c => c.id === ev.cardId);
+        if (b.action === 'review') {
+          ev.status = 'reviewed';
+          ev.timeline.push({ ts: now(), node: 'review', label: '人工复核', note: '总监已人工复核本事件', operator: me.name });
+        } else if (b.action === 'release') {
+          ev.status = 'released';
+          if (card && card.status === 'frozen') card.status = 'active'; // 解除风控=解冻关联卡(挂失卡不自动恢复)
+          ev.timeline.push({ ts: now(), node: 'release', label: '解除风控', note: '复核通过, 风险解除' + (card && card.status === 'active' ? ', 关联卡已解冻' : ''), operator: me.name });
+        } else if (b.action === 'freeze') {
+          ev.status = 'frozen';
+          if (card && card.status === 'active') card.status = 'frozen';
+          ev.timeline.push({ ts: now(), node: 'freeze', label: '自动冻结', note: '手动触发自动冻结动作, 关联卡已冻结', operator: me.name });
+        } else return J({ error: '无效动作, 支持 review / release / freeze' }, 400);
+        return J({ event: pubRiskEvent(ev) });
+      }
+      if (p === '/api/admin/risk/rules') {
+        return J({ list: riskRules.map(r => ({ ...r, actionLabel: RISK_ACTION_LABEL[r.action] || r.action, levelLabel: RISK_LEVEL_LABEL[r.level] || r.level, hitEvents: riskEvents.filter(e => e.ruleId === r.id).length })) });
+      }
+      const mRule = p.match(/^\/api\/admin\/risk\/rules\/(\d+)$/);
+      if (mRule && method === 'PATCH') { // 规则启停
+        const r = riskRules.find(x => x.id === +mRule[1]);
+        if (!r) return J({ error: '规则不存在' }, 404);
+        if (typeof b.enabled === 'boolean') r.enabled = b.enabled;
+        return J({ rule: { ...r, actionLabel: RISK_ACTION_LABEL[r.action] || r.action, levelLabel: RISK_LEVEL_LABEL[r.level] || r.level, hitEvents: riskEvents.filter(e => e.ruleId === r.id).length } });
+      }
+      if (p === '/api/admin/risk/lists') return J({ list: [...riskLists].sort((a, b) => b.createdAt - a.createdAt) });
+      const mList = p.match(/^\/api\/admin\/risk\/lists\/(\d+)\/remove$/);
+      if (mList && (method === 'POST' || method === 'DELETE')) { // 名单移除
+        const i = riskLists.findIndex(l => l.id === +mList[1]);
+        if (i < 0) return J({ error: '名单项不存在' }, 404);
+        riskLists.splice(i, 1);
+        return J({ ok: true, remain: riskLists.length });
+      }
+      if (p === '/api/admin/risk/tags') return J({ list: riskTags });
+      if (p === '/api/admin/finance/recon') { // ?type=topup|consume|refund 按天分组对账
+        const type = RECON_DEFS[q.type] ? q.type : 'topup';
+        const groups = reconGroups(type);
+        const s = (k) => +groups.reduce((a, g) => a + g[k], 0).toFixed(2);
+        return J({ type, typeLabel: RECON_DEFS[type].label, period: financeMeta.period[type], groups,
+          summary: { days: groups.length, count: groups.reduce((a, g) => a + g.count, 0), due: s('due'), actual: s('actual'), fee: s('fee'), diff: s('diff'), diffDays: groups.filter(g => g.status === '差异').length } });
+      }
+      if (p === '/api/admin/finance/diff') { // 差异清单(三类对账中有差异的分组)
+        const rows = [];
+        Object.keys(RECON_DEFS).forEach(tp => reconGroups(tp).forEach(g => { if (g.status === '差异') rows.push({ type: tp, typeLabel: RECON_DEFS[tp].label, ...g }); }));
+        rows.sort((a, b) => (a.day < b.day ? 1 : -1));
+        return J({ list: rows, summary: { count: rows.length, totalDiff: +rows.reduce((a, r) => a + r.diff, 0).toFixed(2) } });
+      }
+      if (p === '/api/admin/finance/merchant') { // 商户结算汇总
+        const list = merchantRows();
+        const pend = list.filter(r => !r.settled);
+        return J({ feeRate: 0.02, period: 'T+2',
+          summary: { merchants: list.length, consumeAmt: +list.reduce((a, r) => a + r.consumeAmt, 0).toFixed(2), fee: +list.reduce((a, r) => a + r.fee, 0).toFixed(2), net: +list.reduce((a, r) => a + r.net, 0).toFixed(2), pending: pend.length, pendingNet: +pend.reduce((a, r) => a + r.net, 0).toFixed(2) },
+          list });
+      }
+      const mMer = p.match(/^\/api\/admin\/finance\/merchant\/(.+)$/);
+      if (mMer && method === 'PATCH') { // 标记已结算 / 取消结算
+        const name = decodeURIComponent(mMer[1]);
+        const row = merchantRows().find(r => r.merchant === name);
+        if (!row) return J({ error: '商户不存在: ' + name }, 404);
+        financeMeta.merchantSettled[name] = b.settled !== false;
+        return J({ row: { ...row, settled: financeMeta.merchantSettled[name] } });
+      }
+      if (p === '/api/admin/finance/report') { // 月度汇总报表
+        const nD = new Date();
+        const ms = new Date(nD.getFullYear(), nD.getMonth(), 1).getTime();
+        const inM = (t) => t.createdAt >= ms;
+        const topups = transactions.filter(t => t.type === 'topup' && t.status === 'success' && inM(t));
+        const consumes = transactions.filter(t => t.type === 'consume' && t.status === 'success' && inM(t));
+        const refunds = transactions.filter(t => t.type === 'consume' && t.status === 'refunded' && inM(t));
+        const topupFee = +topups.reduce((s, t) => s + t.fee, 0).toFixed(2);
+        const consumeFee = +consumes.reduce((s, t) => s + t.fee, 0).toFixed(2);
+        const commissionPaid = +commissions.filter(c => inM(c)).reduce((s, c) => s + c.amount, 0).toFixed(2); // 与交易同口径: 仅当月产生的佣金
+        const monthlyFeeIncome = +cards.filter(c => c.status !== 'lost').reduce((s, c) => s + ((CARD_LEVELS[c.level] || {}).monthlyFee || 0), 0).toFixed(2); // 在册卡月费收入
+        const reconSummary = Object.keys(RECON_DEFS).map(tp => {
+          const gs = reconGroups(tp); const ds = gs.filter(g => g.status === '差异');
+          return { type: tp, typeLabel: RECON_DEFS[tp].label, days: gs.length, diffDays: ds.length, diffTotal: +ds.reduce((s, g) => s + g.diff, 0).toFixed(2) };
+        });
+        const mrs = merchantRows(); const pend = mrs.filter(r => !r.settled);
+        return J({ month: nD.getFullYear() + '-' + d2(nD.getMonth() + 1),
+          topup: { amount: +topups.reduce((s, t) => s + t.amount, 0).toFixed(2), count: topups.length },
+          consume: { amount: +consumes.reduce((s, t) => s + t.amount, 0).toFixed(2), count: consumes.length },
+          refund: { amount: +refunds.reduce((s, t) => s + t.amount, 0).toFixed(2), count: refunds.length },
+          feeIncome: { topup: topupFee, consume: consumeFee, monthlyFee: monthlyFeeIncome, total: +(topupFee + consumeFee + monthlyFeeIncome).toFixed(2) },
+          commissionPaid, netIncome: +(topupFee + consumeFee + monthlyFeeIncome - commissionPaid).toFixed(2),
+          recon: reconSummary,
+          merchant: { total: mrs.length, pending: pend.length, pendingNet: +pend.reduce((s, r) => s + r.net, 0).toFixed(2) } });
+      }
     }
     return J({ error: 'not found: ' + p }, 404);
   }

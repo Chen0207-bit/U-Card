@@ -493,6 +493,109 @@
       </div>
     </section>
 
+    <!-- 13. 风险事件 (P1.5 风控中心) -->
+    <section class="page" id="page-risk">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:140px" id="riskLevelSel" onchange="switchRiskFilter()">
+            <option value="">全部等级</option><option value="high">高风险</option><option value="mid">中风险</option><option value="low">低风险</option>
+          </select>
+          <select class="select" style="width:140px" id="riskStatusSel" onchange="switchRiskFilter()">
+            <option value="">全部状态</option><option value="pending">待处理</option><option value="frozen">已冻结</option><option value="reviewed">已复核</option><option value="released">已解除</option>
+          </select>
+        </div>
+        <span class="dim">点击行查看事件详情与风控时间轴 · 处置: 人工复核 / 解除风控(解冻卡) / 自动冻结</span>
+      </div>
+      <div id="riskSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">风险事件列表</div>
+        <div class="card-sub">命中风控规则自动产生 · 冻结类规则直接冻结卡片, 审核/标记类转人工</div>
+        <div class="tbl-wrap" id="riskBody"></div>
+      </div>
+    </section>
+
+    <!-- 14. 风险规则 -->
+    <section class="page" id="page-riskRules">
+      <div class="notice">📐 规则表达式为演示口径(未接真实引擎): 交易发生时逐条求值, 命中即按「动作」执行 — 拦截交易 / 冻结卡片 / 转人工审核 / 仅标记。</div>
+      <div class="card">
+        <div class="card-title">风控规则</div>
+        <div class="card-sub">停用规则立即失效, 不再产生新事件(历史事件保留)</div>
+        <div class="tbl-wrap" id="riskRulesBody"></div>
+      </div>
+    </section>
+
+    <!-- 15. 黑白名单 -->
+    <section class="page" id="page-riskLists">
+      <div class="toolbar">
+        <div class="tabs" id="riskListTabs">
+          <button class="tab active" data-t="black" onclick="switchListTab('black')">⛔ 黑名单</button>
+          <button class="tab" data-t="white" onclick="switchListTab('white')">✅ 白名单</button>
+        </div>
+        <span class="dim">黑名单对象直接拦截 · 白名单对象豁免部分风控规则</span>
+      </div>
+      <div class="card"><div class="tbl-wrap" id="riskListsBody"></div></div>
+    </section>
+
+    <!-- 16. 风险标签 -->
+    <section class="page" id="page-riskTags">
+      <div class="card">
+        <div class="card-title">风险标签</div>
+        <div class="card-sub">打标对象命中标签规则后自动累积 · 用于人群观察与策略分流</div>
+        <div id="riskTagsBody" class="kyc-list"></div>
+      </div>
+    </section>
+
+    <!-- 17. 对账中心 (P1.6) -->
+    <section class="page" id="page-recon">
+      <div class="toolbar">
+        <div class="tabs" id="reconTabs">
+          <button class="tab active" data-t="topup" onclick="switchReconType('topup')">⬆️ 充值对账</button>
+          <button class="tab" data-t="consume" onclick="switchReconType('consume')">🛍️ 消费对账</button>
+          <button class="tab" data-t="refund" onclick="switchReconType('refund')">↩️ 退款对账</button>
+        </div>
+        <button class="btn-outline" onclick="exportReconCsv()">⬇️ 导出 CSV</button>
+      </div>
+      <div id="reconSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title" id="reconTitle">对账分组(按天)</div>
+        <div class="card-sub">应入账=平台口径 · 实际入账=渠道回执 · 差异金额=应入账-实际入账 · |差异| &lt; $0.01 视为「平」</div>
+        <div class="tbl-wrap" id="reconBody"></div>
+      </div>
+    </section>
+
+    <!-- 18. 差异清单 -->
+    <section class="page" id="page-financeDiff">
+      <div id="diffSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">对账差异清单</div>
+        <div class="card-sub">仅列出存在差异的分组 · 差异原因: 渠道延迟 / 手续费口径 / 退款冲正</div>
+        <div class="tbl-wrap" id="diffBody"></div>
+      </div>
+    </section>
+
+    <!-- 19. 商户结算 -->
+    <section class="page" id="page-merchant">
+      <div id="merchantSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">商户结算汇总</div>
+        <div class="card-sub">平台手续费 2% · 商户应结算净额 = 消费额 - 手续费 · 结算周期 T+2</div>
+        <div class="tbl-wrap" id="merchantBody"></div>
+      </div>
+    </section>
+
+    <!-- 20. 财务报表 -->
+    <section class="page" id="page-financeReport">
+      <div class="toolbar">
+        <div class="toolbar-left"><span class="dim" id="reportMonth"></span></div>
+        <button class="btn-outline" onclick="exportReconCsv()">⬇️ 导出当前对账视图 CSV</button>
+      </div>
+      <div id="reportSum" class="sum-row"></div>
+      <div class="dash-grid">
+        <div class="card" id="reportRecon"></div>
+        <div class="card" id="reportMerchant"></div>
+      </div>
+    </section>
+
   </div>
 </div>
 
@@ -564,7 +667,9 @@ function closeDrawer(){ $('#drawerRoot').innerHTML = ''; }
 
 /* ================= hash 路由 ================= */
 var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'交易流水', crm:'客户管理',
-             perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路', goals:'目标管理'};
+             perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路', goals:'目标管理',
+             risk:'风险事件', riskRules:'风险规则', riskLists:'黑白名单', riskTags:'风险标签',
+             recon:'对账中心', financeDiff:'差异清单', merchant:'商户结算', financeReport:'财务报表'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
@@ -574,7 +679,9 @@ var MENU = [
   {cap:'经营管理', lv0:true, items:[['goals','🎯','目标管理']]},
   {cap:'U卡支付运营', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核']]},
   {cap:'CRM 销售', items:[['crm','👥','客户管理'],['tx','💸','客户交易'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
-  {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]}
+  {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]},
+  {cap:'风控中心', lv0:true, items:[['risk','🚨','风险事件'],['riskRules','📐','风险规则'],['riskLists','⛔','黑白名单'],['riskTags','🏷️','风险标签']]},
+  {cap:'财务结算', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]}
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -1540,6 +1647,337 @@ function submitNewSales(e){
     LOADERS.chain();
   }).catch(function(e2){ toast(e2.message, 'err'); });
 }
+
+/* ================= 13. 风险事件 (P1.5 风控中心) ================= */
+var RISK_EV = [], RISK_RULES = [], RISK_LISTS = [], RISK_TAGS = [];
+var RISK_F = { level: '', status: '' };
+var RISK_LEVEL_PILL = { high: '<span class="pill pill-red">🔴 高</span>', mid: '<span class="pill pill-amber">🟡 中</span>', low: '<span class="pill pill-blue">🔵 低</span>' };
+var RISK_STATUS_PILL = { pending: '<span class="pill pill-amber">⏳ 待处理</span>', frozen: '<span class="pill pill-red">❄️ 已冻结</span>', reviewed: '<span class="pill pill-blue">👀 已复核</span>', released: '<span class="pill pill-green">✅ 已解除</span>' };
+var RISK_ACTION_PILL = { block: '<span class="pill pill-red">拦截</span>', freeze: '<span class="pill pill-red">冻结</span>', review: '<span class="pill pill-blue">人工审核</span>', mark: '<span class="pill pill-gray">标记</span>' };
+function switchRiskFilter(){
+  RISK_F.level = $('#riskLevelSel').value;
+  RISK_F.status = $('#riskStatusSel').value;
+  LOADERS.risk();
+}
+LOADERS.risk = function(){
+  $('#riskBody').innerHTML = loadingBox(); $('#riskSum').innerHTML = '';
+  api('/api/admin/risk?level=' + RISK_F.level + '&status=' + RISK_F.status).then(function(d){
+    RISK_EV = d.list || [];
+    renderRiskSum(d.summary || {});
+    renderRiskTable();
+  }).catch(function(e){ $('#riskBody').innerHTML = errBox(e); });
+};
+function renderRiskSum(s){
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#riskSum').innerHTML =
+    sc('🚨', '#fee2e2', String(nz(s.total)), '风险事件总数') +
+    sc('⏳', '#fef3c7', String(nz(s.pending)), '待处理') +
+    sc('❄️', '#fee2e2', String(nz(s.frozen)), '已冻结') +
+    sc('👀', '#e0f2fe', String(nz(s.reviewed)), '已复核') +
+    sc('✅', '#dcfce7', String(nz(s.released)), '已解除');
+}
+function renderRiskTable(){
+  if (!RISK_EV.length){ $('#riskBody').innerHTML = emptyBox('当前筛选下没有风险事件'); return; }
+  var rows = RISK_EV.map(function(e){
+    var acts = '';
+    if (e.status !== 'released') acts += '<button class="btn-outline btn-sm" onclick="riskAction(' + e.id + ',\'review\')">人工复核</button> ';
+    if (e.status !== 'released') acts += '<button class="btn-ok-sm" onclick="riskAction(' + e.id + ',\'release\')">解除风控</button> ';
+    if (e.status !== 'frozen' && e.status !== 'released') acts += '<button class="btn-danger" onclick="riskAction(' + e.id + ',\'freeze\')">冻结</button>';
+    return '<tr style="cursor:pointer" onclick="openRiskDrawer(' + e.id + ')" title="点击查看事件详情与风控时间轴">' +
+      '<td class="dim num">' + fmtTime(e.createdAt) + '</td>' +
+      '<td><b>' + esc(e.user) + '</b><div class="sub-line">UID ' + nz(e.userId) + '</div></td>' +
+      '<td class="num dim">' + esc(e.cardNoMask) + '</td>' +
+      '<td><b>' + esc(e.ruleName) + '</b><div class="sub-line dim">' + esc(e.ruleExpr || '') + '</div></td>' +
+      '<td>' + (RISK_LEVEL_PILL[e.level] || esc(e.level)) + '</td>' +
+      '<td style="max-width:280px;white-space:normal;font-size:12.5px;color:var(--ink2)">' + esc(e.reason) + '</td>' +
+      '<td>' + (RISK_STATUS_PILL[e.status] || esc(e.status)) + '</td>' +
+      '<td onclick="event.stopPropagation()" style="white-space:nowrap">' + (acts || '<span class="dim">已完结</span>') + '</td></tr>';
+  }).join('');
+  $('#riskBody').innerHTML = '<table><thead><tr><th>时间</th><th>用户</th><th>卡号</th><th>触发规则</th><th>风险等级</th><th>风险原因</th><th>状态</th><th>处置动作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function riskAction(id, action){
+  var names = { review: '人工复核', release: '解除风控', freeze: '自动冻结' };
+  post('/api/admin/risk/' + id + '/action', { action: action }).then(function(r){
+    toast(names[action] + '成功' + (action === 'release' && r.event.cardStatus === 'active' ? ', 关联卡已解冻' : ''));
+    closeDrawer();
+    LOADERS.risk();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* 事件详情抽屉: 基础信息 + 风控事件时间轴(产生→冻结→复核→解除) + 底部处置 */
+function openRiskDrawer(id){
+  var e = null;
+  RISK_EV.forEach(function(x){ if (x.id === id) e = x; });
+  if (!e) return;
+  var lvlPill = RISK_LEVEL_PILL[e.level] || esc(e.levelLabel || e.level);
+  var stPill = RISK_STATUS_PILL[e.status] || esc(e.statusLabel || e.status);
+  var info = [
+    ['用户', '<b>' + esc(e.user) + '</b> <span class="dim num">UID ' + nz(e.userId) + '</span>'],
+    ['卡号', '<span class="num">' + esc(e.cardNoMask) + '</span>'],
+    ['卡状态', cardStatusBadge(e.cardStatus)],
+    ['触发规则', '<b>' + esc(e.ruleName) + '</b>'],
+    ['规则条件', '<code style="font-size:12px;background:#f1f5f9;border-radius:6px;padding:2px 7px">' + esc(e.ruleExpr || '—') + '</code>'],
+    ['风险等级', lvlPill],
+    ['事件状态', stPill],
+    ['涉及金额', '<b class="num">' + fmtMoney(nz(e.amount)) + '</b>'],
+    ['发生场景', esc(e.scene || '—')],
+    ['设备指纹', '<span class="num">' + esc(e.deviceId || '—') + '</span>'],
+    ['发生时间', '<span class="num">' + fmtTime(e.createdAt) + '</span>'],
+    ['事件编号', '<span class="num">RE-' + nz(e.id) + '</span>']
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+  var NODE_ICON = { created: '⚡', freeze: '❄️', review: '👀', release: '✅' };
+  var tlHtml = (e.timeline || []).length ? '<div class="tl">' + e.timeline.map(function(t){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + (NODE_ICON[t.node] || '📌') + ' ' + esc(t.label) + '</span><span class="num">' + fmtTime(t.ts) + '</span>' + (t.operator ? '<span class="dim">· ' + esc(t.operator) + '</span>' : '') + '</div>' +
+      '<div class="tl-content">' + esc(t.note || '') + '</div></div>';
+  }).join('') + '</div>' : emptyBox('暂无时间轴');
+  var footActs = '';
+  if (e.status !== 'released') footActs += '<button class="btn-outline" onclick="riskAction(' + e.id + ',\'review\')">👀 人工复核</button> <button class="btn" onclick="riskAction(' + e.id + ',\'release\')">✅ 解除风控(解冻卡)</button> ';
+  if (e.status !== 'frozen' && e.status !== 'released') footActs += '<button class="btn-danger" style="padding:8px 16px" onclick="riskAction(' + e.id + ',\'freeze\')">❄️ 自动冻结</button>';
+  showDrawer('🚨 风险事件 #' + e.id + ' ' + stPill,
+    '<div class="info-grid">' + info + '</div>' +
+    ovSection('🕒 风控事件时间轴 (产生 → 冻结 → 复核 → 解除)', tlHtml),
+    '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">' + (footActs || '<span class="dim" style="align-self:center">该事件已完结</span>') + '<button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+}
+
+/* ================= 14. 风险规则 ================= */
+LOADERS.riskRules = function(){
+  $('#riskRulesBody').innerHTML = loadingBox();
+  api('/api/admin/risk/rules').then(function(d){
+    RISK_RULES = d.list || [];
+    if (!RISK_RULES.length){ $('#riskRulesBody').innerHTML = emptyBox('暂无风控规则'); return; }
+    var rows = RISK_RULES.map(function(r){
+      return '<tr>' +
+        '<td><b>' + esc(r.name) + '</b><div class="sub-line">' + esc(r.desc || '') + '</div></td>' +
+        '<td><code style="font-size:12px;background:#f1f5f9;border-radius:6px;padding:2px 7px">' + esc(r.expr) + '</code></td>' +
+        '<td>' + (RISK_LEVEL_PILL[r.level] || esc(r.levelLabel)) + '</td>' +
+        '<td>' + (RISK_ACTION_PILL[r.action] || esc(r.actionLabel)) + '</td>' +
+        '<td class="num"><b>' + nz(r.hits) + '</b><div class="sub-line">本月 ' + nz(r.hitEvents) + ' 条</div></td>' +
+        '<td>' + (r.enabled ? '<span class="pill pill-green">启用</span>' : '<span class="pill pill-gray">停用</span>') + '</td>' +
+        '<td><button class="' + (r.enabled ? 'btn-danger' : 'btn-ok-sm') + '" onclick="toggleRiskRule(' + r.id + ',' + r.enabled + ')">' + (r.enabled ? '停用' : '启用') + '</button></td></tr>';
+    }).join('');
+    $('#riskRulesBody').innerHTML = '<table><thead><tr><th>规则名</th><th>触发条件表达式</th><th>风险等级</th><th>动作</th><th>累计命中</th><th>状态</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#riskRulesBody').innerHTML = errBox(e); });
+};
+function toggleRiskRule(id, wasEnabled){
+  patch('/api/admin/risk/rules/' + id, { enabled: !wasEnabled }).then(function(r){
+    toast(wasEnabled ? '规则已停用: ' + r.rule.name + ', 不再产生新事件' : '规则已启用: ' + r.rule.name);
+    LOADERS.riskRules();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 15. 黑白名单 ================= */
+var RLIST_TAB = 'black';
+var OBJ_TYPE_LAB = { user: '用户', card: '卡', merchant: '商户', device: '设备标识' };
+function switchListTab(t){
+  RLIST_TAB = t;
+  $$('#riskListTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.t === t); });
+  LOADERS.riskLists();
+}
+LOADERS.riskLists = function(){
+  $('#riskListsBody').innerHTML = loadingBox();
+  api('/api/admin/risk/lists').then(function(d){
+    RISK_LISTS = d.list || [];
+    renderRiskLists();
+  }).catch(function(e){ $('#riskListsBody').innerHTML = errBox(e); });
+};
+function renderRiskLists(){
+  var list = RISK_LISTS.filter(function(l){ return l.type === RLIST_TAB; });
+  if (!list.length){ $('#riskListsBody').innerHTML = emptyBox(RLIST_TAB === 'black' ? '黑名单为空' : '白名单为空'); return; }
+  var typePill = RLIST_TAB === 'black' ? '<span class="pill pill-red">黑名单</span>' : '<span class="pill pill-green">白名单</span>';
+  var rows = list.map(function(l){
+    return '<tr>' +
+      '<td>' + typePill + '</td>' +
+      '<td><span class="pill pill-gray">' + esc(OBJ_TYPE_LAB[l.objType] || l.objType) + '</span></td>' +
+      '<td><b>' + esc(l.target) + '</b></td>' +
+      '<td style="max-width:260px;white-space:normal;font-size:12.5px;color:var(--ink2)">' + esc(l.reason) + '</td>' +
+      '<td class="dim num">' + fmtTime(l.createdAt) + '</td>' +
+      '<td>' + esc(l.operator || '—') + '</td>' +
+      '<td><button class="btn-danger" onclick="confirmRemoveList(' + l.id + ')">移除</button></td></tr>';
+  }).join('');
+  $('#riskListsBody').innerHTML = '<table><thead><tr><th>名单类型</th><th>对象类型</th><th>对象</th><th>原因</th><th>加入时间</th><th>操作人</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function confirmRemoveList(id){
+  showModal('⛔ 移除名单项',
+    '<div class="notice" style="margin-bottom:14px">移除后该对象立即恢复' + (RLIST_TAB === 'black' ? '正常交易(不再拦截)' : '常规风控策略(不再豁免)') + '。</div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" style="background:var(--bad);box-shadow:0 1px 3px rgba(220,38,38,.35)" onclick="removeListEntry(' + id + ')">确认移除</button></div>');
+}
+function removeListEntry(id){
+  post('/api/admin/risk/lists/' + id + '/remove', {}).then(function(r){
+    closeModal(); toast('已移除, 剩余 ' + r.remain + ' 项'); LOADERS.riskLists();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 16. 风险标签 ================= */
+LOADERS.riskTags = function(){
+  $('#riskTagsBody').innerHTML = loadingBox();
+  api('/api/admin/risk/tags').then(function(d){
+    RISK_TAGS = d.list || [];
+    if (!RISK_TAGS.length){ $('#riskTagsBody').innerHTML = emptyBox('暂无风险标签'); return; }
+    $('#riskTagsBody').innerHTML = RISK_TAGS.map(function(t){
+      return '<div class="kyc-card">' +
+        '<div class="kyc-row"><div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:4px;background:' + esc(t.color) + ';display:inline-block;box-shadow:0 0 0 3px ' + esc(t.color) + '22"></span><span class="kyc-name">' + esc(t.name) + '</span></div>' +
+        '<span class="pill pill-indigo num">' + fmtPts(nz(t.count)) + ' 对象</span></div>' +
+        '<div class="kyc-meta">' + esc(t.desc || '—') + '</div>' +
+        '<div class="sub-line" style="margin-top:8px">标签色 <span class="num">' + esc(t.color) + '</span></div></div>';
+    }).join('');
+  }).catch(function(e){ $('#riskTagsBody').innerHTML = errBox(e); });
+};
+
+/* ================= 17. 对账中心 (P1.6) ================= */
+var RECON_TYPE = 'topup', RECON_CACHE = [];
+var RECON_LABEL = { topup: '充值对账', consume: '消费对账', refund: '退款对账' };
+function switchReconType(t){
+  RECON_TYPE = t;
+  $$('#reconTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.t === t); });
+  LOADERS.recon();
+}
+LOADERS.recon = function(){
+  $('#reconBody').innerHTML = loadingBox(); $('#reconSum').innerHTML = '';
+  api('/api/admin/finance/recon?type=' + RECON_TYPE).then(function(d){
+    RECON_CACHE = d.groups || [];
+    renderReconSum(d);
+    renderReconTable(d);
+  }).catch(function(e){ $('#reconBody').innerHTML = errBox(e); });
+};
+function renderReconSum(d){
+  var s = d.summary || {};
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#reconSum').innerHTML =
+    sc('🧮', '#e0e7ff', String(nz(s.days)) + ' 天', (RECON_LABEL[d.type] || '') + ' · ' + nz(s.count) + ' 笔 · 结算周期 ' + esc(d.period || '')) +
+    sc('📥', '#dcfce7', fmtMoney0(nz(s.due)), '应入账金额合计') +
+    sc('🏦', '#e0f2fe', fmtMoney0(nz(s.actual)), '实际入账金额合计 · 手续费 ' + fmtMoney0(nz(s.fee))) +
+    sc('⚖️', nz(s.diff) ? '#fee2e2' : '#dcfce7', fmtMoney(nz(s.diff)), '差异金额合计 · ' + nz(s.diffDays) + ' 天有差异');
+}
+function renderReconTable(d){
+  if (!RECON_CACHE.length){ $('#reconBody').innerHTML = emptyBox('暂无对账数据'); return; }
+  var rows = RECON_CACHE.map(function(g){
+    var isDiff = g.status === '差异';
+    return '<tr' + (isDiff ? ' style="background:#fff7ed"' : '') + '>' +
+      '<td class="num"><b>' + esc(g.day) + '</b></td>' +
+      '<td class="num">' + nz(g.count) + '</td>' +
+      '<td class="num">' + fmtMoney(g.due) + '</td>' +
+      '<td class="num">' + fmtMoney(g.actual) + '</td>' +
+      '<td class="num dim">' + fmtMoney(g.fee) + '</td>' +
+      '<td class="num" style="font-weight:600;color:' + (isDiff ? 'var(--bad)' : 'var(--ink3)') + '">' + fmtMoney(g.diff) + '</td>' +
+      '<td>' + (isDiff ? '<span class="pill pill-red">差异</span>' + (g.reason ? ' <span class="dim">' + esc(g.reason) + '</span>' : '') : '<span class="pill pill-green">平</span>') + '</td>' +
+      '<td class="dim num">' + esc(g.period) + '</td>' +
+      '<td class="dim num">' + esc(g.voucher) + '</td></tr>';
+  }).join('');
+  $('#reconTitle').textContent = (RECON_LABEL[d.type] || '对账') + '分组(按天)';
+  $('#reconBody').innerHTML = '<table><thead><tr><th>日期</th><th>笔数</th><th>应入账金额</th><th>实际入账金额</th><th>手续费</th><th>差异金额</th><th>对账状态</th><th>结算周期</th><th>结算凭证号</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+/* CSV 导出(当前对账视图, 前端 Blob 下载, BOM 头防 Excel 乱码) */
+function exportReconCsv(){
+  var go = function(rows){
+    if (!rows.length){ toast('当前对账视图无数据可导出', 'warn'); return; }
+    var head = ['日期', '笔数', '应入账金额', '实际入账金额', '手续费', '差异金额', '对账状态', '结算周期', '结算凭证号'];
+    var lines = [head].concat(rows.map(function(g){
+      return [g.day, nz(g.count), nz(g.due).toFixed(2), nz(g.actual).toFixed(2), nz(g.fee).toFixed(2), nz(g.diff).toFixed(2), g.status, g.period, g.voucher];
+    }));
+    var csv = String.fromCharCode(0xfeff) + lines.map(function(r){ // BOM 头防 Excel 乱码
+      return r.map(function(c){ return '"' + String(c).replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+    var d = new Date();
+    var fname = 'ucard-finance-' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '.csv';
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1200);
+    toast('已导出 ' + fname + ' · ' + (RECON_LABEL[RECON_TYPE] || '') + ' ' + rows.length + ' 天');
+  };
+  if (RECON_CACHE && RECON_CACHE.length) return go(RECON_CACHE);
+  api('/api/admin/finance/recon?type=' + RECON_TYPE).then(function(d){ go(d.groups || []); })
+    .catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 18. 差异清单 ================= */
+LOADERS.financeDiff = function(){
+  $('#diffBody').innerHTML = loadingBox(); $('#diffSum').innerHTML = '';
+  api('/api/admin/finance/diff').then(function(d){
+    var rows = d.list || [], s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#diffSum').innerHTML =
+      sc('🔍', '#fef3c7', String(nz(s.count)), '差异分组数(充值+消费+退款)') +
+      sc('⚖️', '#fee2e2', fmtMoney(nz(s.totalDiff)), '差异金额合计(渠道少入账)') +
+      sc('🎯', '#e0e7ff', rows.length ? Math.round(nz(s.totalDiff) / rows.length * 100) / 100 : 0, '平均单组差异');
+    if (!rows.length){ $('#diffBody').innerHTML = emptyBox('三类对账全部打平, 无差异'); return; }
+    var html = rows.map(function(r){
+      return '<tr>' +
+        '<td><span class="pill pill-indigo">' + esc(r.typeLabel) + '</span></td>' +
+        '<td class="num"><b>' + esc(r.day) + '</b></td>' +
+        '<td class="num">' + nz(r.count) + '</td>' +
+        '<td class="num">' + fmtMoney(r.due) + '</td>' +
+        '<td class="num">' + fmtMoney(r.actual) + '</td>' +
+        '<td class="num" style="font-weight:700;color:var(--bad)">' + fmtMoney(r.diff) + '</td>' +
+        '<td><span class="pill pill-amber">' + esc(r.reason || '待核实') + '</span></td>' +
+        '<td class="dim num">' + esc(r.period) + '</td>' +
+        '<td class="dim num">' + esc(r.voucher) + '</td></tr>';
+    }).join('');
+    $('#diffBody').innerHTML = '<table><thead><tr><th>对账类型</th><th>日期</th><th>笔数</th><th>应入账</th><th>实际入账</th><th>差异金额</th><th>差异原因</th><th>结算周期</th><th>结算凭证号</th></tr></thead><tbody>' + html + '</tbody></table>';
+  }).catch(function(e){ $('#diffBody').innerHTML = errBox(e); });
+};
+
+/* ================= 19. 商户结算 ================= */
+LOADERS.merchant = function(){
+  $('#merchantBody').innerHTML = loadingBox(); $('#merchantSum').innerHTML = '';
+  api('/api/admin/finance/merchant').then(function(d){
+    var list = d.list || [], s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#merchantSum').innerHTML =
+      sc('🏪', '#e0e7ff', String(nz(s.merchants)), '合作商户') +
+      sc('🛍️', '#e0f2fe', fmtMoney0(nz(s.consumeAmt)), '累计消费额 · 手续费 ' + fmtMoney0(nz(s.fee)) + ' (2%)') +
+      sc('💰', '#dcfce7', fmtMoney0(nz(s.net)), '应结算净额合计') +
+      sc('⏳', '#fef3c7', String(nz(s.pending)) + ' 家', '待结算 · 净额 ' + fmtMoney0(nz(s.pendingNet)));
+    if (!list.length){ $('#merchantBody').innerHTML = emptyBox('暂无商户消费数据'); return; }
+    var rows = list.map(function(r){
+      return '<tr>' +
+        '<td><b>' + esc(r.merchant) + '</b></td>' +
+        '<td class="num">' + nz(r.txCount) + '</td>' +
+        '<td class="num">' + fmtMoney(r.consumeAmt) + '</td>' +
+        '<td class="num dim">' + fmtMoney(r.fee) + '</td>' +
+        '<td class="num" style="font-weight:600">' + fmtMoney(r.net) + '</td>' +
+        '<td>' + (r.settled ? '<span class="pill pill-green">已结算</span>' : '<span class="pill pill-amber">待结算</span>') + '</td>' +
+        '<td class="dim num">' + esc(r.period) + '</td>' +
+        '<td class="dim num">' + esc(r.voucher) + '</td>' +
+        '<td class="dim num">' + fmtTime(r.lastTxAt) + '</td>' +
+        '<td><button class="' + (r.settled ? 'btn-outline btn-sm' : 'btn-ok-sm') + '" onclick="settleMerchant(\'' + encodeURIComponent(r.merchant) + '\',' + r.settled + ')">' + (r.settled ? '取消结算' : '标记已结算') + '</button></td></tr>';
+    }).join('');
+    $('#merchantBody').innerHTML = '<table><thead><tr><th>商户</th><th>交易笔数</th><th>消费额</th><th>平台手续费</th><th>应结算净额</th><th>结算状态</th><th>结算周期</th><th>结算凭证号</th><th>最近交易</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#merchantBody').innerHTML = errBox(e); });
+};
+function settleMerchant(nameEnc, wasSettled){
+  patch('/api/admin/finance/merchant/' + nameEnc, { settled: !wasSettled }).then(function(r){
+    toast(wasSettled ? '已取消结算: ' + r.row.merchant : '已标记结算: ' + r.row.merchant + ' · 净额 ' + fmtMoney(r.row.net));
+    LOADERS.merchant();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 20. 财务报表 ================= */
+LOADERS.financeReport = function(){
+  $('#reportSum').innerHTML = ''; $('#reportRecon').innerHTML = loadingBox(); $('#reportMerchant').innerHTML = loadingBox();
+  api('/api/admin/finance/report').then(function(d){
+    $('#reportMonth').textContent = '统计月份 ' + esc(d.month) + ' · 净收入 = 消费手续费 + 充值手续费 - 佣金支出';
+    var sc = function(ic, bg, v, k, style){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num"' + (style || '') + '>' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#reportSum').innerHTML =
+      sc('⬆️', '#dcfce7', fmtMoney0(nz(d.topup && d.topup.amount)), '月度充值 · ' + nz(d.topup && d.topup.count) + ' 笔') +
+      sc('🛍️', '#e0f2fe', fmtMoney0(nz(d.consume && d.consume.amount)), '月度消费 · ' + nz(d.consume && d.consume.count) + ' 笔') +
+      sc('↩️', '#fee2e2', fmtMoney0(nz(d.refund && d.refund.amount)), '月度退款 · ' + nz(d.refund && d.refund.count) + ' 笔') +
+      sc('🧾', '#fef3c7', fmtMoney0(nz(d.feeIncome && d.feeIncome.total)), '手续费收入 (充 ' + fmtMoney0(nz(d.feeIncome && d.feeIncome.topup)) + ' + 消 ' + fmtMoney0(nz(d.feeIncome && d.feeIncome.consume)) + ')') +
+      sc('💼', '#f3e8ff', fmtMoney0(nz(d.commissionPaid)), '佣金支出') +
+      sc('📈', nz(d.netIncome) >= 0 ? '#dcfce7' : '#fee2e2', fmtMoney(nz(d.netIncome)), '净收入', nz(d.netIncome) >= 0 ? '' : 'color:var(--bad)');
+    var rc = d.recon || [];
+    $('#reportRecon').innerHTML = '<div class="card-title">对账概况(近 30 天)</div><div class="card-sub">按天分组 · 差异=渠道回执与平台口径的偏差</div>' +
+      '<div class="tbl-wrap"><table><thead><tr><th>对账类型</th><th>分组天数</th><th>差异天数</th><th>差异金额</th></tr></thead><tbody>' +
+      (rc.length ? rc.map(function(r){
+        return '<tr><td><span class="pill pill-indigo">' + esc(r.typeLabel) + '</span></td><td class="num">' + nz(r.days) + '</td>' +
+          '<td>' + (nz(r.diffDays) ? '<span class="pill pill-amber num">' + nz(r.diffDays) + ' 天</span>' : '<span class="pill pill-green">无差异</span>') + '</td>' +
+          '<td class="num" style="color:' + (nz(r.diffTotal) ? 'var(--bad)' : 'var(--ink3)') + '">' + fmtMoney(nz(r.diffTotal)) + '</td></tr>';
+      }).join('') : '<tr><td colspan="4" class="empty">暂无对账数据</td></tr>') + '</tbody></table></div>';
+    var m = d.merchant || {};
+    $('#reportMerchant').innerHTML = '<div class="card-title">商户结算概况</div><div class="card-sub">T+2 · 平台手续费 2%</div>' +
+      '<div class="kyc-meta">合作商户 <b>' + nz(m.total) + '</b> 家<br>待结算 <b>' + nz(m.pending) + '</b> 家<br>待结算净额 <b class="num">' + fmtMoney(nz(m.pendingNet)) + '</b></div>' +
+      '<div style="margin-top:10px"><a class="btn-outline btn-sm" href="#merchant" style="display:inline-block" onclick="closeDrawer()">去商户结算页处理 ›</a></div>';
+  }).catch(function(e){ $('#reportSum').innerHTML = ''; $('#reportRecon').innerHTML = errBox(e); $('#reportMerchant').innerHTML = ''; });
+};
 
 /* ================= 登录 / 身份 ================= */
 function renderAccounts(list){
