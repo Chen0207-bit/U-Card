@@ -31,7 +31,8 @@ const server = http.createServer(async (req, res) => {
       : p === '/app' ? (/Mobile|Android|iPhone/i.test(req.headers['user-agent'] || '') ? '/app.html' : '/app-pc.html')
       : p === '/app/select' ? '/app-select.html'
       : (p === '/app/m' || p === '/app/mobile') ? '/app.html'
-      : p === '/app/pc' ? '/app-pc.html' : p;
+      : p === '/app/pc' ? '/app-pc.html'
+      : p === '/merchant' ? '/merchant.html' : p;
     const fp = path.join(__dirname, 'public', file);
     if (!fp.startsWith(path.join(__dirname, 'public'))) { res.writeHead(403); return res.end('403'); }
     if (!fs.existsSync(fp) || fs.statSync(fp).isDirectory()) { res.writeHead(404); return res.end('404'); }

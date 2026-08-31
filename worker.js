@@ -28,6 +28,8 @@ export default {
       else if (url.pathname === '/app/select') url.pathname = '/app-select.html';
       else if (url.pathname === '/app/m' || url.pathname === '/app/mobile') url.pathname = '/app.html';
       else if (url.pathname === '/app/pc') url.pathname = '/app-pc.html';
+      // 商户端门户
+      else if (url.pathname === '/merchant') url.pathname = '/merchant.html';
       return env.ASSETS.fetch(new Request(url, req));
     } catch (e) {
       return new Response('worker error: ' + String(e), { status: 500 });
