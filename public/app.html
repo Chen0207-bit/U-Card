@@ -260,6 +260,79 @@ body{min-height:100vh;background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%)
 .invrow i{font-style:normal;color:var(--ok);font-weight:700}
 .invtot{border-top:1px dashed var(--line);margin-top:4px;padding-top:9px;font-size:12px;color:#475569;text-align:right}
 .ver{text-align:center;color:#94a3b8;font-size:10.5px;padding:16px 0 6px}
+/* ---- P2: 商城筛选/评分 ---- */
+.tab em.tl{font-style:normal}
+.chiprow{display:flex;gap:7px;overflow-x:auto;padding:2px 0 4px}
+.mchip{flex:none;padding:7px 14px;border-radius:999px;background:#fff;border:1.5px solid var(--line);color:#475569;font-size:12px;font-weight:700;cursor:pointer}
+.mchip.on{background:#eef2ff;border-color:#c7d2fe;color:#4338ca}
+.sch{margin-bottom:9px;background:#fff;border-radius:12px;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.prate{font-size:11px;color:#b45309;margin-top:3px}
+.prate .dim{color:#94a3b8}
+.plimit{display:inline-block;background:#fef3c7;color:#b45309;font-size:10px;padding:2px 7px;border-radius:6px;margin:4px 0 2px}
+/* ---- P2: 积分中心 ---- */
+.p3cards{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:9px}
+.p3c{background:#fff;border-radius:14px;padding:12px;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.p3c label{font-size:10px;color:var(--mut);font-weight:700;display:block}
+.p3c b{font-size:19px;display:block;margin-top:4px;color:#334155}
+.p3c.main{background:linear-gradient(135deg,var(--pri),var(--pri2));}
+.p3c.main label,.p3c.main span{color:rgba(255,255,255,.8)}
+.p3c.main b{color:#fff;font-size:23px}
+.p3c span{font-size:9.5px;color:#94a3b8;display:block;margin-top:3px}
+.p3c.warn b{color:var(--bad)}
+.srcrow{display:flex;align-items:center;gap:9px;padding:6px 0}
+.srcname{width:74px;flex:none;font-size:11.5px;color:#475569;font-weight:600}
+.srcbar{flex:1;height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden}
+.srcbar i{display:block;height:100%;border-radius:4px}
+.srcrow>b{width:70px;flex:none;text-align:right;font-size:12px}
+/* ---- P2: 设置列表 / 通知 / FAQ / 客服 ---- */
+.mrow{display:flex;align-items:center;gap:11px;padding:13px 2px;border-top:1px solid #f1f5f9;cursor:pointer;font-size:13.5px;color:var(--ink)}
+.mrow:first-of-type{border-top:none}
+.mrow .mico{width:34px;height:34px;border-radius:11px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+.mrow .mtxt{flex:1;min-width:0}
+.mrow .mtxt b{display:block;font-size:13.5px}
+.mrow .mtxt span{display:block;font-size:10.5px;color:var(--mut);margin-top:1px}
+.mrow .mval{font-size:11.5px;color:var(--mut);flex:none}
+.mrow .arr{color:#cbd5e1;font-size:16px;flex:none}
+.dotred{width:8px;height:8px;border-radius:50%;background:var(--bad);display:inline-block;flex:none}
+.ntf{padding:11px 2px;border-top:1px solid #f1f5f9;display:flex;gap:10px;cursor:pointer}
+.ntf .nico{width:36px;height:36px;border-radius:12px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px;flex:none}
+.ntf.unread{background:#f8faff;margin:0 -8px;padding:11px 8px;border-radius:10px}
+.ntf .nmain{flex:1;min-width:0}
+.ntf .nmain b{font-size:13px;display:flex;align-items:center;gap:6px}
+.ntf .nmain p{margin:3px 0 0;font-size:11.5px;color:var(--mut);line-height:1.5}
+.ntf .nmain em{font-style:normal;font-size:10.5px;color:#94a3b8}
+.ntag{font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:700;flex:none}
+.ntag.交易{background:#dbeafe;color:#1d4ed8}
+.ntag.系统{background:#f1f5f9;color:#475569}
+.ntag.营销{background:#fef3c7;color:#b45309}
+.ntop{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ntop .mini{margin-top:0}
+details.faq{background:#fff;border-radius:14px;box-shadow:0 4px 14px rgba(15,23,42,.05);margin-bottom:10px;overflow:hidden}
+details.faq summary{padding:13px 14px;font-size:13.5px;font-weight:700;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary::after{content:'+';color:var(--pri);font-size:17px;font-weight:800}
+details.faq[open] summary::after{content:'–'}
+details.faq .fabody{padding:0 14px 13px;font-size:12px;color:var(--mut);line-height:1.8}
+.svcard{background:#fff;border-radius:16px;padding:22px 16px;text-align:center;box-shadow:0 4px 14px rgba(15,23,42,.05)}
+.svav{width:68px;height:68px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 10px}
+.sv-on{font-size:11px;color:var(--ok);font-weight:700}
+.qbtns{display:flex;flex-direction:column;gap:8px;margin-top:14px;text-align:left}
+.qbtns .qb{background:#f8fafc;border:1.5px dashed var(--line);border-radius:11px;padding:11px 13px;font-size:12.5px;color:#475569;cursor:pointer}
+.langseg{display:flex;background:#f1f5f9;border-radius:12px;padding:3px;gap:3px;margin-bottom:6px}
+.langseg>div{flex:1;text-align:center;padding:10px;border-radius:9px;font-size:13.5px;font-weight:700;cursor:pointer;color:var(--mut)}
+.langseg>div.on{background:#fff;color:var(--pri);box-shadow:0 2px 8px rgba(15,23,42,.08)}
+/* ---- P2: 订单动作 / 评价星星 ---- */
+.oacts{margin-top:11px;padding-top:11px;border-top:1px dashed var(--line);display:flex;gap:8px;flex-wrap:wrap}
+.obtn{border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.obtn.warn{border-color:#fde68a;color:#b45309;background:#fffbeb}
+.obtn.ok{border-color:#a7f3d0;color:#15803d;background:#f0fdf4}
+.obtn.danger{border-color:#fecaca;color:#b91c1c;background:#fef2f2}
+.pill.mut{background:#f1f5f9;color:#64748b}
+.pill.bad{background:#fee2e2;color:#b91c1c}
+.oreview{margin-top:11px;padding-top:11px;border-top:1px dashed var(--line);font-size:12px;color:#475569;line-height:1.7}
+.starpick{display:flex;justify-content:center;gap:8px;margin:12px 0 4px}
+.starpick span{font-size:30px;cursor:pointer;color:#cbd5e1;transition:.12s}
+.starpick span.on{color:#f59e0b}
 /* ---- toast ---- */
 .toast{position:absolute;top:14px;left:50%;transform:translate(-50%,-90px);z-index:99;transition:transform .32s cubic-bezier(.2,.9,.3,1.2),opacity .3s;opacity:0;background:#111827;color:#fff;padding:10px 16px;border-radius:12px;font-size:12.5px;max-width:86%;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.35);line-height:1.5;pointer-events:none}
 .toast.on{transform:translate(-50%,0);opacity:1}
@@ -290,11 +363,11 @@ body{min-height:100vh;background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%)
     <main class="view" id="v-order"></main>
     <main class="view" id="v-me"></main>
     <nav class="tabbar">
-      <div class="tab on" data-t="card" onclick="switchTab('card')"><span>💳</span>卡包</div>
-      <div class="tab" data-t="mall" onclick="switchTab('mall')"><span>🛒</span>商城</div>
-      <div class="tab" data-t="task" onclick="switchTab('task')"><span>🎯</span>任务</div>
-      <div class="tab" data-t="order" onclick="switchTab('order')"><span>📦</span>订单</div>
-      <div class="tab" data-t="me" onclick="switchTab('me')"><span>👤</span>我的</div>
+      <div class="tab on" data-t="card" onclick="switchTab('card')"><span>💳</span><em class="tl">卡包</em></div>
+      <div class="tab" data-t="mall" onclick="switchTab('mall')"><span>🛒</span><em class="tl">商城</em></div>
+      <div class="tab" data-t="task" onclick="switchTab('task')"><span>🎯</span><em class="tl">任务</em></div>
+      <div class="tab" data-t="order" onclick="switchTab('order')"><span>📦</span><em class="tl">订单</em></div>
+      <div class="tab" data-t="me" onclick="switchTab('me')" style="position:relative"><span>👤</span><em class="tl">我的</em><i class="dotred" id="meDot" style="position:absolute;top:4px;right:50%;margin-right:-22px;display:none"></i></div>
     </nav>
   </div>
 
@@ -321,7 +394,7 @@ var LEVELS = {
 };
 var KYC_LIM = { 0:[100,300], 1:[1000,3000], 2:[10000,50000] };
 var WALLET = '0x3f8aC92bD14e67B05F3a2C9d84e06b175d3f9c2B';
-var OSTAT = { pending:['待发货','warn'], shipped:['已发货','info'], redeemed:['已核销','ok'] };
+var OSTAT = { pending:['待发货','warn'], shipped:['已发货','info'], redeemed:['已核销','ok'], cancelled:['已取消','mut'], aftersale:['售后中','bad'] };
 var PICO = {'每日签到':'📅','消费返积分':'🛍️','充值奖励':'💰','消费抵扣':'➕','商城兑换':'🛒','KYC 认证奖励':'🪪','任务奖励':'🎯','运营发放':'🎁'};
 var CATG = {
   '充值券':'linear-gradient(135deg,#06b6d4,#2563eb)', '卡券':'linear-gradient(135deg,#f59e0b,#ea580c)',
@@ -331,7 +404,8 @@ var CATG = {
 var AVS = ['🧑🏽‍💼','👩🏽‍💻','🧕🏽','👨🏽‍🦱','👱🏽','🤵🏽','👨🏽‍🍳','👩🏽‍🎓','🧔🏽','👸🏽','🤠','💁🏽‍♀️'];
 
 var S = { uid:null, me:null, txs:[], tasks:null, products:[], orders:[], points:[], invite:null,
-          tab:'card', revealed:false, usePts:false, prevBal:0, prevPts:0, claimed:{}, tqMethod:'fiat' };
+          tab:'card', revealed:false, usePts:false, prevBal:0, prevPts:0, claimed:{}, tqMethod:'fiat',
+          categories:['全部'], mallCat:'全部', mallKw:'', psum:null, notif:null, lang: localStorage.getItem('uc_lang') || 'zh', rvStars:5 };
 
 function $(id){ return document.getElementById(id); }
 function p2(n){ return String(n).padStart(2,'0'); }
@@ -345,6 +419,27 @@ function maskCard(no){
 }
 function avatar(s){ var h = 0; for (var ch of String(s)) h = (h*31 + ch.codePointAt(0)) >>> 0; return AVS[h % AVS.length]; }
 function catGrad(c){ return CATG[c] || 'linear-gradient(135deg,#64748b,#475569)'; }
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ---- 语言切换(Demo: 仅 tab 标题与「我的」页标签) ---- */
+function T(zh, en){ return S.lang === 'en' ? (en || zh) : zh; }
+var TAB_T = { card:['卡包','Cards'], mall:['商城','Mall'], task:['任务','Tasks'], order:['订单','Orders'], me:['我的','Me'] };
+function applyLang(){
+  document.querySelectorAll('.tab').forEach(function(el){
+    var t = TAB_T[el.dataset.t]; if (!t) return;
+    var lb = el.querySelector('.tl'); if (lb) lb.textContent = T(t[0], t[1]);
+  });
+  if (S.tab === 'me' && S.me) renderMe();
+}
+function setLang(l){
+  S.lang = l; localStorage.setItem('uc_lang', l);
+  applyLang();
+  toast(l === 'en' ? 'Language switched to English' : '已切换为中文', 'ok');
+}
+function starsHtml(n){
+  n = Math.max(0, Math.min(5, Math.round(n)));
+  return '<span style="color:#f59e0b;letter-spacing:1px">' + '★★★★★'.slice(0, n) + '</span><span style="color:#cbd5e1;letter-spacing:1px">' + '★★★★★'.slice(0, 5 - n) + '</span>';
+}
 
 async function api(path, opts){
   opts = opts || {};
@@ -444,6 +539,7 @@ async function boot(){
   if (!await loadMe()) return;
   $('loginView').style.display = 'none';
   $('appView').style.display = 'block';
+  applyLang();
   switchTab('card');
 }
 
@@ -460,10 +556,18 @@ async function switchTab(t){
   document.querySelectorAll('.view').forEach(function(el){ el.classList.toggle('on', el.id === 'v-' + t); });
   try {
     if (t === 'card') { await refreshCard(false); }
-    else if (t === 'mall') { S.products = await api('/api/app/products') || []; if (!await loadMe()) return; renderMall(); }
+    else if (t === 'mall') { var mr = await api('/api/app/products') || {}; S.products = mr.products || []; S.categories = mr.categories || ['全部']; if (!await loadMe()) return; renderMall(); }
     else if (t === 'task') { await loadTasks(); if (!await loadMe()) return; renderTask(); }
     else if (t === 'order') { S.orders = await api('/api/app/orders') || []; renderOrders(); }
-    else if (t === 'me') { if (!await loadMe()) return; S.points = await api('/api/app/points') || []; S.invite = await api('/api/app/invite'); renderMe(); }
+    else if (t === 'me') {
+      if (!await loadMe()) return;
+      S.points = await api('/api/app/points') || [];
+      S.psum = await api('/api/app/points/summary');
+      S.invite = await api('/api/app/invite');
+      S.notif = await api('/api/app/notifications');
+      renderMe();
+      var dot = $('meDot'); if (dot) dot.style.display = (S.notif && S.notif.unread > 0) ? 'inline-block' : 'none';
+    }
   } catch(e) { toast('网络错误，请确认后端已启动 (node server.js)', 'err'); }
 }
 </script>
@@ -541,10 +645,46 @@ async function openTxAll(){
   S.txs = await api('/api/app/transactions') || [];
   openPage('全部交易 · ' + S.txs.length + ' 笔', S.txs.map(txRowFull).join('') || '<div class="empty-s">暂无交易</div>');
 }
+/* ---- 积分中心 ---- */
+function srcBarsHtml(by){
+  by = by || {};
+  var CLR = { '消费返积分':'#6366f1', '充值奖励':'#0ea5e9', '签到':'#f59e0b', '任务与其他':'#10b981', '兑换与抵扣':'#f43f5e' };
+  var keys = Object.keys(by);
+  var max = 1;
+  keys.forEach(function(k){ max = Math.max(max, Math.abs(by[k] || 0)); });
+  return keys.map(function(k){
+    var v = by[k] || 0;
+    return '<div class="srcrow"><span class="srcname">' + k + '</span>' +
+      '<div class="srcbar"><i style="width:' + Math.round(Math.abs(v) / max * 100) + '%;background:' + (CLR[k] || '#94a3b8') + '"></i></div>' +
+      '<b class="' + (v < 0 ? 'dn' : 'up') + '">' + (v > 0 ? '+' : '') + fmtPts(v) + '</b></div>';
+  }).join('');
+}
+function pointsCenterHtml(sum){
+  sum = sum || {};
+  return '<div class="p3cards">' +
+      '<div class="p3c main"><label>可用积分</label><b>' + fmtPts(sum.available) + '</b><span>100 分 = $1</span></div>' +
+      '<div class="p3c"><label>冻结中</label><b>' + fmtPts(sum.frozen) + '</b><span>当月获得 10%</span></div>' +
+      '<div class="p3c warn"><label>即将过期</label><b>' + fmtPts(sum.expiringSoon) + '</b><span>30 天内到期</span></div>' +
+    '</div>' +
+    '<div class="panel" style="margin-top:12px"><div class="phead">来源与消耗分布</div>' +
+      srcBarsHtml(sum.bySource) +
+      '<div class="sh-note">累计获得 ' + fmtPts(sum.total) + ' 分 · 每笔积分 90 天有效期</div>' +
+    '</div>' +
+    '<details class="faq"><summary>📖 积分规则说明</summary><div class="fabody">' +
+      '· 消费返积分： 1 USD = 10 分 × 卡等级倍率 (标准 1x / 金卡 1.5x / 白金 2x)<br>' +
+      '· 充值奖励： 每 1 USD 返 5 分<br>' +
+      '· 积分抵扣： 100 分 = $1, 单笔最多抵扣消费金额 30%<br>' +
+      '· 有效期： 每笔积分获得后 90 天内有效， 到期自动清零<br>' +
+      '· 签到 / 任务 / KYC 认证 / 邀请好友均可额外获得积分' +
+    '</div></details>' +
+    '<div class="panel" style="margin-top:2px"><div class="phead">积分明细</div>' +
+      (S.points.map(pointsRow).join('') || '<div class="empty-s">暂无积分记录</div>') +
+    '</div>';
+}
 async function openPoints(){
   S.points = await api('/api/app/points') || [];
-  openPage('积分明细', '<div class="ptshead">当前积分<b>' + fmtPts(S.me.points) + '</b>分</div>' +
-    (S.points.map(pointsRow).join('') || '<div class="empty-s">暂无积分记录</div>'));
+  S.psum = await api('/api/app/points/summary');
+  openPage('积分中心', pointsCenterHtml(S.psum));
 }
 
 /* ---- 充值 ---- */
@@ -717,11 +857,21 @@ function prodCard(p){
     '<div class="ppic" style="background:' + catGrad(p.category) + '">' + p.icon +
       (p.stock <= 0 ? '<span class="soldout">已兑完</span>' : (low ? '<span class="lowstock">仅剩 ' + p.stock + ' 件</span>' : '')) +
     '</div>' +
-    '<div class="pbody"><b>' + p.name + '</b>' +
-      '<div class="pcat">' + p.category + '</div>' +
+    '<div class="pbody"><b>' + esc(p.name) + '</b>' +
+      '<div class="pcat">' + esc(p.category) + '</div>' +
+      (p.rating ? '<div class="prate">⭐ ' + p.rating.avg + ' <span class="dim">· ' + p.rating.count + ' 条评价</span></div>' : '') +
       '<div class="pprice">🪙 ' + fmtPts(p.points) + ' 分</div>' +
       '<div class="pcash">' + (p.cash ? ('+$' + p.cash + ' 现金加价') : '纯积分兑换') + '</div>' +
     '</div></div>';
+}
+function mallListHtml(){
+  var kw = (S.mallKw || '').toLowerCase();
+  var list = S.products.filter(function(p){
+    if (S.mallCat !== '全部' && p.category !== S.mallCat) return false;
+    if (kw && p.name.toLowerCase().indexOf(kw) < 0) return false;
+    return true;
+  });
+  return list.length ? list.map(prodCard).join('') : '<div class="empty-s">没有匹配的商品，换个分类或关键词试试</div>';
 }
 function renderMall(){
   $('v-mall').innerHTML =
@@ -729,31 +879,60 @@ function renderMall(){
       '<div><label>我的积分 · POINTS</label><b><span id="mallPts">' + fmtPts(S.me.points) + '</span> 分</b></div>' +
       '<div class="goTask" onclick="switchTab(\'task\')">🎯 去赚积分 ›</div>' +
     '</div></div>' +
-    '<div class="sec"><div class="pgrid">' + (S.products.map(prodCard).join('') || '<div class="empty-s">商城暂无商品</div>') + '</div></div>';
+    '<div class="sec"><input class="inp sch" placeholder="🔍 搜索商品名称" value="' + esc(S.mallKw) + '" oninput="setMallKw(this.value)">' +
+      '<div class="chiprow">' + (S.categories || ['全部']).map(function(c){
+        return '<span class="mchip' + (S.mallCat === c ? ' on' : '') + '" onclick="setMallCat(\'' + esc(c) + '\')">' + esc(c) + '</span>';
+      }).join('') + '</div>' +
+    '</div>' +
+    '<div class="sec"><div class="pgrid" id="mallGrid">' + mallListHtml() + '</div></div>';
 }
+function setMallKw(v){ S.mallKw = v; var g = $('mallGrid'); if (g) g.innerHTML = mallListHtml(); }
+function setMallCat(c){ S.mallCat = c; renderMall(); }
 function openProduct(id){
   var p = S.products.find(function(x){ return x.id === id; });
   if (!p) return;
   if (p.stock <= 0) { toast('该商品已兑完', 'err'); return; }
+  var enough = S.me.points >= p.points;
   openSheet(
     '<div class="pdetail">' +
       '<div class="pdbig" style="background:' + catGrad(p.category) + '">' + p.icon + '</div>' +
-      '<div class="pdname">' + p.name + '<span class="pcat">' + p.category + '</span></div>' +
-      '<div class="pddesc">' + (p.desc || '') + '</div>' +
+      '<div class="pdname">' + esc(p.name) + '<span class="pcat">' + esc(p.category) + '</span></div>' +
+      (p.rating ? '<div class="prate" style="font-size:12.5px;margin-top:5px">' + starsHtml(p.rating.avg) + ' ' + p.rating.avg + ' <span class="dim">· ' + p.rating.count + ' 条评价</span></div>' : '') +
+      '<div class="pddesc">' + esc(p.desc || '') + '</div>' +
       '<div class="pdprice">🪙 <b>' + fmtPts(p.points) + '</b> 积分<em>' + (p.cash ? ('+ $' + p.cash + ' 现金加价') : '纯积分') + '</em></div>' +
       '<div class="pdrules"><div class="phead">兑换须知</div>' +
+        '· 库存： ' + p.stock + ' 件' + (p.stock <= 15 ? ' (手慢无)' : '') + '<br>' +
+        '· 限购： ' + (p.limitPerUser > 0 ? ('每人限兑 ' + p.limitPerUser + ' 件') : '不限购') + '<br>' +
         '· 卡券 / 充值券 / 权益类兑换后立即生成核销码<br>' +
         '· 实物类商品 3-7 个工作日发货， 发货后可在订单页查看物流<br>' +
-        '· 积分一经兑换不予退还' + (p.cash ? '<br>· 演示环境： 现金加价部分不实际扣款' : '') + '</div>' +
-      '<div class="sh-note">当前积分 ' + fmtPts(S.me.points) + ' 分 · 库存 ' + p.stock + ' 件</div>' +
-      '<button class="btn" onclick="doRedeem(' + p.id + ')">立即兑换 · 🪙 ' + fmtPts(p.points) + ' 分' + (p.cash ? (' + $' + p.cash) : '') + '</button>' +
+        '· 待发货订单可在订单页自助取消， 积分原路退回' + (p.cash ? '<br>· 演示环境： 现金加价部分不实际扣款' : '') + '</div>' +
+      '<div class="sh-note">当前积分 ' + fmtPts(S.me.points) + ' 分 · 兑换后剩余 ' + fmtPts(Math.max(0, S.me.points - p.points)) + ' 分</div>' +
+      '<button class="btn"' + (!enough ? ' disabled' : '') + ' onclick="confirmRedeem(' + p.id + ')">' +
+        (enough ? '立即兑换 · 🪙 ' + fmtPts(p.points) + ' 分' + (p.cash ? (' & $' + p.cash) : '') : '积分不足 (还差 ' + fmtPts(p.points - S.me.points) + ' 分)') + '</button>' +
     '</div>');
+}
+function confirmRedeem(id){
+  var p = S.products.find(function(x){ return x.id === id; });
+  if (!p) return;
+  openSheet(
+    '<div class="sh-title">确认兑换</div>' +
+    '<div class="estbox" style="font-size:13px">' +
+      '商品： <b>' + esc(p.name) + '</b><br>' +
+      '本次扣除： <b>🪙 ' + fmtPts(p.points) + ' 分</b>' + (p.cash ? (' + $' + p.cash + ' 现金加价') : '') + '<br>' +
+      '积分变动： ' + fmtPts(S.me.points) + ' 分 → <b>' + fmtPts(S.me.points - p.points) + ' 分</b>' +
+      (p.limitPerUser > 0 ? '<br>限购： 每人限兑 ' + p.limitPerUser + ' 件' : '') +
+    '</div>' +
+    '<div class="sh-note">积分一经兑换不予退还 (待发货实物订单可在订单页取消， 积分原路退回)。</div>' +
+    '<button class="btn" onclick="doRedeem(' + p.id + ')">✅ 确认扣分兑换</button>' +
+    '<button class="btn ghost" onclick="closeSheet()">再想想</button>');
 }
 async function doRedeem(id){
   var r = await api('/api/app/redeem', { method:'POST', body: JSON.stringify({ id: id }) });
   if (r.error) { toast(r.error, 'err'); return; }
   closeSheet();
-  S.products = await api('/api/app/products') || [];
+  var pr = await api('/api/app/products') || {};
+  S.products = pr.products || [];
+  S.categories = pr.categories || ['全部'];
   if (!await loadMe()) return;
   renderMall();
   var p = S.products.find(function(x){ return x.id === id; });
@@ -817,11 +996,15 @@ async function claimTask(id){
 /* ================= Tab4 订单 ================= */
 function orderRow(o){
   var st = OSTAT[o.status] || ['未知', 'warn'];
+  var acts = '';
+  if (o.status === 'pending') acts += '<button class="obtn danger" onclick="openCancel(' + o.id + ')">取消订单</button>';
+  if (o.status === 'shipped' || o.status === 'redeemed') acts += '<button class="obtn warn" onclick="openAftersale(' + o.id + ')">申请售后</button>';
+  if (o.status === 'redeemed' && !o.review) acts += '<button class="obtn ok" onclick="openReview(' + o.id + ')">⭐ 评价</button>';
   return '<div class="panel ocard">' +
     '<div class="ohead">' +
       '<div class="oico">' + (o.product ? o.product.icon : '🎁') + '</div>' +
-      '<div class="omain"><b>' + (o.product ? o.product.name : '商品') + '</b>' +
-        '<span>-' + fmtPts(o.pointsCost) + ' 积分 · ' + fmtTime(o.createdAt) + '</span></div>' +
+      '<div class="omain"><b>' + (o.product ? esc(o.product.name) : '商品') + '</b>' +
+        '<span>-' + fmtPts(o.pointsCost) + ' 积分 · ' + fmtTime(o.createdAt) + ' · #' + o.id + '</span></div>' +
       '<span class="pill ' + st[1] + '">' + st[0] + '</span>' +
     '</div>' +
     (o.status === 'shipped' && o.trackingNo
@@ -830,6 +1013,13 @@ function orderRow(o){
     (o.status === 'redeemed' && o.redeemCode
       ? '<div class="rcode"><span>核销码</span><b>' + o.redeemCode + '</b>' +
         '<button class="copybtn sm" onclick="copyText(\'' + o.redeemCode + '\',\'核销码已复制\')">复制</button></div>' : '') +
+    (o.aftersale
+      ? '<div class="oline">🛠 售后单号 <code>' + o.aftersale.no + '</code> · ' + esc(o.aftersale.type) +
+        (o.aftersale.reason ? ' · ' + esc(o.aftersale.reason) : '') + '</div>' : '') +
+    (o.review
+      ? '<div class="oreview">我的评价： ' + starsHtml(o.review.stars) + ' ' + o.review.stars + ' 分<br>' +
+        (o.review.text ? '<span style="color:var(--mut)">' + esc(o.review.text) + '</span>' : '') + '</div>' : '') +
+    (acts ? '<div class="oacts">' + acts + '</div>' : '') +
   '</div>';
 }
 function renderOrders(){
@@ -839,6 +1029,79 @@ function renderOrders(){
     return;
   }
   $('v-order').innerHTML = '<div style="height:12px"></div><div class="sec">' + S.orders.map(orderRow).join('') + '</div>';
+}
+async function refreshOrders(){
+  S.orders = await api('/api/app/orders') || [];
+  if (!await loadMe()) return;
+  renderOrders();
+}
+/* ---- 取消订单 ---- */
+function openCancel(id){
+  var o = S.orders.find(function(x){ return x.id === id; });
+  if (!o) return;
+  openSheet(
+    '<div class="sh-title">取消订单</div>' +
+    '<div class="estbox">确认取消订单 #' + o.id + '「' + (o.product ? esc(o.product.name) : '商品') + '」？<br>' +
+      '积分退回： <b>+' + fmtPts(o.pointsCost) + ' 分</b> · 库存将自动回补</div>' +
+    '<button class="btn danger" onclick="doCancel(' + o.id + ')">确认取消</button>' +
+    '<button class="btn ghost" onclick="closeSheet()">不取消了</button>');
+}
+async function doCancel(id){
+  var r = await api('/api/app/orders/cancel', { method:'POST', body: JSON.stringify({ id: id }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  await refreshOrders();
+  toast('订单已取消， ' + fmtPts(r.order.pointsCost) + ' 积分已退回', 'ok');
+}
+/* ---- 申请售后 ---- */
+function openAftersale(id){
+  var o = S.orders.find(function(x){ return x.id === id; });
+  if (!o) return;
+  openSheet(
+    '<div class="sh-title">申请售后 · #' + o.id + '</div>' +
+    '<div class="field"><label>售后类型</label><select id="asType" class="inp">' +
+      ['退货退款', '换货', '补发', '其他'].map(function(t){ return '<option>' + t + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="field"><label>问题描述</label><textarea id="asReason" class="inp" rows="3" placeholder="请描述遇到的问题 (收到破损 / 未收到货 / 与描述不符等)"></textarea></div>' +
+    '<div class="sh-note">提交后客服将在 1-3 个工作日内处理， 处理结果将通过消息通知告知。</div>' +
+    '<button class="btn" onclick="doAftersale(' + o.id + ')">提交售后申请</button>');
+}
+async function doAftersale(id){
+  var r = await api('/api/app/orders/aftersale', { method:'POST', body: JSON.stringify({ id: id, type: $('asType').value, reason: $('asReason').value }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  await refreshOrders();
+  toast('售后申请已提交， 单号 ' + r.order.aftersale.no, 'ok');
+}
+/* ---- 订单评价 ---- */
+function openReview(id){
+  var o = S.orders.find(function(x){ return x.id === id; });
+  if (!o) return;
+  S.rvStars = 5;
+  openSheet(
+    '<div class="sh-title">评价订单 · #' + o.id + '</div>' +
+    '<div class="pddesc" style="margin-bottom:2px">' + (o.product ? esc(o.product.name) : '商品') + '</div>' +
+    '<div class="starpick" id="rvPick">' + [1,2,3,4,5].map(function(n){
+      return '<span class="' + (n <= 5 ? 'on' : '') + '" onclick="setRvStars(' + n + ')">★</span>';
+    }).join('') + '</div>' +
+    '<div style="text-align:center;font-size:12px;color:var(--mut)" id="rvTxt">非常好</div>' +
+    '<div class="field" style="margin-top:10px"><label>评价内容 (可选)</label>' +
+      '<textarea id="rvInput" class="inp" rows="3" maxlength="200" placeholder="说说商品体验吧"></textarea></div>' +
+    '<button class="btn" onclick="doReview(' + o.id + ')">提交评价</button>');
+}
+var RV_TXT = { 1:'很差', 2:'较差', 3:'一般', 4:'满意', 5:'非常好' };
+function setRvStars(n){
+  S.rvStars = n;
+  var pick = $('rvPick');
+  if (pick) [].forEach.call(pick.children, function(el, i){ el.classList.toggle('on', i < n); });
+  if ($('rvTxt')) $('rvTxt').textContent = RV_TXT[n] || '';
+}
+async function doReview(id){
+  var r = await api('/api/app/orders/review', { method:'POST', body: JSON.stringify({ id: id, stars: S.rvStars, text: $('rvInput').value }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  await refreshOrders();
+  toast('评价成功， 感谢你的反馈', 'ok');
 }
 </script>
 <script>
@@ -863,7 +1126,7 @@ function kycSection(){
     btn = '<button class="btn sm" onclick="openKyc()">升级 KYC 至 L' + (lv+1) + '</button>';
   }
   return '<div class="sec"><div class="panel">' +
-    '<div class="phead">KYC 认证' + (st === 'approved' ? '<span class="kbadge">已认证 L' + lv + ' ✅</span>' : '') + '</div>' +
+    '<div class="phead">' + T('KYC 认证','KYC Verification') + (st === 'approved' ? '<span class="kbadge">已认证 L' + lv + ' ✅</span>' : '') + '</div>' +
     '<div class="kdots">' + dots + '</div>' +
     '<table class="lim"><tr><th>等级</th><th>单笔限额</th><th>单日限额</th></tr>' +
       [0,1,2].map(function(l){
@@ -876,7 +1139,7 @@ function kycSection(){
 function inviteSection(){
   var inv = S.invite || { code: '-', link: '-', invited: [], totalReward: 0 };
   return '<div class="sec"><div class="panel">' +
-    '<div class="phead">邀请推广</div>' +
+    '<div class="phead">' + T('邀请推广','Invite & Earn') + '</div>' +
     '<div class="invcode"><label>我的邀请码 · INVITE CODE</label>' +
       '<div class="icrow"><b>' + inv.code + '</b>' +
       '<button class="copybtn" onclick="copyText(\'' + inv.code + '\',\'邀请码已复制\')">复制</button></div>' +
@@ -892,25 +1155,172 @@ function inviteSection(){
       : '<div class="empty-s">还没有好友加入， 快去邀请吧</div>') +
   '</div></div>';
 }
+function settingsRows(unread){
+  return '<div class="mrow" onclick="openNotifs()"><span class="mico">📣</span>' +
+      '<div class="mtxt"><b>' + T('消息通知','Notifications') + '</b><span>' + T('交易 · 系统 · 营销','Tx · System · Promo') + '</span></div>' +
+      (unread ? '<i class="dotred"></i>' : '') + '<span class="arr">›</span></div>' +
+    '<div class="mrow" onclick="openPwd()"><span class="mico">🔒</span>' +
+      '<div class="mtxt"><b>' + T('安全设置','Security') + '</b><span>' + T('修改密码','Change password') + '</span></div><span class="arr">›</span></div>' +
+    '<div class="mrow" onclick="openHelp()"><span class="mico">❓</span>' +
+      '<div class="mtxt"><b>' + T('帮助中心','Help Center') + '</b><span>FAQ</span></div><span class="arr">›</span></div>' +
+    '<div class="mrow" onclick="openService()"><span class="mico">💬</span>' +
+      '<div class="mtxt"><b>' + T('在线客服','Live Support') + '</b><span>9:00 - 18:00</span></div><span class="arr">›</span></div>' +
+    '<div class="mrow" onclick="openLang()"><span class="mico">🌐</span>' +
+      '<div class="mtxt"><b>' + T('语言','Language') + '</b><span>中文 / English</span></div>' +
+      '<span class="mval">' + (S.lang === 'en' ? 'English' : '中文') + '</span><span class="arr">›</span></div>' +
+    '<div class="mrow" onclick="openDelAcc()"><span class="mico">🗑</span>' +
+      '<div class="mtxt"><b>' + T('账号注销','Delete Account') + '</b><span>' + T('注销与数据删除','Deactivate account') + '</span></div><span class="arr">›</span></div>';
+}
 function renderMe(){
-  var me = S.me;
+  var me = S.me, ps = S.psum || {};
+  var unread = (S.notif && S.notif.unread) || 0;
   $('v-me').innerHTML =
     '<div class="mehead">' +
       '<div class="meav">' + avatar(me.name) + '</div>' +
       '<div class="memain"><b>' + me.name + '</b>' +
         '<span>' + me.country + ' · ' + me.city + ' · ' + me.phone + '</span>' +
-        '<span>👤 专属顾问： ' + (me.salesRep || '—') + '</span></div>' +
+        '<span>👤 ' + T('专属顾问： ','Advisor: ') + (me.salesRep || '—') + '</span></div>' +
       '<span class="kpill">KYC L' + me.kycLevel + '</span>' +
     '</div>' +
     kycSection() +
     '<div class="sec"><div class="panel">' +
-      '<div class="phead">我的积分<a onclick="openPoints()">全部明细 ›</a></div>' +
-      '<div class="ptsbig">🪙 <b>' + fmtPts(me.points) + '</b> 分</div>' +
-      (S.points.slice(0, 10).map(pointsRow).join('') || '<div class="empty-s">暂无积分记录</div>') +
+      '<div class="phead">' + T('我的积分','My Points') + '<a onclick="openPoints()">' + T('积分中心 ›','Points Center ›') + '</a></div>' +
+      '<div class="ptsbig">🪙 <b>' + fmtPts(me.points) + '</b> ' + T('分','pts') + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:4px 0 8px">' +
+        '<span class="pcat">' + T('冻结 ','Frozen ') + fmtPts(ps.frozen || 0) + '</span>' +
+        '<span class="pcat" style="background:#fef2f2;color:#b91c1c">' + T('30 天内过期 ','Expiring ') + fmtPts(ps.expiringSoon || 0) + '</span>' +
+        '<span class="pcat">' + T('累计获得 ','Earned ') + fmtPts(ps.total || 0) + '</span>' +
+      '</div>' +
+      (S.points.slice(0, 6).map(pointsRow).join('') || '<div class="empty-s">暂无积分记录</div>') +
     '</div></div>' +
     inviteSection() +
-    '<div class="sec"><button class="btn danger" onclick="logout()">退出登录</button></div>' +
-    '<div class="ver">U-Card App · Demo v1.0</div>';
+    '<div class="sec"><div class="panel">' +
+      '<div class="phead">' + T('设置','Settings') + '</div>' +
+      settingsRows(unread) +
+    '</div></div>' +
+    '<div class="sec"><button class="btn danger" onclick="openLogout()">' + T('退出登录','Log Out') + '</button></div>' +
+    '<div class="ver">U-Card App · Demo v2.0</div>';
+  updateMeDot();
+}
+function updateMeDot(){
+  var dot = $('meDot');
+  if (dot) dot.style.display = (S.notif && S.notif.unread > 0) ? 'inline-block' : 'none';
+}
+
+/* ---- P2.1: 安全设置(修改密码 Demo) ---- */
+function openPwd(){
+  openSheet(
+    '<div class="sh-title">🔒 ' + T('修改密码','Change Password') + '</div>' +
+    '<div class="field"><label>' + T('旧密码','Old password') + '</label><input id="pwOld" class="inp" type="password" placeholder="' + T('请输入旧密码','Enter old password') + '"></div>' +
+    '<div class="field"><label>' + T('新密码','New password') + '</label><input id="pwNew" class="inp" type="password" placeholder="' + T('请输入新密码','Enter new password') + '"></div>' +
+    '<div class="field"><label>' + T('确认新密码','Confirm new password') + '</label><input id="pwNew2" class="inp" type="password" placeholder="' + T('请再次输入新密码','Repeat new password') + '"></div>' +
+    '<div class="sh-note">演示环境： 仅校验非空与两次输入一致， 不做真实鉴权。</div>' +
+    '<button class="btn" onclick="doPwd()">确认修改</button>');
+}
+async function doPwd(){
+  var o = $('pwOld').value, n1 = $('pwNew').value, n2 = $('pwNew2').value;
+  if (!o || !n1) { toast(T('请填写旧密码与新密码','Old and new password required'), 'err'); return; }
+  if (n1 !== n2) { toast(T('两次输入的新密码不一致','New passwords do not match'), 'err'); return; }
+  var r = await api('/api/app/password', { method:'POST', body: JSON.stringify({ oldPassword: o, newPassword: n1, newPassword2: n2 }) });
+  if (r.error) { toast(r.error, 'err'); return; }
+  closeSheet();
+  toast(T('密码修改成功 (Demo)','Password changed (Demo)'), 'ok');
+}
+
+/* ---- P2.1: 消息通知 ---- */
+function ntfRow(m){
+  return '<div class="ntf' + (m.read ? '' : ' unread') + '" onclick="readNotif(\'' + m.id + '\')">' +
+    '<div class="nico">' + m.icon + '</div>' +
+    '<div class="nmain"><b><i class="ntag ' + m.type + '">' + m.type + '</i>' + esc(m.title) + (m.read ? '' : ' <i class="dotred"></i>') + '</b>' +
+      '<p>' + esc(m.body) + '</p><em>' + fmtTime(m.createdAt) + '</em></div></div>';
+}
+function renderNotifs(){
+  var n = S.notif || { list: [], unread: 0 };
+  openPage(T('消息通知','Notifications') + (n.unread ? ' · ' + n.unread + T(' 未读',' unread') : ''),
+    '<div class="ntop"><span style="font-size:11.5px;color:var(--mut)">' + T('共 ','Total ') + n.list.length + T(' 条 · 未读 ',' · unread ') + n.unread + '</span>' +
+      '<button class="mini" onclick="readAllNotifs()">' + T('全部已读','Read all') + '</button></div>' +
+    '<div class="panel" style="padding:6px 12px">' +
+      (n.list.map(ntfRow).join('') || '<div class="empty-s">暂无消息</div>') +
+    '</div>');
+}
+async function openNotifs(){
+  S.notif = await api('/api/app/notifications') || { list: [], unread: 0 };
+  renderNotifs();
+}
+async function readNotif(id){
+  await api('/api/app/notifications/read', { method:'POST', body: JSON.stringify({ id: id }) });
+  var m = (S.notif.list || []).find(function(x){ return x.id === id; });
+  if (m && !m.read) { m.read = true; S.notif.unread = Math.max(0, (S.notif.unread || 0) - 1); }
+  renderNotifs();
+  updateMeDot();
+}
+async function readAllNotifs(){
+  await api('/api/app/notifications/read', { method:'POST', body: JSON.stringify({ all: true }) });
+  (S.notif.list || []).forEach(function(m){ m.read = true; });
+  S.notif.unread = 0;
+  renderNotifs();
+  updateMeDot();
+}
+
+/* ---- P2.1: 帮助中心 FAQ ---- */
+var FAQS = [
+  ['💰 怎么充值？', '进入「卡包」页点击「充值」， 支持银行卡(法币， 2% 手续费)与 USDT-TRC20(1% 手续费)两种方式， 充值实时到账并按 5 分/USD 返积分。'],
+  ['🪙 积分规则是什么？', '消费返积分： 1 USD = 10 分 × 卡等级倍率 (标准 1x / 金卡 1.5x / 白金 2x); 充值返 5 分/USD; 100 分 = $1, 支付时最多抵扣 30%; 每笔积分 90 天有效。'],
+  ['🚨 卡丢了怎么挂失？', '进入「卡包 → 冻结挂失」： 冻结可自助解除； 挂失为更强管控， 充值消费全部阻断， 需运营后台解除或联系客服处理。'],
+  ['📋 交易限额是多少？', 'KYC L0: 单笔 $100 / 单日 $300; L1: $1,000 / $3,000; L2: $10,000 / $50,000。可在「我的」页提交 KYC 升级。'],
+  ['💬 怎么联系客服？', '在线客服工作时间 9:00-18:00, 也可通过帮助中心 FAQ 自助查询； 紧急事项请先冻结卡片再联系客服。'],
+  ['↩️ 兑换的订单能退吗？', '卡券/权益类兑换后即时发放核销码， 不可退； 实物类待发货订单可在「订单」页自助取消， 积分原路退回； 已发货可申请售后。']
+];
+function openHelp(){
+  openPage(T('帮助中心','Help Center'),
+    FAQS.map(function(f){
+      return '<details class="faq"><summary>' + f[0] + '</summary><div class="fabody">' + f[1] + '</div></details>';
+    }).join('') +
+    '<div class="panel" style="padding:13px 14px;font-size:12px;color:var(--mut);line-height:1.8">' +
+      T('没找到答案？','Still need help? ') + '<a style="color:var(--pri);cursor:pointer" onclick="openService()">' + T('联系在线客服 ›','Contact support ›') + '</a></div>');
+}
+
+/* ---- P2.1: 在线客服(占位) ---- */
+function openService(){
+  openPage(T('在线客服','Live Support'),
+    '<div class="svcard">' +
+      '<div class="svav">💁🏽‍♀️</div>' +
+      '<div style="font-size:16px;font-weight:800">' + T('U-Card 官方客服','U-Card Support') + '</div>' +
+      '<div class="sv-on" style="margin-top:4px">🟢 ' + T('9:00 - 18:00 在线','Online 9:00 - 18:00') + '</div>' +
+      '<div style="font-size:11.5px;color:var(--mut);margin-top:6px">' + T('平均响应 2 分钟 · 演示环境未接入真实会话','Avg. reply 2 min · Demo, no live chat') + '</div>' +
+      '<div class="qbtns">' +
+        ['怎么充值？','积分规则是什么？','卡丢了怎么挂失？','交易限额是多少？'].map(function(q){
+          return '<div class="qb" onclick="toast(\'Demo: 请转帮助中心查看该问题答案\',\'ok\')">💬 ' + q + '</div>';
+        }).join('') +
+      '</div>' +
+      '<button class="btn ghost" style="margin-top:12px" onclick="openHelp()">' + T('先看常见问题 FAQ','Browse FAQ first') + '</button>' +
+    '</div>');
+}
+
+/* ---- P2.1: 语言切换 / 账号注销 / 退出登录 ---- */
+function openLang(){
+  openSheet(
+    '<div class="sh-title">🌐 ' + T('语言','Language') + '</div>' +
+    '<div class="langseg">' +
+      '<div class="' + (S.lang === 'zh' ? 'on' : '') + '" onclick="setLang(\'zh\')">🇨🇳 简体中文</div>' +
+      '<div class="' + (S.lang === 'en' ? 'on' : '') + '" onclick="setLang(\'en\')">🇬🇧 English</div>' +
+    '</div>' +
+    '<div class="sh-note">Demo: ' + T('仅切换底部导航与「我的」页关键文案', 'switches nav tabs and Profile labels only') + '</div>' +
+    '<button class="btn ghost" onclick="closeSheet()">关闭</button>');
+}
+function openDelAcc(){
+  openSheet(
+    '<div class="sh-title">🗑 ' + T('账号注销','Delete Account') + '</div>' +
+    '<div class="kycst bad" style="margin-top:0">⚠️ ' + T('演示环境不支持注销账号。','Account deletion is not supported in this demo.') + '</div>' +
+    '<div class="sh-note">正式环境中注销需满足： 无未完成订单 / 无未结算余额与积分 / 无进行中的售后。如需清理演示数据， 可由运营后台重置演示数据。</div>' +
+    '<button class="btn ghost" onclick="closeSheet()">' + T('我知道了','Got it') + '</button>');
+}
+function openLogout(){
+  openSheet(
+    '<div class="sh-title">' + T('退出登录','Log Out') + '</div>' +
+    '<div class="estbox">' + T('确认退出当前账号？', 'Log out of this account?') + '<br>' + T('登录态将清除， 需重新选择账号登录。', 'You will need to sign in again.') + '</div>' +
+    '<button class="btn danger" onclick="logout()">' + T('确认退出','Confirm') + '</button>' +
+    '<button class="btn ghost" onclick="closeSheet()">' + T('取消','Cancel') + '</button>');
 }
 function openKyc(){
   var lv = S.me.kycLevel;
