@@ -11,6 +11,8 @@ const now = () => Date.now();
 const daysAgo = (d, jitterH = 0) => now() - d * 864e5 - ri(0, jitterH) * 36e5;
 let idSeq = 1000;
 const nid = () => ++idSeq;
+const d2 = (n) => String(n).padStart(2, '0');
+const dayKey = (ts) => { const x = new Date(ts); return d2(x.getMonth() + 1) + '-' + d2(x.getDate()); }; // 本地时区 MM-DD(财务对账分组键)
 
 // ---------------- 业务配置 ----------------
 const CARD_LEVELS = {
@@ -27,9 +29,16 @@ const COMMISSION = {
 };
 const TIER_LABELS = ['直属', '上级', '上上级'];
 const POINTS_PER_USD = 10; // 1 USD = 10 分(基础), 再乘卡等级倍率
+// 月度目标默认值(P1.3): gmv=充值+消费, 4 类目标字段可由总监在目标管理页调整
+const TARGET_DEFAULTS = {
+  1: { gmv: 120000, topup: 70000, consume: 50000, cards: 40, points: 400000 },
+  2: { gmv: 60000, topup: 35000, consume: 25000, cards: 25, points: 180000 },
+  3: { gmv: 25000, topup: 15000, consume: 10000, cards: 15, points: 80000 },
+};
 
 // ---------------- 种子数据(懒初始化: Workers 全局作用域 Date.now()=0, 必须等首个请求再生成真实时间) ----------------
 let salesReps, users, cards, transactions, pointsLogs, commissions, customers, followups, products, orders, tasks;
+let riskEvents, riskRules, riskLists, riskTags, financeMeta; // P1: 风控中心 + 财务对账
 let inited = false;
 function initSeed() {
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
@@ -310,6 +319,37 @@ function recentChains(scopeIds, n = 10) {
   return out;
 }
 
+// 驾驶舱时间范围工具(模块级): ?range=today|week|month|quarter 的起点与趋势分桶
+// today=按小时 / week=按天(周一起) / month=按天 / quarter=按周; 旧版固定 14 天, 现按所选范围聚合
+function rangeStartTs(range) {
+  const n = new Date();
+  if (range === 'week') { const d0 = new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime(); return d0 - ((new Date(d0).getDay() + 6) % 7) * 864e5; } // 本周一
+  if (range === 'month') return new Date(n.getFullYear(), n.getMonth(), 1).getTime();
+  if (range === 'quarter') return new Date(n.getFullYear(), Math.floor(n.getMonth() / 3) * 3, 1).getTime();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+}
+function buildTrend(range, topups, consumes) {
+  const rs = rangeStartTs(range);
+  const stepMs = range === 'today' ? 36e5 : range === 'quarter' ? 7 * 864e5 : 864e5;
+  const maxBuckets = range === 'today' ? 24 : range === 'quarter' ? 14 : 31;
+  const buckets = [];
+  for (let i = 0; i < 92 && buckets.length < maxBuckets; i++) {
+    const t = rs + i * stepMs;
+    if (t > now()) break; // 未来的分桶不画
+    const d = new Date(t);
+    buckets.push({ key: t, label: range === 'today' ? String(d.getHours()).padStart(2, '0') + ':00' : (d.getMonth() + 1) + '/' + d.getDate() });
+  }
+  const bktOf = (ts) => rs + Math.floor((ts - rs) / stepMs) * stepMs;
+  const acc = {};
+  buckets.forEach(b => { acc[b.key] = { topup: 0, consume: 0 }; });
+  [...topups, ...consumes].forEach(t => {
+    if (t.createdAt < rs) return;
+    const cell = acc[bktOf(t.createdAt)];
+    if (cell) cell[t.type] += t.amount;
+  });
+  return buckets.map(b => ({ date: b.label, topup: +acc[b.key].topup.toFixed(0), consume: +acc[b.key].consume.toFixed(0) }));
+}
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
 export function handleApi(method, p, q = {}, b = {}, h = {}) {
@@ -332,19 +372,25 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     if (p === '/api/admin/me') return J({ ...me, scope: '全部数据', teamIds: subtreeIds(sid) });
 
     if (p === '/api/admin/dashboard') {
+      // P1.1 驾驶舱增强: ?range=today|week|month|quarter, GMV/充值/消费与趋势按范围统计(缺省 today)
+      const range = ['today', 'week', 'month', 'quarter'].includes(q.range) ? q.range : 'today';
+      const rs = rangeStartTs(range);
       const topups = transactions.filter(t => t.type === 'topup' && t.status === 'success' && scopedUserIds.includes(t.userId));
       const consumes = transactions.filter(t => t.type === 'consume' && t.status === 'success' && scopedUserIds.includes(t.userId));
-      const trend = [];
-      for (let d = 13; d >= 0; d--) {
-        const day = new Date(now() - d * 864e5).toDateString();
-        trend.push({ date: new Date(now() - d * 864e5).toISOString().slice(5, 10),
-          topup: +topups.filter(t => new Date(t.createdAt).toDateString() === day).reduce((s, t) => s + t.amount, 0).toFixed(0),
-          consume: +consumes.filter(t => new Date(t.createdAt).toDateString() === day).reduce((s, t) => s + t.amount, 0).toFixed(0) });
-      }
+      const rangeTx = [...topups, ...consumes].filter(t => t.createdAt >= rs);
+      const topupTotal = +rangeTx.filter(t => t.type === 'topup').reduce((s, t) => s + t.amount, 0).toFixed(2);
+      const consumeTotal = +rangeTx.filter(t => t.type === 'consume').reduce((s, t) => s + t.amount, 0).toFixed(2);
+      const trend = buildTrend(range, topups, consumes);
       const myCommissions = commissions.filter(c => ids.includes(c.salesId));
+      const scopedTx = transactions.filter(t => scopedUserIds.includes(t.userId)); // 含 refunded, 供风险口径统计
       return J({
         me: { id: me.id, name: me.name, role: me.role, level: me.level },
         stats: {
+          range,
+          gmv: +(topupTotal + consumeTotal).toFixed(2),
+          topupTotal, consumeTotal,
+          activeUsers: new Set(scopedTx.filter(t => t.createdAt >= now() - 30 * 864e5).map(t => t.userId)).size, // 近30天有交易
+          riskCount: scopedTx.filter(t => t.status === 'refunded' || (t.type === 'consume' && t.amount > 400)).length, // 简单口径: 已退款 或 单笔>$400 消费
           totalCards: cards.filter(c => ids.includes(c.salesRepId)).length,
           activeCards: cards.filter(c => ids.includes(c.salesRepId) && c.status === 'active').length,
           todayTopup: +topups.filter(t => isToday(t.createdAt)).reduce((s, t) => s + t.amount, 0).toFixed(0),
@@ -392,7 +438,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       t.status = 'refunded'; const card = cards.find(c => c.id === t.cardId); card.balance = +(card.balance + t.amount).toFixed(2);
       return J({ ok: true });
     }
-    if (p === '/api/admin/customers') {
+    if (p === '/api/admin/customers' && method === 'GET') {
       if (q.id) { const c = customers.find(x => x.id === +q.id); return J(pubCustomer(c)); }
       return J(customers.filter(c => ids.includes(c.ownerSalesId)).map(pubCustomer));
     }
@@ -401,6 +447,31 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       if (dup) return J({ error: `查重: 已存在客户 ${dup.name}(${dup.stage})` }, 409);
       const c = { id: nid(), ...b, stage: '线索', userId: null, tags: [], createdAt: now(), nextFollowAt: now() + 3 * 864e5 };
       customers.unshift(c); return J(c);
+    }
+    // P1.2 客户全景: 基础资料 + 阶段 + 跟进时间轴 + 关联卡 + 充值/消费 + 积分 + KYC + 佣金贡献(客户不在 scope 子树内 403)
+    const mOv = p.match(/^\/api\/admin\/customers\/(\d+)\/overview$/);
+    if (mOv) {
+      const c = customers.find(x => x.id === +mOv[1]);
+      if (!c) return J({ error: '客户不存在' }, 404);
+      if (!ids.includes(c.ownerSalesId)) return J({ error: '无权查看该客户(不在你的数据范围内)' }, 403);
+      const u = c.userId ? users.find(x => x.id === c.userId) : null;
+      const myCards = u ? cards.filter(x => x.userId === u.id).map(x => ({ id: x.id, cardNo: x.cardNo, level: x.level, levelLabel: CARD_LEVELS[x.level].label, balance: x.balance, status: x.status, createdAt: x.createdAt })) : [];
+      const txs = u ? transactions.filter(t => t.userId === u.id) : [];
+      const topups = txs.filter(t => t.type === 'topup');
+      const consumes = txs.filter(t => t.type === 'consume');
+      const sumTx = (list) => +list.reduce((a, t) => a + t.amount, 0).toFixed(2);
+      const txIdSet = new Set(txs.map(t => t.id));
+      const comms = commissions.filter(x => txIdSet.has(x.refId)).sort((a, b) => b.createdAt - a.createdAt);
+      return J({
+        customer: { ...c, owner: repById(c.ownerSalesId)?.name },
+        user: u ? { id: u.id, name: u.name, phone: u.phone, email: u.email, points: u.points, kycLevel: u.kycLevel, kycStatus: u.kycStatus, createdAt: u.createdAt } : null,
+        followups: followups.filter(f => f.customerId === c.id).sort((a, b) => b.createdAt - a.createdAt).map(f => ({ ...f, sales: repById(f.salesId)?.name })),
+        cards: myCards,
+        topup: { total: sumTx(topups), count: topups.length, list: topups.slice(0, 10) },
+        consume: { total: sumTx(consumes), count: consumes.length, list: consumes.slice(0, 10) },
+        points: { current: u ? u.points : 0, list: u ? pointsLogs.filter(l => l.userId === u.id).sort((a, b) => b.createdAt - a.createdAt).slice(0, 10) : [] },
+        commission: { total: +comms.reduce((a, x) => a + x.amount, 0).toFixed(2), count: comms.length, list: comms.slice(0, 5).map(pubCommission) },
+      });
     }
     if (p === '/api/admin/followups' && method === 'POST') {
       const f = { id: nid(), customerId: +b.customerId, salesId: +b.salesId || sid, type: b.type, content: b.content, nextPlan: b.nextPlan || '', createdAt: now() };
@@ -422,7 +493,17 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
           total: +my.reduce((a, c) => a + c.amount, 0).toFixed(2),
           customers: customers.filter(c => c.ownerSalesId === s.id).length, cards: cards.filter(c => c.salesRepId === s.id).length };
       });
-      return J({ rules: COMMISSION, tierLabels: TIER_LABELS, nodes, chains: recentChains(ids) });
+      // P1.4 链路增强: 来源用户/来源卡号(掩码后4位)/每级结算状态/关联单号/路径佣金合计
+      const chains = recentChains(ids).map(ch => {
+        const tx = transactions.find(t => t.id === ch.txId);
+        const card = tx ? cards.find(c => c.id === tx.cardId) : null;
+        const no = card ? String(card.cardNo).replace(/\s/g, '') : '';
+        const path = commissions.filter(x => x.refId === ch.txId).sort((a, b) => a.tier - b.tier)
+          .map(x => ({ salesId: x.salesId, sales: repById(x.salesId)?.name, tier: x.tier, tierLabel: x.tierLabel, rate: x.rate, amount: x.amount, status: x.status, refId: x.refId }));
+        return { ...ch, userId: tx?.userId, cardNoMask: no ? '**** **** **** ' + no.slice(-4) : '', path,
+          total: +path.reduce((s, x) => s + x.amount, 0).toFixed(2) };
+      });
+      return J({ rules: COMMISSION, tierLabels: TIER_LABELS, nodes, chains });
     }
     if (p === '/api/admin/points') return J({ rules: { POINTS_PER_USD, CARD_LEVELS, COMMISSION }, logs: pointsLogs.filter(l => sid === 1 || scopedUserIds.includes(l.userId)).slice(0, 200).map(l => ({ ...l, user: users.find(u => u.id === l.userId)?.name })) });
     if (p === '/api/admin/points/grant' && method === 'POST') { if (sid !== 1) return J({ error: '仅运营总监可发放积分' }, 403); addPointsLog(+b.userId, +b.delta, b.source || '运营发放', 'OP', now()); return J({ ok: true }); }
@@ -462,6 +543,57 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       const id = Math.max(0, ...salesReps.map(s => s.id)) + 1;
       salesReps.push({ id, name, role: b.role || ROLE_BY_LEVEL[level], parentId: parent.id, level, region: b.region || parent.region, target: +b.target || TARGET_BY_LEVEL[level] });
       return J({ sales: salesReps.find(s => s.id === id) });
+    }
+    // P1.3 目标管理: 四类目标(发卡/充值/消费/积分发放) × 维度(个人/团队子树) × 周期(月/季/年, 目标按倍数放大)
+    if (p === '/api/admin/goals') {
+      const dim = q.dim === 'team' ? 'team' : 'personal';
+      const period = ['month', 'quarter', 'year'].includes(q.period) ? q.period : 'month';
+      const mult = period === 'year' ? 12 : period === 'quarter' ? 3 : 1;
+      const nD = new Date();
+      const periodStart = period === 'year' ? new Date(nD.getFullYear(), 0, 1).getTime()
+        : period === 'quarter' ? new Date(nD.getFullYear(), Math.floor(nD.getMonth() / 3) * 3, 1).getTime()
+        : new Date(nD.getFullYear(), nD.getMonth(), 1).getTime();
+      const inPeriod = (ts) => ts >= periodStart;
+      const rate = (done, tgt) => tgt > 0 ? +(done / tgt * 100).toFixed(1) : 0;
+      const rows = salesReps.filter(s => ids.includes(s.id) && s.level > 0).map(s => {
+        const teamIds = subtreeIds(s.id);
+        const aggIds = dim === 'team' ? teamIds : [s.id];
+        const uids = users.filter(u => aggIds.includes(u.salesRepId)).map(u => u.id);
+        const myTx = transactions.filter(t => uids.includes(t.userId) && t.status === 'success' && inPeriod(t.createdAt));
+        const done = {
+          cards: cards.filter(c => aggIds.includes(c.salesRepId) && inPeriod(c.createdAt)).length,
+          topup: +myTx.filter(t => t.type === 'topup').reduce((a, t) => a + t.amount, 0).toFixed(2),
+          consume: +myTx.filter(t => t.type === 'consume').reduce((a, t) => a + t.amount, 0).toFixed(2),
+          points: pointsLogs.filter(l => uids.includes(l.userId) && l.delta > 0 && inPeriod(l.createdAt)).reduce((a, l) => a + l.delta, 0),
+        };
+        const base = s.target || (s.level === 1 ? 120000 : s.level === 2 ? 60000 : 25000);
+        const targets = {
+          cards: (s.level === 1 ? 20 : s.level === 2 ? 12 : 6) * mult,
+          topup: Math.round(base * 0.7 * mult),
+          consume: Math.round(base * 0.3 * mult),
+          points: Math.round(base * 0.3 * mult * 10),
+        };
+        const rates = { cards: rate(done.cards, targets.cards), topup: rate(done.topup, targets.topup), consume: rate(done.consume, targets.consume), points: rate(done.points, targets.points) };
+        return { id: s.id, name: s.name, role: s.role, level: s.level, region: s.region, teamSize: teamIds.length - 1, baseTarget: base,
+          dim, period, targets, done, rates,
+          overall: +((rates.cards + rates.topup + rates.consume + rates.points) / 4).toFixed(1) };
+      }).sort((a, b) => b.overall - a.overall);
+      rows.forEach((r, i) => { r.rank = i + 1; });
+      const sumDone = (k) => rows.reduce((a, r) => a + r.done[k], 0);
+      const sumTgt = (k) => rows.reduce((a, r) => a + r.targets[k], 0);
+      const catRates = ['cards', 'topup', 'consume', 'points'].map(k => rate(sumDone(k), sumTgt(k)));
+      return J({
+        dim, period, mult, periodStart,
+        summary: {
+          repCount: rows.length,
+          overall: +(catRates.reduce((a, b) => a + b, 0) / catRates.length).toFixed(1),
+          rates: { cards: catRates[0], topup: catRates[1], consume: catRates[2], points: catRates[3] },
+          done: { cards: sumDone('cards'), topup: +sumDone('topup').toFixed(2), consume: +sumDone('consume').toFixed(2), points: sumDone('points') },
+          targets: { cards: sumTgt('cards'), topup: sumTgt('topup'), consume: sumTgt('consume'), points: sumTgt('points') },
+          top: rows[0] ? { id: rows[0].id, name: rows[0].name, overall: rows[0].overall } : null,
+        },
+        rows,
+      });
     }
     return J({ error: 'not found: ' + p }, 404);
   }
