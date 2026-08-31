@@ -91,30 +91,8 @@ transactions = [];
 pointsLogs = [];
 commissions = [];
 
-function addPointsLog(userId, delta, source, refNo, ts) {
-  const u = users.find(x => x.id === userId);
-  u.points = Math.max(0, u.points + delta);
-  pointsLogs.push({ id: nid(), userId, delta, source, refNo, balanceAfter: u.points, createdAt: ts });
-}
-// 多级佣金: 从直属销售沿 parent 链向上, 最多 3 层(tiers), 逐级生成佣金记录
-function addCommissions(salesId, type, baseAmt, refId, ts) {
-  const rule = COMMISSION[type];
-  let cur = repById(salesId), tier = 0;
-  while (cur && tier < rule.tiers.length) {
-    const val = rule.tiers[tier];
-    if (val > 0) {
-      commissions.push({
-        id: nid(), salesId: cur.id, fromSalesId: salesId, tier,
-        tierLabel: TIER_LABELS[tier], type, typeLabel: rule.label,
-        baseAmt: +baseAmt.toFixed(2),
-        rate: rule.mode === 'fixed' ? '$' + val.toFixed(0) : (val * 100).toFixed(val * 100 % 1 ? 1 : 0) + '%',
-        amount: +(rule.mode === 'fixed' ? val : baseAmt * val).toFixed(2),
-        refId, status: ts < now() - 3 * 864e5 ? 'settled' : 'pending', createdAt: ts,
-      });
-    }
-    cur = cur.parentId ? repById(cur.parentId) : null; tier++;
-  }
-}
+// (addPointsLog / addCommissions 已移至模块级, 供 initSeed 种子与 handleApi 业务动作共用)
+
 // 近 30 天种子交易
 for (let d = 30; d >= 0; d--) {
   const nTx = ri(2, 5);
@@ -194,6 +172,32 @@ tasks = [
   { id: 5, code: 'invite', title: '邀请 1 位好友', desc: '好友完成注册', points: 800, type: 'once', icon: '🤝' },
 ];
   inited = true;
+}
+
+// ---------------- 业务动作工具(模块级, 依赖 initSeed 填充的数据数组) ----------------
+function addPointsLog(userId, delta, source, refNo, ts) {
+  const u = users.find(x => x.id === userId);
+  u.points = Math.max(0, u.points + delta);
+  pointsLogs.push({ id: nid(), userId, delta, source, refNo, balanceAfter: u.points, createdAt: ts });
+}
+// 多级佣金: 从直属销售沿 parent 链向上, 最多 3 层(tiers), 逐级生成佣金记录
+function addCommissions(salesId, type, baseAmt, refId, ts) {
+  const rule = COMMISSION[type];
+  let cur = repById(salesId), tier = 0;
+  while (cur && tier < rule.tiers.length) {
+    const val = rule.tiers[tier];
+    if (val > 0) {
+      commissions.push({
+        id: nid(), salesId: cur.id, fromSalesId: salesId, tier,
+        tierLabel: TIER_LABELS[tier], type, typeLabel: rule.label,
+        baseAmt: +baseAmt.toFixed(2),
+        rate: rule.mode === 'fixed' ? '$' + val.toFixed(0) : (val * 100).toFixed(val * 100 % 1 ? 1 : 0) + '%',
+        amount: +(rule.mode === 'fixed' ? val : baseAmt * val).toFixed(2),
+        refId, status: ts < now() - 3 * 864e5 ? 'settled' : 'pending', createdAt: ts,
+      });
+    }
+    cur = cur.parentId ? repById(cur.parentId) : null; tier++;
+  }
 }
 
 // ---------------- 销售组织工具(模块级, 依赖 initSeed 填充的 salesReps) ----------------
@@ -360,15 +364,17 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       return J({ card });
     }
     if (p.startsWith('/api/admin/cards/') && method === 'PATCH') {
+      if (sid !== 1) return J({ error: '仅运营总监可执行冻结/调账' }, 403);
       const card = cards.find(c => c.id === +p.split('/').pop()); if (!card) return J({ error: 'not found' }, 404);
       if (b.action === 'freeze') card.status = card.status === 'frozen' ? 'active' : 'frozen';
       if (b.action === 'adjust') { card.balance = +(card.balance + +b.amount).toFixed(2); transactions.unshift({ id: nid(), type: 'adjust', userId: card.userId, cardId: card.id, amount: +b.amount, fee: 0, method: 'adjust', ref: 'OP-' + ri(10000, 99999), pointsEarned: 0, status: 'success', createdAt: now() }); }
       return J({ card });
     }
     if (p === '/api/admin/kyc') {
-      return J(users.filter(u => ids.includes(u.salesRepId) && u.kycStatus !== 'approved').map(u => ({ id: u.id, name: u.name, country: u.country, phone: u.phone, kycLevel: u.kycLevel, applyLevel: u.kycLevel + 1, idType: pick(['护照', '国民ID']), submitAt: daysAgo(ri(1, 5)), docs: ['passport.jpg', 'selfie.jpg'], owner: repById(u.salesRepId)?.name })));
+      return J(users.filter(u => ids.includes(u.salesRepId) && u.kycStatus.startsWith('pending')).map(u => ({ id: u.id, name: u.name, country: u.country, phone: u.phone, kycLevel: u.kycLevel, applyLevel: u.kycLevel + 1, idType: pick(['护照', '国民ID']), submitAt: daysAgo(ri(1, 5)), docs: ['passport.jpg', 'selfie.jpg'], owner: repById(u.salesRepId)?.name })));
     }
     if (p === '/api/admin/kyc/review' && method === 'POST') {
+      if (sid !== 1) return J({ error: '仅运营总监可审核 KYC' }, 403);
       const u = users.find(x => x.id === +b.userId); if (!u) return J({ error: '用户不存在' }, 400);
       if (b.pass) { u.kycLevel = b.toLevel || u.kycLevel + 1; u.kycStatus = 'approved'; addPointsLog(u.id, 200, 'KYC 认证奖励', 'KYC', now()); }
       else u.kycStatus = 'rejected';
@@ -376,6 +382,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     }
     if (p === '/api/admin/transactions') return J(transactions.filter(t => scopedUserIds.includes(t.userId) && (!q.type || t.type === q.type)).slice(0, 200).map(pubTx));
     if (p === '/api/admin/refund' && method === 'POST') {
+      if (sid !== 1) return J({ error: '仅运营总监可执行退款' }, 403);
       const t = transactions.find(x => x.id === +b.txId); if (!t || t.type !== 'consume') return J({ error: '交易不存在' }, 400);
       t.status = 'refunded'; const card = cards.find(c => c.id === t.cardId); card.balance = +(card.balance + t.amount).toFixed(2);
       return J({ ok: true });
@@ -398,7 +405,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     }
     if (p === '/api/admin/performance') return J(perfRows(ids).sort((a, b) => (b.topup + b.consume) - (a.topup + a.consume)));
     if (p === '/api/admin/commissions') return J([...commissions].filter(c => ids.includes(c.salesId) || ids.includes(c.fromSalesId)).sort((a, b) => b.createdAt - a.createdAt).slice(0, 300).map(pubCommission));
-    if (p === '/api/admin/commissions/settle' && method === 'POST') { commissions.forEach(c => { if (c.id === +b.id) c.status = 'settled'; }); return J({ ok: true }); }
+    if (p === '/api/admin/commissions/settle' && method === 'POST') { if (sid !== 1) return J({ error: '仅运营总监可结算佣金' }, 403); commissions.forEach(c => { if (c.id === +b.id) c.status = 'settled'; }); return J({ ok: true }); }
     // 分销链路: 组织树 + 各级佣金 + 最近分佣链
     if (p === '/api/admin/commissions/tree') {
       const rootIds = sid === 1 ? [1] : [sid];
@@ -412,12 +419,12 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       });
       return J({ rules: COMMISSION, tierLabels: TIER_LABELS, nodes, chains: recentChains(ids) });
     }
-    if (p === '/api/admin/points') return J({ rules: { POINTS_PER_USD, CARD_LEVELS, COMMISSION }, logs: pointsLogs.slice(0, 200).map(l => ({ ...l, user: users.find(u => u.id === l.userId)?.name })) });
-    if (p === '/api/admin/points/grant' && method === 'POST') { addPointsLog(+b.userId, +b.delta, b.source || '运营发放', 'OP', now()); return J({ ok: true }); }
+    if (p === '/api/admin/points') return J({ rules: { POINTS_PER_USD, CARD_LEVELS, COMMISSION }, logs: pointsLogs.filter(l => sid === 1 || scopedUserIds.includes(l.userId)).slice(0, 200).map(l => ({ ...l, user: users.find(u => u.id === l.userId)?.name })) });
+    if (p === '/api/admin/points/grant' && method === 'POST') { if (sid !== 1) return J({ error: '仅运营总监可发放积分' }, 403); addPointsLog(+b.userId, +b.delta, b.source || '运营发放', 'OP', now()); return J({ ok: true }); }
     if (p === '/api/admin/products') return J(products);
-    if (p.startsWith('/api/admin/products/') && method === 'PATCH') { const pr = products.find(x => x.id === +p.split('/').pop()); if (pr) pr.status = pr.status === 'on' ? 'off' : 'on'; return J({ ok: true }); }
+    if (p.startsWith('/api/admin/products/') && method === 'PATCH') { if (sid !== 1) return J({ error: '仅运营总监可上下架商品' }, 403); const pr = products.find(x => x.id === +p.split('/').pop()); if (pr) pr.status = pr.status === 'on' ? 'off' : 'on'; return J({ ok: true }); }
     if (p === '/api/admin/orders') return J(orders.filter(o => sid === 1 || scopedUserIds.includes(o.userId)).map(pubOrder));
-    if (p === '/api/admin/orders/ship' && method === 'POST') { const o = orders.find(x => x.id === +b.id); if (o) { o.status = 'shipped'; o.trackingNo = b.trackingNo || 'SF' + ri(100000000, 999999999); } return J({ ok: true }); }
+    if (p === '/api/admin/orders/ship' && method === 'POST') { if (sid !== 1) return J({ error: '仅运营总监可发货' }, 403); const o = orders.find(x => x.id === +b.id); if (o) { o.status = 'shipped'; o.trackingNo = b.trackingNo || 'SF' + ri(100000000, 999999999); } return J({ ok: true }); }
     if (p === '/api/admin/users') return J(users.filter(u => ids.includes(u.salesRepId)).map(pubUser));
     return J({ error: 'not found: ' + p }, 404);
   }
