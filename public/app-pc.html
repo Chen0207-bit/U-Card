@@ -441,7 +441,7 @@ function $(id){ return document.getElementById(id); }
 function p2(n){ return String(n).padStart(2,'0'); }
 function fmtUSD(n){ return '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtPts(n){ return Number(n||0).toLocaleString('en-US'); }
-function fmtTime(ts){ var d = new Date(ts||0); return p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes())+':'+p2(d.getSeconds()); }
+function fmtTime(ts){ var d = new Date(ts||0); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes()); }
 function maskCard(no){
   var g = String(no||'').split(' ');
   if (g.length !== 4) return '5533 68** **** 1234';
@@ -592,7 +592,7 @@ async function switchTab(t){
     }
   } catch(e) { toast('网络错误, 请确认后端已启动 (node server.js)', 'err'); }
 }
-async function loadTasks(){ S.tasks = await api('/api/app/tasks'); }
+async function loadTasks(){ S.tasks = await api('/api/app/tasks'); (S.tasks.claimed || []).forEach(function(id){ S.claimed[id] = true; }); }
 async function refreshCardPage(animate){
   if (!await loadMe()) return;
   S.txs = await api('/api/app/transactions') || [];
@@ -850,11 +850,26 @@ function openLimitsM(){
     '<button class="btn ghost" onclick="closeM();switchTab(\'me\')">去完成 KYC</button>');
 }
 function openFreezeM(){
-  var frozen = S.me.card.status === 'frozen';
-  openM('<h3 class="mtitle">' + (frozen ? '解冻卡片' : '冻结卡片') + ' <button class="mclose" onclick="closeM()">✕</button></h3>' +
-    (frozen
-      ? '<div class="kbenefit">🔓 解冻后卡片立即恢复消费能力, 历史交易与余额不受影响。</div><button class="btn" onclick="closeM();toast(\'卡片已解冻(Demo)\',\'ok\')">确认解冻</button>'
-      : '<div class="kbenefit">❄️ 冻结后卡片暂停所有消费; 充值与还款不受影响。适合卡片信息泄露时应急。</div><button class="btn" style="background:linear-gradient(135deg,#dc2626,#b91c1c)" onclick="closeM();toast(\'卡片已冻结(Demo)\',\'ok\')">确认冻结</button>'));
+  var c = S.me.card, st = c.status;
+  var title = st === 'active' ? '冻结 / 挂失' : st === 'lost' ? '卡片已挂失' : '解冻卡片';
+  openM('<h3 class="mtitle">' + title + ' <button class="mclose" onclick="closeM()">✕</button></h3>' +
+    '<div class="kv"><span>卡号</span><b>' + maskCard(c.cardNo) + '</b></div>' +
+    '<div class="kv"><span>当前状态</span><b>' + (st === 'active' ? '✅ 正常使用中' : st === 'lost' ? '🚨 已挂失' : '❄️ 已冻结') + '</b></div>' +
+    (st === 'active'
+      ? '<div class="kbenefit">❄️ 冻结后暂停充值与消费， 适合卡片信息泄露时应急； 🚨 挂失为更强管控， 需后台解除。</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">' +
+        '<button class="btn" style="background:#0ea5e9" onclick="cardCtrlM(\'freeze\')">❄️ 立即冻结</button>' +
+        '<button class="btn" style="background:linear-gradient(135deg,#dc2626,#b91c1c)" onclick="cardCtrlM(\'lost\')">🚨 挂失</button></div>'
+      : st === 'frozen'
+      ? '<div class="kbenefit">🔓 解冻后立即恢复充值与消费， 历史交易与余额不受影响。</div><button class="btn" onclick="cardCtrlM(\'unfreeze\')">🔓 确认解冻</button>'
+      : '<div class="kbenefit">🚨 挂失卡需由运营后台「U卡管理」解除挂失后恢复使用， 充值与消费已全部阻断。</div>'));
+}
+async function cardCtrlM(act){
+  var r = await api('/api/app/card/' + act, { method: 'POST', body: '{}' });
+  if (r.error) { toast(r.error, 'err'); return; }
+  S.me.card.status = r.status;
+  closeM(); renderCard(false);
+  toast(act === 'freeze' ? '已冻结， 充值与消费已阻断' : act === 'unfreeze' ? '已解冻， 恢复使用' : '已挂失， 请联系客服处理', 'ok');
 }
 </script>
 <script>
