@@ -290,6 +290,8 @@
 .dict-head:hover{background:#eef2ff}
 .dict-group .tbl-wrap{border-top:1px solid var(--line)}
 @media (max-width:1080px){ .perm-grid{grid-template-columns:1fr} }
+.api-doc-grid{grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:980px){ .api-doc-grid{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -778,6 +780,109 @@
       <div class="card"><div class="tbl-wrap" id="opLogBody"></div></div>
     </section>
 
+    <!-- 29. 租户管理 (P4.1 平台管理) -->
+    <section class="page" id="page-tenants">
+      <div class="notice">🏢 多租户为<b>轻量演示版</b>: 主租户 U-Card 即本系统, 其余租户为平台层模拟数据(不做真实隔离改造) · 点击租户行查看详情与「数据隔离视图」。</div>
+      <div id="tenantSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">租户列表</div>
+        <div class="card-sub">套餐 Basic / Pro / Enterprise · 状态 待审核 / 试用 / 正常 / 冻结 · 审核(待审核→正常)与冻结/解冻即时生效(内存)</div>
+        <div class="tbl-wrap" id="tenantBody"></div>
+      </div>
+    </section>
+
+    <!-- 30. 租户配置 -->
+    <section class="page" id="page-tenantConfig">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:230px" id="tcTenantSel" onchange="renderTenantConfig()"></select>
+        </div>
+        <button class="btn" onclick="saveTenantConfig()">💾 保存配置 (PATCH 内存生效)</button>
+      </div>
+      <div class="card" id="tcBody"></div>
+    </section>
+
+    <!-- 31. 应用管理 (P4.5 开放平台) -->
+    <section class="page" id="page-apps">
+      <div id="openAppSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">开放平台应用</div>
+        <div class="card-sub">应用以 AppKey 调用 /api/open/* 开放接口 · 停用后所有调用立即返回 403</div>
+        <div class="tbl-wrap" id="openAppBody"></div>
+      </div>
+    </section>
+
+    <!-- 32. API 密钥 -->
+    <section class="page" id="page-keys">
+      <div id="openKeySum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">API 密钥</div>
+        <div class="card-sub">AppSecret 仅掩码展示(sk-****后4位) · 吊销后不可恢复, 请新建密钥替换(演示)</div>
+        <div class="tbl-wrap" id="openKeyBody"></div>
+      </div>
+    </section>
+
+    <!-- 33. Webhook -->
+    <section class="page" id="page-webhooks">
+      <div class="card">
+        <div class="card-title">Webhook 配置</div>
+        <div class="card-sub">事件发生时向商户回调地址推送 · 点击行查看最近推送记录 · 「测试推送」追加一条成功记录</div>
+        <div class="tbl-wrap" id="webhookBody"></div>
+      </div>
+    </section>
+
+    <!-- 34. API 日志 -->
+    <section class="page" id="page-apilogs">
+      <div id="apiLogSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">API 调用日志</div>
+        <div class="card-sub">最近 100 条 /api/open/* 调用 · 在线调试的真实请求也会写入本列表</div>
+        <div class="tbl-wrap" id="apiLogBody"></div>
+      </div>
+    </section>
+
+    <!-- 35. 接口文档 -->
+    <section class="page" id="page-docs">
+      <div class="toolbar">
+        <div class="toolbar-left"><span class="dim">10 个模拟开放接口 · 鉴权: 请求头 <code>x-app-key</code> · 分组展示, 每条可展开请求/响应示例</span></div>
+        <button class="btn" onclick="openApiDebug()">🧪 在线调试</button>
+      </div>
+      <div class="notice">📘 本页接口均为 <b>真实可调用的 mock 端点</b> <code>POST /api/open/:mock</code>: 在线调试会用所选 AppKey 发起真实请求, 无 Key / 错 Key 返回 401, 停用应用返回 403, 调用会写入「API 日志」。</div>
+      <div id="docsBody"></div>
+    </section>
+
+    <!-- 36. 通知模板 (P4.6 消息中心) -->
+    <section class="page" id="page-templates">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:150px" id="tplChannelSel" onchange="renderNotifyTemplates()"><option value="">全部渠道</option></select>
+          <select class="select" style="width:150px" id="tplEventSel" onchange="renderNotifyTemplates()"><option value="">全部事件</option></select>
+        </div>
+        <span class="dim">变量: {{userName}} {{amount}} {{cardLast4}} {{transactionId}} {{createdAt}} · 点击「预览」看变量填充后的各渠道最终文案</span>
+      </div>
+      <div id="tplSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="tplBody"></div></div>
+    </section>
+
+    <!-- 37. 发送记录 -->
+    <section class="page" id="page-sends">
+      <div id="sendSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">发送记录</div>
+        <div class="card-sub">最近 100 条 · 失败/重试中的记录可点击「重发」(状态翻成功)</div>
+        <div class="tbl-wrap" id="sendBody"></div>
+      </div>
+    </section>
+
+    <!-- 38. 渠道配置 -->
+    <section class="page" id="page-channels">
+      <div class="card">
+        <div class="card-title">通知渠道</div>
+        <div class="card-sub">7 个渠道 · 启用开关与配置编辑为演示动作(PATCH 改内存, 重置演示数据后恢复)</div>
+        <div id="channelBody" class="kyc-list"></div>
+      </div>
+    </section>
+
   </div>
 </div>
 
@@ -854,6 +959,9 @@ var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'�
              recon:'对账中心', financeDiff:'差异清单', merchant:'商户结算', financeReport:'财务报表',
              ledgerAccounts:'账户总览', ledgerEntries:'资金流水', ledgerSnapshots:'余额快照',
              accounts:'账号管理', roles:'角色管理', perms:'权限配置', org:'组织架构', params:'系统参数', dicts:'字典管理', loginlogs:'登录日志', oplogs:'操作日志',
+             tenants:'租户管理', tenantConfig:'租户配置',
+             apps:'应用管理', keys:'API 密钥', webhooks:'Webhook', apilogs:'API 日志', docs:'接口文档',
+             templates:'通知模板', sends:'发送记录', channels:'渠道配置'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
@@ -868,6 +976,9 @@ var MENU = [
   {cap:'财务结算', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]},
   {cap:'资金账本', lv0:true, items:[['ledgerAccounts','📒','账户总览'],['ledgerEntries','🧾','资金流水'],['ledgerSnapshots','📸','余额快照']]},
   {cap:'系统管理', lv0:true, items:[['accounts','👤','账号管理'],['roles','🧩','角色管理'],['perms','🔐','权限配置'],['org','🌳','组织架构'],['params','⚙️','系统参数'],['dicts','📚','字典管理'],['loginlogs','📝','登录日志'],['oplogs','🗒️','操作日志']]},
+  {cap:'平台管理', lv0:true, items:[['tenants','🏢','租户管理'],['tenantConfig','🎛️','租户配置']]},
+  {cap:'开放平台', lv0:true, items:[['apps','🔌','应用管理'],['keys','🔑','API 密钥'],['webhooks','🪝','Webhook'],['apilogs','📊','API 日志'],['docs','📘','接口文档']]},
+  {cap:'消息中心', lv0:true, items:[['templates','📨','通知模板'],['sends','📤','发送记录'],['channels','📻','渠道配置']]}
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -2539,6 +2650,573 @@ function renderOpLogs(){
       '<td>' + (o.result === '成功' ? '<span class="pill pill-green">成功</span>' : '<span class="pill pill-red">失败</span>') + '</td></tr>';
   }).join('');
   $('#opLogBody').innerHTML = '<table><thead><tr><th>时间</th><th>操作人</th><th>模块</th><th>动作</th><th>对象摘要</th><th>结果</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+/* ================= 29-30. P4.1 多租户(轻量演示) ================= */
+var TENANTS = [];
+var TENANT_STATUS_PILL = {
+  pending: '<span class="pill pill-amber">⏳ 待审核</span>',
+  trial: '<span class="pill pill-blue">🧪 试用</span>',
+  active: '<span class="pill pill-green">✅ 正常</span>',
+  frozen: '<span class="pill pill-red">❄️ 冻结</span>'
+};
+var TENANT_PLAN_PILL = { Basic: 'pill-gray', Pro: 'pill-blue', Enterprise: 'pill-indigo' };
+LOADERS.tenants = function(){
+  $('#tenantBody').innerHTML = loadingBox(); $('#tenantSum').innerHTML = '';
+  api('/api/admin/tenants').then(function(d){
+    TENANTS = d.list || [];
+    renderTenantSum(d.summary || {});
+    renderTenantTable();
+  }).catch(function(e){ $('#tenantSum').innerHTML = ''; $('#tenantBody').innerHTML = errBox(e); });
+};
+function renderTenantSum(s){
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#tenantSum').innerHTML =
+    sc('🏢', '#e0e7ff', String(nz(s.total)), '租户总数 · 含主租户 U-Card') +
+    sc('✅', '#dcfce7', String(nz(s.active)), '正常') +
+    sc('🧪', '#e0f2fe', String(nz(s.trial)), '试用中') +
+    sc('⏳', '#fef3c7', String(nz(s.pending)), '待审核') +
+    sc('❄️', '#fee2e2', String(nz(s.frozen)), '已冻结') +
+    sc('📈', '#f3e8ff', fmtMoney0(nz(s.gmv)), '全平台 GMV(各租户隔离域合计)');
+}
+function renderTenantTable(){
+  if (!TENANTS.length){ $('#tenantBody').innerHTML = emptyBox('暂无租户'); return; }
+  var rows = TENANTS.map(function(t){
+    var acts = '';
+    if (t.status === 'pending') acts += '<button class="btn-ok-sm" onclick="tenantAction(' + t.id + ',\'active\')">审核通过</button> ';
+    if (!t.isMain && t.status !== 'frozen') acts += '<button class="btn-danger" onclick="tenantAction(' + t.id + ',\'frozen\')">冻结</button>';
+    if (!t.isMain && t.status === 'frozen') acts += '<button class="btn-ok-sm" onclick="tenantAction(' + t.id + ',\'active\')">解冻</button>';
+    return '<tr style="cursor:pointer" onclick="openTenantDrawer(' + t.id + ')" title="点击查看租户详情与数据隔离视图">' +
+      '<td><div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:4px;background:' + esc(t.brandColor) + ';display:inline-block;box-shadow:0 0 0 3px ' + esc(t.brandColor) + '22"></span><b>' + esc(t.name) + '</b></div><div class="sub-line num">' + esc(t.code) + (t.isMain ? ' · 主租户' : '') + '</div></td>' +
+      '<td><span class="pill ' + (TENANT_PLAN_PILL[t.plan] || 'pill-gray') + '">' + esc(t.planLabel || t.plan) + '</span></td>' +
+      '<td>' + (TENANT_STATUS_PILL[t.status] || esc(t.status)) + '</td>' +
+      '<td class="num">' + fmtTime(t.expireAt) + '<div class="sub-line num">' + (nz(t.expireDaysLeft) > 3650 ? '长期' : '剩 ' + nz(t.expireDaysLeft) + ' 天') + '</div></td>' +
+      '<td class="num">' + fmtPts(nz(t.users)) + '</td>' +
+      '<td class="num">' + fmtPts(nz(t.cards)) + '</td>' +
+      '<td class="num"><b>' + fmtMoney0(nz(t.gmv)) + '</b></td>' +
+      '<td class="dim num">' + fmtTime(t.createdAt) + '</td>' +
+      '<td onclick="event.stopPropagation()" style="white-space:nowrap">' + (acts || '<span class="dim">—</span>') + ' <button class="btn-link" onclick="openTenantDrawer(' + t.id + ')">详情 ›</button></td></tr>';
+  }).join('');
+  $('#tenantBody').innerHTML = '<table><thead><tr><th>租户</th><th>套餐</th><th>状态</th><th>到期时间</th><th>用户数</th><th>卡量</th><th>GMV</th><th>创建时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function tenantAction(id, status){
+  var t = null; TENANTS.forEach(function(x){ if (x.id === id) t = x; });
+  patch('/api/admin/tenants/' + id, { status: status }).then(function(r){
+    toast((status === 'active' ? '租户已' + (t && t.status === 'pending' ? '审核通过(转正常)' : '解冻') + ': ' : '租户已冻结: ') + r.tenant.name + ', 开放 API 与用户端访问' + (status === 'frozen' ? '已阻断' : '恢复'));
+    closeDrawer();
+    LOADERS.tenants();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* 租户详情抽屉: 品牌配置 + 租户级卡产品/佣金/积分规则 + 数据隔离视图(演示模拟) */
+function openTenantDrawer(id){
+  var t = null; TENANTS.forEach(function(x){ if (x.id === id) t = x; });
+  if (!t) return;
+  var info = [
+    ['品牌色', '<div style="display:flex;align-items:center;gap:8px"><span style="width:26px;height:26px;border-radius:7px;background:' + esc(t.brandColor) + ';display:inline-block;box-shadow:0 0 0 3px ' + esc(t.brandColor) + '22"></span><span class="num">' + esc(t.brandColor) + '</span></div>'],
+    ['域名', '<span class="num">' + esc(t.domain) + '</span>'],
+    ['币种 / 语言', esc(t.currency) + ' · ' + esc(t.locale)],
+    ['时区', esc(t.timezone)],
+    ['套餐', '<span class="pill ' + (TENANT_PLAN_PILL[t.plan] || 'pill-gray') + '">' + esc(t.planLabel || t.plan) + '</span>'],
+    ['状态', TENANT_STATUS_PILL[t.status] || esc(t.status)],
+    ['到期时间', '<span class="num">' + fmtTime(t.expireAt) + '</span> · 剩 <b class="num">' + nz(t.expireDaysLeft) + '</b> 天'],
+    ['创建时间', '<span class="num">' + fmtTime(t.createdAt) + '</span>'],
+    ['租户编码', '<span class="num">' + esc(t.code) + '</span>'],
+    ['AppKey 前缀', t.isMain ? '<span class="dim">平台自身</span>' : '<span class="num">ak-' + esc(t.code) + '-****</span>']
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+  var prodRows = (t.cardProducts || []).map(function(p){
+    return '<tr><td><span style="display:inline-flex;align-items:center;gap:6px"><span style="width:10px;height:10px;border-radius:3px;background:' + esc(p.color) + '"></span><b>' + esc(p.name) + '</b></span></td>' +
+      '<td class="num">$' + nz(p.monthlyFee) + ' / 月</td><td class="num">x' + p.pointRate + ' 倍</td></tr>';
+  }).join('');
+  var cd = t.commissionDisplay || { topup: [], consume: [], card: [] };
+  var commRows = [
+    ['充值佣金', cd.topup], ['消费佣金', cd.consume], ['发卡奖励', cd.card]
+  ].map(function(r){
+    return '<tr><td>' + r[0] + '</td>' + [0, 1, 2].map(function(i){ return '<td class="num"><b>' + esc(r[1][i] || '—') + '</b></td>'; }).join('') + '</tr>';
+  }).join('');
+  var pr = t.pointsRule || {};
+  var iso = t.isolation || {};
+  var isoTiles = [
+    ['👥 用户数', fmtPts(nz(iso.users))], ['💳 卡量', fmtPts(nz(iso.cards))], ['💸 交易笔数', fmtPts(nz(iso.tx))],
+    ['⬆️ 充值额', fmtMoney0(nz(iso.topup))], ['🛍️ 消费额', fmtMoney0(nz(iso.consume))], ['📈 GMV', fmtMoney0(nz(iso.gmv))]
+  ].map(function(x){ return '<div class="sum-card"><div class="ic" style="background:#eef2ff">' + x[0].split(' ')[0] + '</div><div><div class="v num">' + x[1] + '</div><div class="k">' + x[0].replace(/^\S+\s/, '') + '</div></div></div>'; }).join('');
+  var acts = '';
+  if (t.status === 'pending') acts += '<button class="btn" onclick="tenantAction(' + t.id + ',\'active\')">✓ 审核通过</button> ';
+  if (!t.isMain && t.status !== 'frozen') acts += '<button class="btn-danger" style="padding:8px 16px" onclick="tenantAction(' + t.id + ',\'frozen\')">❄️ 冻结租户</button>';
+  if (!t.isMain && t.status === 'frozen') acts += '<button class="btn" onclick="tenantAction(' + t.id + ',\'active\')">✅ 解冻租户</button>';
+  showDrawer('🏢 ' + esc(t.name) + ' ' + (TENANT_STATUS_PILL[t.status] || ''),
+    '<div class="info-grid">' + info + '</div>' +
+    ovSection('💳 租户级卡产品', '<div class="tbl-wrap"><table><thead><tr><th>产品</th><th>月费</th><th>积分倍率</th></tr></thead><tbody>' + prodRows + '</tbody></table></div>') +
+    ovSection('💰 租户级佣金比例 (可与平台默认 1% / 2% / 0.5% 不同)', '<div class="tbl-wrap"><table><thead><tr><th>类型</th><th>直属</th><th>上级</th><th>上上级</th></tr></thead><tbody>' + commRows + '</tbody></table></div>') +
+    ovSection('⭐ 租户级积分规则', '<div class="rule-block"><div class="rule-line"><span>消费返积分</span><b>1 USD = ' + nz(pr.earnPerUsd) + ' 分</b></div><div class="rule-line"><span>积分抵现</span><b>' + nz(pr.pointsPerUsd) + ' 分 = $1 (最多抵 ' + esc(pr.maxOff) + ')</b></div><div class="rule-line"><span>积分有效期</span><b>' + nz(pr.validityDays) + ' 天</b></div></div>') +
+    ovSection('🔒 数据隔离视图 <span class="pill pill-amber">演示模拟</span>',
+      '<div class="notice" style="margin-bottom:12px">🧱 多租户数据按租户物理隔离: <b>租户 A 看不到租户 B 的用户、卡与交易</b>。平台管理员在此仅能看到该租户独立数据域的聚合统计(非主租户为演示模拟数字)。</div>' +
+      '<div class="sum-row" style="margin-bottom:8px">' + isoTiles + '</div>' +
+      '<div class="dim">' + esc(iso.note || '') + '</div>'),
+    '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">' + (acts || '<span class="dim" style="align-self:center">主租户不可变更状态</span>') +
+      '<a class="btn-outline" href="#tenantConfig" onclick="TC_SEL=' + t.id + '">🎛️ 去租户配置</a><button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+}
+/* ---- 30. 租户配置: 品牌色/币种/语言/时区/佣金比例 编辑(PATCH 内存生效) ---- */
+var TC_SEL = null;
+LOADERS.tenantConfig = function(){
+  $('#tcBody').innerHTML = loadingBox();
+  api('/api/admin/tenants').then(function(d){
+    TENANTS = d.list || [];
+    var sel = $('#tcTenantSel');
+    if (TC_SEL == null) TC_SEL = TENANTS.length ? TENANTS[0].id : null;
+    sel.innerHTML = TENANTS.map(function(t){ return '<option value="' + t.id + '">' + esc(t.name) + ' · ' + esc(t.code) + (t.isMain ? ' (主租户)' : '') + '</option>'; }).join('');
+    if (TC_SEL) sel.value = String(TC_SEL);
+    renderTenantConfig();
+  }).catch(function(e){ $('#tcBody').innerHTML = errBox(e); });
+};
+function tcCur(){
+  var id = +$('#tcTenantSel').value;
+  var t = null; TENANTS.forEach(function(x){ if (x.id === id) t = x; });
+  return t;
+}
+function renderTenantConfig(){
+  var t = tcCur();
+  if (!t){ $('#tcBody').innerHTML = emptyBox('暂无租户'); return; }
+  var c = t.commission || {};
+  var num = function(k, i, step){ return '<input class="input num" id="tcc-' + k + '-' + i + '" type="number" step="' + step + '" min="0" style="width:92px" value="' + c[k][i] + '">'; };
+  $('#tcBody').innerHTML =
+    '<div class="card-title">租户基础配置</div><div class="card-sub">保存后立即对该租户生效(演示为内存 PATCH, 重置演示数据后恢复种子值)</div>' +
+    '<div class="form-grid">' +
+    '<div class="field"><label>品牌色 (Brand Color)</label><div style="display:flex;gap:8px"><input type="color" id="tcColorPick" value="' + esc(t.brandColor) + '" style="width:52px;height:36px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:2px" oninput="$(\'#tcColor\').value=this.value"><input class="input num" id="tcColor" value="' + esc(t.brandColor) + '"></div></div>' +
+    '<div class="field"><label>域名</label><input class="input num" id="tcDomain" value="' + esc(t.domain) + '"></div>' +
+    '<div class="field"><label>币种</label><select class="select" id="tcCurrency">' + ['USD', 'AED', 'SAR', 'QAR', 'BHD', 'KWD', 'EGP'].map(function(x){ return '<option' + (x === t.currency ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>语言</label><select class="select" id="tcLocale">' + ['zh-CN', 'en-AE', 'ar-SA', 'en-QA', 'ar-BH', 'en-US'].map(function(x){ return '<option' + (x === t.locale ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>时区</label><select class="select" id="tcTimezone">' + ['Asia/Riyadh', 'Asia/Dubai', 'Asia/Qatar', 'Asia/Bahrain', 'Asia/Kuwait', 'UTC'].map(function(x){ return '<option' + (x === t.timezone ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>套餐</label><input class="input" value="' + esc(t.planLabel || t.plan) + '" disabled></div></div>' +
+    '<div class="card-title" style="margin:8px 0 3px">租户级佣金比例</div><div class="card-sub">直属 / 上级 / 上上级 三级 · 充值与消费按比例(0.01 = 1%), 发卡按固定金额(USD) · 平台默认: 充值 1%/2%/0.5% · 消费 1%/2%/0.5% · 发卡 $5/$1/$1</div>' +
+    '<div class="tbl-wrap"><table><thead><tr><th>类型</th><th>直属</th><th>上级</th><th>上上级</th></tr></thead><tbody>' +
+    '<tr><td><b>充值佣金</b> (比例)</td>' + [0, 1, 2].map(function(i){ return '<td>' + num('topup', i, 0.001) + '</td>'; }).join('') + '</tr>' +
+    '<tr><td><b>消费佣金</b> (比例)</td>' + [0, 1, 2].map(function(i){ return '<td>' + num('consume', i, 0.001) + '</td>'; }).join('') + '</tr>' +
+    '<tr><td><b>发卡奖励</b> (固定$)</td>' + [0, 1, 2].map(function(i){ return '<td>' + num('card', i, 0.5) + '</td>'; }).join('') + '</tr>' +
+    '</tbody></table></div>' +
+    '<div class="notice" style="margin-top:14px">🔒 数据隔离口径: 该租户的用户 / 卡 / 交易与主租户及其它租户互不可见(当前 GMV <b class="num">' + fmtMoney0(nz(t.gmv)) + '</b> 为其独立数据域聚合' + (t.isolation && t.isolation.simulated ? ' · 演示模拟数字' : '') + ')。</div>';
+}
+function saveTenantConfig(){
+  var t = tcCur(); if (!t) return;
+  var g = function(id){ return ($('#' + id) || {}).value || ''; };
+  var commission = { topup: [], consume: [], card: [] };
+  ['topup', 'consume', 'card'].forEach(function(k){ [0, 1, 2].forEach(function(i){ commission[k].push(parseFloat($('#tcc-' + k + '-' + i).value) || 0); }); });
+  patch('/api/admin/tenants/' + t.id, {
+    brandColor: g('tcColor'), domain: g('tcDomain'), currency: g('tcCurrency'), locale: g('tcLocale'), timezone: g('tcTimezone'),
+    commission: commission
+  }).then(function(r){
+    toast('租户配置已保存: ' + r.tenant.name + ' (品牌色 ' + r.tenant.brandColor + ' · ' + r.tenant.currency + ' · ' + r.tenant.locale + ' · ' + r.tenant.timezone + ')');
+    TC_SEL = t.id;
+    LOADERS.tenantConfig();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+
+/* ================= 31-35. P4.5 开放平台 ================= */
+var OPEN_APPS = [], OPEN_KEYS = [], OPEN_HOOKS = [], OPEN_LOGS = [];
+var APP_STATUS_PILL = { enabled: '<span class="pill pill-green">启用</span>', disabled: '<span class="pill pill-gray">停用</span>' };
+LOADERS.apps = function(){
+  $('#openAppBody').innerHTML = loadingBox(); $('#openAppSum').innerHTML = '';
+  api('/api/admin/open/apps').then(function(d){
+    OPEN_APPS = d.list || [];
+    var en = OPEN_APPS.filter(function(a){ return a.enabled; }).length;
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#openAppSum').innerHTML =
+      sc('🔌', '#e0e7ff', String(OPEN_APPS.length), '应用总数 · 启用 ' + en + ' 个') +
+      sc('📞', '#e0f2fe', fmtPts(OPEN_APPS.reduce(function(s, a){ return s + nz(a.todayCalls); }, 0)), '今日总调用') +
+      sc('📈', '#dcfce7', fmtPts(OPEN_APPS.reduce(function(s, a){ return s + nz(a.totalCalls); }, 0)), '累计总调用') +
+      sc('🔑', '#fef3c7', String(OPEN_APPS.reduce(function(s, a){ return s + nz(a.keyCount); }, 0)), '有效密钥数') +
+      sc('🪝', '#f3e8ff', String(OPEN_APPS.reduce(function(s, a){ return s + nz(a.hookCount); }, 0)), 'Webhook 配置');
+    if (!OPEN_APPS.length){ $('#openAppBody').innerHTML = emptyBox('暂无应用'); return; }
+    var rows = OPEN_APPS.map(function(a){
+      return '<tr>' +
+        '<td><b>' + esc(a.name) + '</b></td>' +
+        '<td><code class="num" style="background:#f1f5f9;border-radius:6px;padding:2px 7px;font-size:12px">' + esc(a.appKey) + '</code></td>' +
+        '<td>' + (a.enabled ? APP_STATUS_PILL.enabled : APP_STATUS_PILL.disabled) + '</td>' +
+        '<td class="num"><b>' + fmtPts(nz(a.todayCalls)) + '</b></td>' +
+        '<td class="num">' + fmtPts(nz(a.totalCalls)) + '</td>' +
+        '<td class="num">' + nz(a.keyCount) + ' 把 / ' + nz(a.hookCount) + ' 个</td>' +
+        '<td class="dim num">' + fmtTime(a.createdAt) + '</td>' +
+        '<td><button class="' + (a.enabled ? 'btn-danger' : 'btn-ok-sm') + '" onclick="toggleOpenApp(' + a.id + ',' + a.enabled + ')">' + (a.enabled ? '停用' : '启用') + '</button></td></tr>';
+    }).join('');
+    $('#openAppBody').innerHTML = '<table><thead><tr><th>应用名</th><th>AppKey</th><th>状态</th><th>今日调用</th><th>累计调用</th><th>密钥/钩子</th><th>创建时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#openAppSum').innerHTML = ''; $('#openAppBody').innerHTML = errBox(e); });
+};
+function toggleOpenApp(id, wasEnabled){
+  patch('/api/admin/open/apps/' + id, { enabled: !wasEnabled }).then(function(r){
+    toast(wasEnabled ? '应用已停用: ' + r.app.name + ', 其开放接口调用将返回 403' : '应用已启用: ' + r.app.name);
+    LOADERS.apps();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 32. API 密钥 ---- */
+LOADERS.keys = function(){
+  $('#openKeyBody').innerHTML = loadingBox(); $('#openKeySum').innerHTML = '';
+  api('/api/admin/open/keys').then(function(d){
+    OPEN_KEYS = d.list || [];
+    var act = OPEN_KEYS.filter(function(k){ return k.status === 'active'; }).length;
+    var sc = function(ic, bg, v, k2){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k2 + '</div></div></div>'; };
+    $('#openKeySum').innerHTML =
+      sc('🔑', '#e0e7ff', String(OPEN_KEYS.length), '密钥总数') +
+      sc('✅', '#dcfce7', String(act), '有效中') +
+      sc('⛔', '#fee2e2', String(OPEN_KEYS.length - act), '已吊销');
+    if (!OPEN_KEYS.length){ $('#openKeyBody').innerHTML = emptyBox('暂无密钥'); return; }
+    var rows = OPEN_KEYS.map(function(k){
+      return '<tr>' +
+        '<td><b>' + esc(k.appName) + '</b></td>' +
+        '<td><code class="num" style="background:#f1f5f9;border-radius:6px;padding:2px 7px;font-size:12px">' + esc(k.secretMask) + '</code></td>' +
+        '<td>' + k.scopes.map(function(s){ return '<span class="pill pill-indigo" style="margin:1px 3px 1px 0">' + esc(s) + '</span>'; }).join('') + '</td>' +
+        '<td>' + (k.status === 'active' ? '<span class="pill pill-green">有效</span>' : '<span class="pill pill-red">已吊销</span>') + '</td>' +
+        '<td class="dim num">' + fmtTime(k.lastUsedAt) + '</td>' +
+        '<td class="num">' + fmtTime(k.expireAt) + '</td>' +
+        '<td class="dim num">' + fmtTime(k.createdAt) + '</td>' +
+        '<td>' + (k.status === 'active' ? '<button class="btn-danger" onclick="confirmRevokeKey(' + k.id + ')">吊销</button>' : '<span class="dim">—</span>') + '</td></tr>';
+    }).join('');
+    $('#openKeyBody').innerHTML = '<table><thead><tr><th>所属应用</th><th>AppSecret</th><th>权限范围 (scope)</th><th>状态</th><th>最近使用</th><th>过期时间</th><th>创建时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#openKeySum').innerHTML = ''; $('#openKeyBody').innerHTML = errBox(e); });
+};
+function confirmRevokeKey(id){
+  showModal('⛔ 吊销 API 密钥',
+    '<div class="notice" style="margin-bottom:14px">吊销后使用该密钥的调用立即返回 <b>401</b>, 且不可恢复(演示)。请确认已在调用方完成密钥轮换。</div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" style="background:var(--bad);box-shadow:0 1px 3px rgba(220,38,38,.35)" onclick="revokeOpenKey(' + id + ')">确认吊销</button></div>');
+}
+function revokeOpenKey(id){
+  post('/api/admin/open/keys/' + id + '/revoke', {}).then(function(r){
+    closeModal(); toast('密钥已吊销: ' + r.key.secretMask + ', 调用将返回 401');
+    LOADERS.keys();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 33. Webhook ---- */
+var WH_STATUS_PILL = { success: '<span class="pill pill-green">成功 200</span>', failed: '<span class="pill pill-red">失败</span>' };
+LOADERS.webhooks = function(){
+  $('#webhookBody').innerHTML = loadingBox();
+  api('/api/admin/open/webhooks').then(function(d){
+    OPEN_HOOKS = d.list || [];
+    if (!OPEN_HOOKS.length){ $('#webhookBody').innerHTML = emptyBox('暂无 Webhook 配置'); return; }
+    var rows = OPEN_HOOKS.map(function(w){
+      return '<tr style="cursor:pointer" onclick="openWebhookDrawer(' + w.id + ')" title="点击查看最近推送记录">' +
+        '<td><span class="pill pill-indigo">' + esc(w.eventLabel) + '</span><div class="sub-line num">' + esc(w.event) + '</div></td>' +
+        '<td><b>' + esc(w.appName) + '</b></td>' +
+        '<td class="num" style="max-width:240px;overflow:hidden;text-overflow:ellipsis">' + esc(w.url) + '</td>' +
+        '<td class="dim">' + esc(w.retry) + '</td>' +
+        '<td>' + (WH_STATUS_PILL[w.lastPush && w.lastPush.status] || '<span class="dim">—</span>') + '<div class="sub-line num">' + fmtTime(w.lastPush && w.lastPush.at) + '</div></td>' +
+        '<td class="num" style="' + (nz(w.failCount) > 0 ? 'color:var(--bad);font-weight:700' : '') + '">' + nz(w.failCount) + ' 次<div class="sub-line num">累计 ' + fmtPts(nz(w.pushCount)) + ' 推送</div></td>' +
+        '<td onclick="event.stopPropagation()"><button class="btn-outline btn-sm" onclick="testWebhook(' + w.id + ')">🧪 测试推送</button></td></tr>';
+    }).join('');
+    $('#webhookBody').innerHTML = '<table><thead><tr><th>事件类型</th><th>所属应用</th><th>URL</th><th>重试策略</th><th>最近推送</th><th>失败次数</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#webhookBody').innerHTML = errBox(e); });
+};
+function testWebhook(id){
+  post('/api/admin/open/webhooks/' + id + '/test', {}).then(function(r){
+    toast('测试推送成功: ' + r.webhook.eventLabel + ' → HTTP ' + r.push.httpCode + ' · ' + r.push.ms + 'ms, 推送记录已追加');
+    LOADERS.webhooks();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function openWebhookDrawer(id){
+  var w = null; OPEN_HOOKS.forEach(function(x){ if (x.id === id) w = x; });
+  if (!w) return;
+  var pushes = (w.pushes || []).map(function(p){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + (p.status === 'success' ? '✅ 成功' : '❌ 失败') + ' · HTTP ' + nz(p.httpCode) + '</span><span class="num">' + fmtTime(p.at) + '</span><span class="dim">· ' + nz(p.ms) + 'ms</span></div>' +
+      '<div class="tl-content num" style="font-size:12px">POST ' + esc(w.url) + '</div></div>';
+  }).join('');
+  showDrawer('🪝 Webhook · ' + esc(w.eventLabel),
+    '<div class="info-grid">' + [
+      ['事件类型', '<span class="num">' + esc(w.event) + '</span>'], ['所属应用', '<b>' + esc(w.appName) + '</b>'],
+      ['回调 URL', '<span class="num" style="word-break:break-all">' + esc(w.url) + '</span>'],
+      ['重试策略', esc(w.retry)],
+      ['最近推送', (WH_STATUS_PILL[w.lastPush && w.lastPush.status] || '—') + ' · ' + fmtTime(w.lastPush && w.lastPush.at)],
+      ['失败次数', '<b class="num" style="' + (nz(w.failCount) > 0 ? 'color:var(--bad)' : '') + '">' + nz(w.failCount) + '</b> / 累计 ' + fmtPts(nz(w.pushCount)) + ' 次']
+    ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('') + '</div>' +
+    ovSection('🕒 最近推送记录', (pushes ? '<div class="tl">' + pushes + '</div>' : emptyBox('暂无推送记录'))),
+    '<div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="testWebhook(' + w.id + ')">🧪 测试推送</button><button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+}
+/* ---- 34. API 日志 ---- */
+LOADERS.apilogs = function(){
+  $('#apiLogBody').innerHTML = loadingBox(); $('#apiLogSum').innerHTML = '';
+  api('/api/admin/open/apilogs').then(function(d){
+    OPEN_LOGS = d.list || [];
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#apiLogSum').innerHTML =
+      sc('📊', '#e0e7ff', String(nz(s.total)), '日志总量(近段)') +
+      sc('✅', '#dcfce7', String(nz(s.ok)), '2xx 成功') +
+      sc('⚠️', '#fee2e2', String(nz(s.fail)), '失败(401/429/500)') +
+      sc('⚡', '#e0f2fe', nz(s.avgMs) + ' ms', '平均耗时');
+    if (!OPEN_LOGS.length){ $('#apiLogBody').innerHTML = emptyBox('暂无调用日志'); return; }
+    var stPill = function(st){ return st === 200 ? '<span class="pill pill-green">200</span>' : st === 401 ? '<span class="pill pill-red">401</span>' : st === 429 ? '<span class="pill pill-amber">429</span>' : '<span class="pill pill-red">' + st + '</span>'; };
+    var rows = OPEN_LOGS.map(function(l){
+      return '<tr>' +
+        '<td class="dim num">' + fmtTime(l.createdAt) + '</td>' +
+        '<td><code class="num" style="font-size:12px;background:#f1f5f9;border-radius:6px;padding:2px 7px">' + esc(l.appKey) + '</code></td>' +
+        '<td class="num">' + esc(l.endpoint) + '</td>' +
+        '<td><span class="pill pill-gray">' + esc(l.method) + '</span></td>' +
+        '<td>' + stPill(l.status) + '</td>' +
+        '<td class="num">' + nz(l.ms) + ' ms</td>' +
+        '<td class="num dim">' + esc(l.ip) + '</td></tr>';
+    }).join('');
+    $('#apiLogBody').innerHTML = '<table><thead><tr><th>时间</th><th>AppKey</th><th>端点</th><th>方法</th><th>状态码</th><th>耗时</th><th>IP(模拟)</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#apiLogSum').innerHTML = ''; $('#apiLogBody').innerHTML = errBox(e); });
+};
+/* ---- 35. 接口文档 + 在线调试(真实调用 /api/open/:mock) ---- */
+var OPEN_DOC = [
+  { g: '账户与 KYC', items: [
+    { mock: 'user.create', name: '用户开户', desc: '为指定租户创建 C 端用户(初始 KYC L0)', req: { name: 'Fatima Al-Zahrani', phone: '+966 55 123 4567', country: 'SA' }, res: { userId: 318, name: 'Fatima Al-Zahrani', kycLevel: 0, status: 'created' } },
+    { mock: 'kyc.submit', name: 'KYC 提交', desc: '提交 KYC 升级申请(证件+自拍), 转人工/自动审核', req: { userId: 318, applyLevel: 1, docs: ['passport.jpg', 'selfie.jpg'] }, res: { kycId: 'KYC-482913', applyLevel: 1, status: 'pending_review', sla: '2 小时' } } ] },
+  { g: '卡片', items: [
+    { mock: 'card.issue', name: '发卡', desc: '为已开户用户签发 U 卡(等级 standard/gold/platinum)', req: { userId: 318, level: 'gold' }, res: { cardId: 207, cardNo: '**** **** **** 4821', level: 'gold', status: 'active', balance: 0 } } ] },
+  { g: '交易与回调', items: [
+    { mock: 'topup.callback', name: '充值回调', desc: '渠道充值完成后回调入账(幂等: 按 ref 去重)', req: { userId: 1, amount: 500, method: 'usdt', ref: '0x9f2a...' }, res: { accepted: true, txId: 'TX884213', amount: 500, status: 'settled' } },
+    { mock: 'consume.callback', name: '消费回调', desc: '卡组织消费清算回调(含 2% 手续费口径)', req: { cardId: 1, amount: 128.4, merchant: 'Amazon' }, res: { accepted: true, txId: 'TX884229', merchant: 'Amazon', amount: 128.4, fee: 2.57, status: 'cleared' } },
+    { mock: 'refund.create', name: '退款', desc: '对已成交交易发起退款(T+1 原路退回)', req: { txId: 'TX884229', amount: 45, reason: '商品未送达' }, res: { refundId: 'RF391205', txId: 'TX884229', amount: 45, status: 'processing', eta: 'T+1 到账' } } ] },
+  { g: '查询类', items: [
+    { mock: 'balance.query', name: '查询余额', desc: '查询单个用户的卡账户余额(可用/冻结)', req: { userId: 1 }, res: { userId: 1, userName: 'Ahmed Al-Rashid', currency: 'USD', balance: 4820.5, available: 4820.5, frozen: 0 } },
+    { mock: 'transaction.query', name: '查询交易', desc: '分页查询用户交易流水(演示返回主租户最近 5 笔真实种子数据)', req: { userId: 1, page: 1, size: 5 }, res: { total: 96, list: [{ id: 1226, type: 'consume', amount: 88.4, status: 'success' }] } },
+    { mock: 'points.query', name: '积分查询', desc: '查询用户积分(可用/冻结/即将过期)', req: { userId: 1 }, res: { userId: 1, available: 2860, frozen: 132, expiringSoon: 420, totalEarned: 18240 } },
+    { mock: 'order.query', name: '订单查询', desc: '查询积分商城兑换订单(按订单号或列表)', req: { orderId: 9002 }, res: { order: { id: 9002, userId: 3, pointsCost: 5200, status: 'shipped', trackingNo: 'SF88219047SA' } } } ] }
+];
+LOADERS.docs = function(silent){
+  if (!silent) $('#docsBody').innerHTML = loadingBox();
+  var fill = function(){
+    var groups = OPEN_DOC.map(function(g){
+      var items = g.items.map(function(it){
+        return '<details class="dict-group" style="margin-bottom:10px"><summary class="dict-head" style="list-style:none">' +
+          '<span class="org-toggle">▸</span><span class="pill pill-indigo" style="min-width:46px;justify-content:center">POST</span>' +
+          '<code class="num" style="font-size:12.5px;font-weight:600">/api/open/' + esc(it.mock) + '</code>' +
+          '<b>' + esc(it.name) + '</b><span class="dim">' + esc(it.desc) + '</span>' +
+          '<button class="btn-outline btn-sm" style="margin-left:auto" onclick="event.preventDefault();event.stopPropagation();openApiDebug(\'' + it.mock + '\')">🧪 调试</button></summary>' +
+          '<div style="border-top:1px solid var(--line);padding:12px 14px;display:grid;grid-template-columns:1fr 1fr;gap:12px" class="api-doc-grid">' +
+          '<div><div class="k" style="font-size:11.5px;color:var(--ink3);margin-bottom:5px">请求示例 (Body JSON)</div><pre class="num" style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto">' + esc(JSON.stringify(it.req, null, 2)) + '</pre></div>' +
+          '<div><div class="k" style="font-size:11.5px;color:var(--ink3);margin-bottom:5px">响应示例 (200)</div><pre class="num" style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto">' + esc(JSON.stringify(it.res, null, 2)) + '</pre></div>' +
+          '</div></details>';
+      }).join('');
+      return '<div style="margin-bottom:16px"><div class="card-title" style="margin-bottom:8px">' + esc(g.g) + '</div>' + items + '</div>';
+    }).join('');
+    $('#docsBody').innerHTML = groups;
+  };
+  if (OPEN_APPS.length) fill();
+  else api('/api/admin/open/apps').then(function(d){ OPEN_APPS = d.list || []; fill(); }).catch(function(e){ $('#docsBody').innerHTML = errBox(e); });
+};
+function openApiDebug(mock){
+  var apps = OPEN_APPS.filter(function(a){ return a.enabled; });
+  if (!apps.length){
+    showModal('🧪 在线调试', '<div class="empty">暂无启用的应用, 请先在「应用管理」启用一个应用获得 AppKey</div>');
+    return;
+  }
+  var opts = OPEN_DOC.reduce(function(a, g){ return a.concat(g.items); }, []);
+  var cur = opts.filter(function(o){ return o.mock === mock; })[0] || opts[0];
+  showModal('🧪 开放接口在线调试',
+    '<div class="field"><label>接口</label><select class="select" id="dbgMock" onchange="dbgSyncBody()">' +
+      opts.map(function(o){ return '<option value="' + o.mock + '"' + (o.mock === cur.mock ? ' selected' : '') + '>POST /api/open/' + o.mock + ' · ' + o.name + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>AppKey (启用中的应用)</label><select class="select" id="dbgApp">' +
+      apps.map(function(a){ return '<option value="' + esc(a.appKey) + '">' + esc(a.name) + ' · ' + esc(a.appKey) + '</option>'; }).join('') + '</select></div>' +
+    '<div class="field"><label>请求 Body (JSON, 可编辑)</label><textarea class="textarea num" id="dbgBody" style="min-height:110px;font-size:12.5px">' + esc(JSON.stringify(cur.req, null, 2)) + '</textarea></div>' +
+    '<div class="form-foot" style="margin-bottom:10px"><button class="btn-outline" onclick="dbgNoKey()">🚫 不带 Key 发送(演示 401)</button><button class="btn" onclick="dbgSend()">▶ 发送请求</button></div>' +
+    '<div id="dbgResp"></div>');
+}
+function dbgNoKey(){ dbgSend(true); } // 演示: 不带有效 Key 发送 → 401
+function dbgSyncBody(){
+  var m = $('#dbgMock').value;
+  var it = OPEN_DOC.reduce(function(a, g){ return a.concat(g.items); }, []).filter(function(o){ return o.mock === m; })[0];
+  if (it) $('#dbgBody').value = JSON.stringify(it.req, null, 2);
+}
+function dbgSend(skipKey){
+  var mock = $('#dbgMock').value, key = $('#dbgApp').value;
+  var body = {};
+  try { body = JSON.parse($('#dbgBody').value || '{}'); }
+  catch (e){ toast('请求 Body 不是合法 JSON: ' + e.message, 'err'); return; }
+  $('#dbgResp').innerHTML = '<div class="empty">⏳ 请求发送中…</div>';
+  var headers = { 'Content-Type': 'application/json' };
+  if (!skipKey) headers['x-app-key'] = key;
+  else headers['x-app-key'] = 'ak-invalid-0000';
+  fetch(API + '/api/open/' + mock, { method: 'POST', headers: headers, body: JSON.stringify(body) })
+    .then(function(res){ return res.json().catch(function(){ return {}; }).then(function(data){ return { status: res.status, data: data }; }); })
+    .then(function(r){
+      var ok = r.status === 200;
+      $('#dbgResp').innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="pill ' + (ok ? 'pill-green' : 'pill-red') + '">HTTP ' + r.status + '</span><span class="dim num">' + (skipKey ? 'x-app-key: ak-invalid-0000 (演示无效 Key)' : 'x-app-key: ' + esc(key)) + '</span></div>' +
+        '<pre class="num" style="background:#0f172a;color:' + (ok ? '#e2e8f0' : '#fca5a5') + ';border-radius:10px;padding:12px;font-size:12px;overflow:auto;max-height:260px">' + esc(JSON.stringify(r.data, null, 2)) + '</pre>' +
+        '<div class="dim" style="margin-top:6px">本次真实调用已写入「API 日志」, 可前往查看。</div>';
+      toast(ok ? '调试成功: HTTP 200 · ' + (r.data.label || mock) : '调试返回 HTTP ' + r.status + ': ' + (r.data.error || ''), ok ? '' : 'warn');
+    })
+    .catch(function(e){ $('#dbgResp').innerHTML = '<div class="empty">⚠️ 请求失败: ' + esc(e.message) + '</div>'; });
+}
+
+/* ================= 36-38. P4.6 消息中心 ================= */
+var NOTIFY_TPLS = [], NOTIFY_SENDS = [], NOTIFY_CHANNELS = [];
+var CH_ICON = { inapp: '🔔', email: '📧', sms: '📱', whatsapp: '💚', webhook: '🪝', push: '📣', voice: '☎️' };
+var CH_NAME = { inapp: '站内信', email: '邮件', sms: '短信', whatsapp: 'WhatsApp', webhook: 'Webhook', push: 'App Push', voice: '语音电话' };
+var EVENT_NAME = { 'topup.success': '充值成功', 'consume.success': '消费成功', 'risk.triggered': '风控触发', 'kyc.passed': 'KYC 通过', 'order.shipped': '订单发货' };
+LOADERS.templates = function(){
+  $('#tplBody').innerHTML = loadingBox(); $('#tplSum').innerHTML = '';
+  api('/api/admin/notify/templates').then(function(d){
+    NOTIFY_TPLS = d.list || [];
+    var sel1 = $('#tplChannelSel'), sel2 = $('#tplEventSel');
+    if (sel1 && !sel1.options.length){
+      sel1.innerHTML = '<option value="">全部渠道</option>' + Object.keys(CH_NAME).map(function(c){ return '<option value="' + c + '">' + CH_ICON[c] + ' ' + CH_NAME[c] + '</option>'; }).join('');
+      sel2.innerHTML = '<option value="">全部事件</option>' + Object.keys(EVENT_NAME).map(function(e){ return '<option value="' + e + '">' + EVENT_NAME[e] + '</option>'; }).join('');
+    }
+    renderNotifyTemplates();
+  }).catch(function(e){ $('#tplSum').innerHTML = ''; $('#tplBody').innerHTML = errBox(e); });
+};
+function renderNotifyTemplates(){
+  var ch = $('#tplChannelSel') ? $('#tplChannelSel').value : '';
+  var ev = $('#tplEventSel') ? $('#tplEventSel').value : '';
+  var list = NOTIFY_TPLS.filter(function(t){ return (!ch || t.channel === ch) && (!ev || t.event === ev); });
+  var en = list.filter(function(t){ return t.enabled; }).length;
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#tplSum').innerHTML =
+    sc('📨', '#e0e7ff', String(NOTIFY_TPLS.length), '模板总数') +
+    sc('✅', '#dcfce7', String(en), '启用中(全渠道)') +
+    sc('⏸️', '#f1f5f9', String(NOTIFY_TPLS.length - en), '已停用(全渠道)');
+  if (!list.length){ $('#tplBody').innerHTML = emptyBox('当前筛选无模板'); return; }
+  var rows = list.map(function(t){
+    return '<tr>' +
+      '<td>' + (CH_ICON[t.channel] || '·') + ' ' + (t.channelName || t.channel) + '</td>' +
+      '<td>' + (EVENT_NAME[t.event] || t.event) + '</td>' +
+      '<td><b>' + esc(t.title) + '</b><div class="sub-line dim" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.body) + '</div></td>' +
+      '<td>' + (t.enabled ? '<span class="pill pill-green">启用</span>' : '<span class="pill pill-gray">停用</span>') + '</td>' +
+      '<td class="dim num">' + fmtTime(t.updatedAt) + '</td>' +
+      '<td><button class="btn-outline btn-sm" style="margin-right:6px" onclick="previewNotifyTemplate(' + t.id + ')">👁 预览</button>' +
+        '<button class="' + (t.enabled ? 'btn-danger' : 'btn-ok-sm') + '" onclick="toggleNotifyTemplate(' + t.id + ',' + t.enabled + ')">' + (t.enabled ? '停用' : '启用') + '</button></td></tr>';
+  }).join('');
+  $('#tplBody').innerHTML = '<table><thead><tr><th>渠道</th><th>事件</th><th>模板内容</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function toggleNotifyTemplate(id, wasEnabled){
+  patch('/api/admin/notify/templates/' + id, { enabled: !wasEnabled }).then(function(r){
+    toast((wasEnabled ? '已停用' : '已启用') + '模板: [' + (r.template.channelName || r.template.channel) + '] ' + (r.template.title));
+    LOADERS.templates();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+var SAMPLE_VARS = { userName: 'Ahmed Al-Rashid', amount: '$1,280.00', cardLast4: '4821', transactionId: 'TX884213' };
+function fillVars(s){
+  return String(s || '').replace(/\{\{(\w+)\}\}/g, function(m, k){
+    if (k === 'createdAt'){ return fmtTime(Date.now()); }
+    return SAMPLE_VARS[k] !== undefined ? SAMPLE_VARS[k] : m;
+  });
+}
+function previewNotifyTemplate(id){
+  var t = null; NOTIFY_TPLS.forEach(function(x){ if (x.id === id) t = x; });
+  if (!t) return;
+  var title = fillVars(t.title), body = fillVars(t.body);
+  var view;
+  if (t.channel === 'email'){
+    view = '<div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">' +
+      '<div style="background:#4f46e5;color:#fff;padding:14px 18px;font-weight:700">📮 U-Card</div>' +
+      '<div style="padding:16px 18px"><div class="k" style="font-size:11.5px;color:var(--ink3)">邮件标题</div><b style="font-size:15px">' + esc(title) + '</b>' +
+      '<div style="height:1px;background:var(--line);margin:12px 0"></div><div style="font-size:13.5px;line-height:1.8;white-space:pre-wrap">' + esc(body) + '</div>' +
+      '<div class="dim" style="margin-top:14px;font-size:11.5px">本邮件由系统自动发送 · U-Card Fintech · 如非本人操作请立即冻结卡片</div></div></div>';
+  } else if (t.channel === 'sms'){
+    var len = body.length;
+    view = '<div class="notice" style="margin-bottom:10px">短信按 70 字/条计费 · 当前 <b class="num">' + len + '</b> 字 · ' + (len <= 70 ? '<span class="pill pill-green">1 条</span>' : '<span class="pill pill-amber">' + Math.ceil(len / 67) + ' 条(长短信)</span>') + '</div>' +
+      '<div style="background:#0f172a;color:#e2e8f0;border-radius:16px;padding:16px;max-width:340px;margin:0 auto"><div class="dim num" style="font-size:11px;text-align:center;margin-bottom:8px">U-CARD</div><div style="font-size:13.5px;line-height:1.7">' + esc(body) + '</div><div class="dim num" style="font-size:10.5px;text-align:right;margin-top:8px">Delivered ✓✓</div></div>';
+  } else if (t.channel === 'whatsapp'){
+    view = '<div style="background:#e5ddd5;border-radius:12px;padding:14px"><div style="background:#dcf8c6;border-radius:10px;padding:12px 14px;max-width:400px;margin-left:auto">' +
+      '<div style="font-size:13.5px;line-height:1.7;white-space:pre-wrap">' + esc(body) + '</div>' +
+      '<div class="dim num" style="font-size:10.5px;text-align:right;margin-top:6px">✓✓ ' + fmtTime(Date.now()) + '</div></div></div>';
+  } else if (t.channel === 'push'){
+    view = '<div style="border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff;max-width:400px;margin:0 auto;box-shadow:0 4px 16px rgba(0,0,0,.08)">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="width:28px;height:28px;border-radius:7px;background:#4f46e5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px">U</span><b style="font-size:12px">U-Card</b><span class="dim num" style="font-size:10.5px;margin-left:auto">now</span></div>' +
+      '<b style="font-size:13.5px">' + esc(title) + '</b><div style="font-size:12.5px;line-height:1.6;margin-top:3px">' + esc(body) + '</div></div>';
+  } else if (t.channel === 'webhook'){
+    var payload = JSON.stringify({ event: t.event, title: title, body: body, vars: SAMPLE_VARS, sentAt: new Date().toISOString() }, null, 2);
+    view = '<div class="dim" style="font-size:12px;margin-bottom:6px">POST https://your-system.com/webhook/ucard</div><pre class="num" style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;font-size:12px;overflow:auto">' + esc(payload) + '</pre>';
+  } else if (t.channel === 'voice'){
+    view = '<div class="notice" style="margin-bottom:10px">☎️ 语音电话播报稿(演示):</div><div style="border:1px solid var(--line);border-radius:12px;padding:16px;font-size:13.5px;line-height:2;background:#fff8f0">🔊 ' + esc(body) + '</div>';
+  } else {
+    view = '<div style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px"><div style="display:flex;gap:10px;align-items:flex-start"><span style="width:34px;height:34px;border-radius:50%;background:#e0e7ff;display:flex;align-items:center;justify-content:center">🔔</span>' +
+      '<div><b style="font-size:13.5px">' + esc(title) + '</b><div style="font-size:13px;line-height:1.7;margin-top:4px;white-space:pre-wrap">' + esc(body) + '</div><div class="dim num" style="font-size:10.5px;margin-top:6px">' + fmtTime(Date.now()) + '</div></div></div></div>';
+  }
+  showDrawer((CH_ICON[t.channel] || '·') + ' 模板预览 · ' + (EVENT_NAME[t.event] || t.event),
+    '<div class="info-grid" style="margin-bottom:14px">' +
+    '<div class="info-item"><div class="k">渠道</div><div class="v">' + (CH_ICON[t.channel] || '') + ' ' + (t.channelName || t.channel) + '</div></div>' +
+    '<div class="info-item"><div class="k">事件</div><div class="v">' + (EVENT_NAME[t.event] || t.event) + '</div></div>' +
+    '<div class="info-item"><div class="k">状态</div><div class="v">' + (t.enabled ? '<span class="pill pill-green">启用</span>' : '<span class="pill pill-gray">停用</span>') + '</div></div>' +
+    '<div class="info-item"><div class="k">变量填充</div><div class="v num" style="font-size:11.5px">示例值填充预览</div></div></div>' +
+    view,
+    '<div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="closeDrawer()">关闭</button></div>');
+}
+/* ---- 37. 发送记录 ---- */
+var SEND_ST_PILL = { success: '<span class="pill pill-green">成功</span>', failed: '<span class="pill pill-red">失败</span>', retrying: '<span class="pill pill-amber">重试中</span>' };
+LOADERS.sends = function(){
+  $('#sendBody').innerHTML = loadingBox(); $('#sendSum').innerHTML = '';
+  api('/api/admin/notify/sends').then(function(d){
+    NOTIFY_SENDS = d.list || [];
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#sendSum').innerHTML =
+      sc('📤', '#e0e7ff', String(nz(s.total)), '发送总量(近段)') +
+      sc('✅', '#dcfce7', String(nz(s.success)), '发送成功') +
+      sc('❌', '#fee2e2', String(nz(s.failed)), '发送失败') +
+      sc('🔄', '#fef3c7', String(nz(s.retrying)), '重试中') +
+      sc('📈', '#e0f2fe', nz(s.rate) + '%', '成功率');
+    if (!NOTIFY_SENDS.length){ $('#sendBody').innerHTML = emptyBox('暂无发送记录'); return; }
+    var rows = NOTIFY_SENDS.map(function(r){
+      return '<tr>' +
+        '<td class="dim num">' + fmtTime(r.createdAt) + '</td>' +
+        '<td>' + (CH_ICON[r.channel] || '·') + ' ' + (r.channelName || r.channel) + '</td>' +
+        '<td><b>' + esc(r.userName) + '</b><div class="sub-line num dim">' + esc(r.receiver) + '</div></td>' +
+        '<td>' + (EVENT_NAME[r.event] || r.event) + '</td>' +
+        '<td class="num" style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(r.content) + '">' + esc(r.content) + '</td>' +
+        '<td>' + (SEND_ST_PILL[r.status] || esc(r.status)) + (r.attempts > 1 ? '<div class="sub-line num dim">第 ' + r.attempts + ' 次</div>' : '') + '</td>' +
+        '<td>' + (r.status === 'success' ? '<span class="dim">—</span>' : '<button class="btn-outline btn-sm" onclick="retryNotifySend(' + r.id + ')">🔄 重发</button>') + '</td></tr>';
+    }).join('');
+    $('#sendBody').innerHTML = '<table><thead><tr><th>时间</th><th>渠道</th><th>接收人</th><th>事件</th><th>内容摘要</th><th>状态</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#sendSum').innerHTML = ''; $('#sendBody').innerHTML = errBox(e); });
+};
+function retryNotifySend(id){
+  post('/api/admin/notify/sends/' + id + '/retry', {}).then(function(r){
+    toast('重发成功: ' + (r.send.channelName || r.send.channel) + ' → ' + r.send.receiver + ' (第 ' + r.send.attempts + ' 次发送)');
+    LOADERS.sends();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 38. 渠道配置 ---- */
+LOADERS.channels = function(){
+  $('#channelBody').innerHTML = loadingBox();
+  api('/api/admin/notify/channels').then(function(d){
+    NOTIFY_CHANNELS = d.list || [];
+    renderChannels();
+  }).catch(function(e){ $('#channelBody').innerHTML = errBox(e); });
+};
+function renderChannels(){
+  if (!NOTIFY_CHANNELS.length){ $('#channelBody').innerHTML = emptyBox('暂无渠道'); return; }
+  var cards = NOTIFY_CHANNELS.map(function(c){
+    var cfgLines = Object.keys(c.config || {}).map(function(k){
+      return '<div style="display:flex;font-size:12px;padding:3px 0"><span class="dim" style="min-width:96px">' + esc(k) + '</span><span class="num" style="word-break:break-all">' + esc(String(c.config[k])) + '</span></div>';
+    }).join('');
+    return '<div class="card" style="padding:16px;margin-bottom:12px' + (c.enabled ? '' : ';opacity:.62') + '">' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+      '<span style="width:40px;height:40px;border-radius:10px;background:' + (c.enabled ? '#e0e7ff' : '#f1f5f9') + ';display:flex;align-items:center;justify-content:center;font-size:19px">' + (CH_ICON[c.key] || '·') + '</span>' +
+      '<div><b>' + esc(c.name) + '</b><div class="dim num" style="font-size:11.5px">' + esc(c.key) + (nz(c.sends) ? ' · 近段发送 ' + fmtPts(c.sends) + ' 条' : '') + '</div></div>' +
+      '<button class="' + (c.enabled ? 'btn-danger' : 'btn-ok-sm') + '" style="margin-left:auto" onclick="toggleChannel(\'' + c.key + '\',' + c.enabled + ')">' + (c.enabled ? '停用' : '启用') + '</button></div>' +
+      '<div style="border-top:1px dashed var(--line);padding-top:8px">' + (cfgLines || '<div class="dim" style="font-size:12px">无配置项</div>') + '</div>' +
+      '<div style="margin-top:10px;text-align:right"><button class="btn-outline btn-sm" onclick="editChannelConfig(\'' + c.key + '\')">⚙️ 编辑配置</button></div></div>';
+  }).join('');
+  $('#channelBody').innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:0">' + cards + '</div>';
+}
+function toggleChannel(ch, wasEnabled){
+  patch('/api/admin/notify/channels/' + ch, { enabled: !wasEnabled }).then(function(r){
+    toast((wasEnabled ? '已停用' : '已启用') + '渠道: ' + r.channel.name + (wasEnabled ? ', 新消息将不再走该渠道' : ''));
+    LOADERS.channels();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function editChannelConfig(ch){
+  var c = null; NOTIFY_CHANNELS.forEach(function(x){ if (x.key === ch) c = x; });
+  if (!c) return;
+  var fields = Object.keys(c.config || {}).map(function(k){
+    var v = String(c.config[k] === null || c.config[k] === undefined ? '' : c.config[k]);
+    var isSecret = /secret|password|key|token|smtp|密码/i.test(k);
+    return '<div class="field"><label>' + esc(k) + (isSecret ? ' <span class="dim">(敏感)</span>' : '') + '</label>' +
+      '<input class="input num" data-chcfg="' + esc(k) + '" value="' + esc(v) + '"' + (isSecret && v ? ' type="password"' : '') + '></div>';
+  }).join('');
+  showModal('⚙️ 渠道配置 · ' + (CH_ICON[c.key] || '') + ' ' + esc(c.name),
+    (fields || '<div class="empty">该渠道无可配置项</div>') +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="saveChannelConfig(\'' + c.key + '\')">保存(内存生效)</button></div>');
+}
+function saveChannelConfig(ch){
+  var inputs = document.querySelectorAll('[data-chcfg]');
+  var config = {};
+  var i; for (i = 0; i < inputs.length; i++){ config[inputs[i].getAttribute('data-chcfg')] = inputs[i].value; }
+  patch('/api/admin/notify/channels/' + ch, { config: config }).then(function(r){
+    closeModal(); toast('渠道配置已保存(演示内存态): ' + r.channel.name);
+    LOADERS.channels();
+  }).catch(function(e){ toast(e.message, 'err'); });
 }
 
 /* ================= 20.5-20.7 资金账本 (P4.4, 总监专属) ================= */

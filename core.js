@@ -40,6 +40,9 @@ const TARGET_DEFAULTS = {
 let salesReps, users, cards, transactions, pointsLogs, commissions, customers, followups, products, orders, tasks;
 let riskEvents, riskRules, riskLists, riskTags, financeMeta; // P1: 风控中心 + 财务对账
 let sysAccounts, sysRoles, sysPerms, sysLogs, opLogs, sysParams, sysDicts; // P3: 系统管理(账号/角色/权限/登录日志/操作日志/参数/字典)
+let tenants; // P4.1 多租户(轻量演示): 租户 + 租户级配置(品牌/币种/佣金/积分规则/数据隔离视图)
+let openApps, openKeys, openWebhooks, openApiLogs; // P4.5 开放平台: 应用 / API密钥 / Webhook / 调用日志
+let notifyTemplates, notifySends, notifyChannels; // P4.6 消息通知中心: 模板 / 发送记录 / 渠道配置
 let inited = false;
 function initSeed() {
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
@@ -319,6 +322,108 @@ sysDicts = [
 ];
 sysLogs = buildSysLoginLogs();
 opLogs = buildSysOpLogs();
+
+// ---------------- P4.1 多租户 / P4.5 开放平台 / P4.6 消息中心 种子 ----------------
+// P4.1 租户(轻量演示): 主租户 U-Card=本系统真实种子数据, 其余租户为平台层模拟隔离数据(不做真实改造)
+const tReal = {
+  users: users.length, cards: cards.length, tx: transactions.length,
+  topup: +transactions.filter(t => t.type === 'topup' && t.status === 'success').reduce((s, t) => s + t.amount, 0).toFixed(2),
+  consume: +transactions.filter(t => t.type === 'consume' && t.status === 'success').reduce((s, t) => s + t.amount, 0).toFixed(2),
+};
+tReal.gmv = +(tReal.topup + tReal.consume).toFixed(2);
+// [name, code, plan, status, domain, currency, locale, timezone, brandColor, commission(null=平台默认), 到期月数, 积分规则]
+const TENANT_DEF = [
+  ['U-Card 优卡', 'ucard', 'Enterprise', 'active', 'app.ucard.io', 'USD', 'zh-CN', 'Asia/Riyadh', '#4f46e5', null, 24, { earnPerUsd: 10, pointsPerUsd: 100, maxOff: '30%', validityDays: 90 }],
+  ['DubaiPay', 'dubaipay', 'Pro', 'active', 'portal.dubaipay.ae', 'AED', 'en-AE', 'Asia/Dubai', '#0ea5e9', { topup: [0.012, 0.018, 0.004], consume: [0.008, 0.015, 0.006], card: [6, 1, 1] }, 11, { earnPerUsd: 8, pointsPerUsd: 100, maxOff: '20%', validityDays: 60 }],
+  ['RiyadhWallet', 'riyadhwallet', 'Basic', 'trial', 'app.riyadhwallet.sa', 'SAR', 'ar-SA', 'Asia/Riyadh', '#16a34a', { topup: [0.008, 0.012, 0.003], consume: [0.006, 0.01, 0.002], card: [3, 1, 0] }, 1, { earnPerUsd: 6, pointsPerUsd: 100, maxOff: '10%', validityDays: 45 }],
+  ['DohaPay', 'dohapay', 'Pro', 'frozen', 'biz.dohapay.qa', 'QAR', 'en-QA', 'Asia/Qatar', '#d97706', { topup: [0.01, 0.02, 0.005], consume: [0.01, 0.02, 0.005], card: [5, 1, 1] }, 7, { earnPerUsd: 12, pointsPerUsd: 100, maxOff: '30%', validityDays: 120 }],
+  ['Manama Pay', 'manamapay', 'Basic', 'pending', '—(待审核)', 'BHD', 'ar-BH', 'Asia/Bahrain', '#7c3aed', { topup: [0.008, 0.012, 0.003], consume: [0.006, 0.01, 0.002], card: [3, 1, 0] }, 1, { earnPerUsd: 6, pointsPerUsd: 100, maxOff: '10%', validityDays: 45 }],
+];
+tenants = TENANT_DEF.map((d, i) => {
+  const [name, code, plan, status, domain, currency, locale, timezone, brandColor, comm, expM, pts] = d;
+  const iso = i === 0
+    ? { ...tReal, simulated: false }
+    : { users: ri(280, 3600), cards: ri(260, 3200), tx: ri(3200, 46000),
+        topup: ri(180000, 5200000), consume: ri(120000, 3800000), simulated: true };
+  const c = comm || { topup: [...COMMISSION.topup.tiers], consume: [...COMMISSION.consume.tiers], card: [...COMMISSION.card.tiers] };
+  const lvls = Object.entries(CARD_LEVELS).filter(([k]) => plan !== 'Basic' || k !== 'platinum');
+  return {
+    id: i + 1, name, code, plan, status, domain, currency, locale, timezone, brandColor,
+    commission: c, pointsRule: pts, expireAt: now() + expM * 30 * 864e5, createdAt: daysAgo(ri(60, 420)),
+    cardProducts: lvls.map(([key, v]) => ({ key, name: v.label, monthlyFee: +(v.monthlyFee * (plan === 'Basic' ? 0.5 : 1)).toFixed(0), pointRate: v.pointRate, color: v.color })),
+    isolation: { ...iso, gmv: +(iso.topup + iso.consume).toFixed(2), note: i === 0 ? '主租户 · 数据为本演示系统真实种子统计' : '演示模拟数据(与主租户物理隔离, 平台侧仅见聚合数字)' },
+    isMain: i === 0,
+  };
+});
+
+// P4.5 开放平台: 应用 / 密钥 / Webhook / 调用日志
+openApps = [
+  ['DubaiPay 收单系统', 'ak-dpay-7f3m2kx9', true],
+  ['RiyadhWallet 小程序', 'ak-rwlt-9q2x8d4v', true],
+  ['ERP 对账集成', 'ak-erpcon-3n8v5t6m', false],
+  ['渠道分销平台', 'ak-chdis-5j1w6y2p', true],
+].map(([name, appKey, enabled], i) => ({ id: i + 1, name, appKey, enabled, todayCalls: enabled ? ri(120, 480) : 0, totalCalls: ri(52000, 186000), createdAt: daysAgo(ri(70, 320)) }));
+const SCOPE_SETS = [
+  ['user.read', 'balance.read', 'transaction.read'],
+  ['user.create', 'kyc.submit', 'card.issue'],
+  ['topup.callback', 'consume.callback'],
+  ['balance.read', 'points.query', 'order.query', 'refund.create'],
+  ['risk.webhook', 'order.webhook'],
+];
+openKeys = [
+  [1, 'sk-9f2mkq7xw4d1plz8', 0, 'active', 0],
+  [1, 'sk-3tb8nc2v6hj5qw09', 1, 'active', 45],
+  [2, 'sk-7ke4xa9m2rt6yu3i', 3, 'active', 120],
+  [3, 'sk-1pz6lo8k4de7vc2q', 2, 'revoked', 0],
+  [4, 'sk-5wu9qn3j7hf2xs6o', 4, 'active', 200],
+].map(([appId, appSecret, sc, status, usedDaysAgoJitter], i) => ({
+  id: i + 1, appId, appSecret, scopes: SCOPE_SETS[sc], status,
+  lastUsedAt: status === 'revoked' ? null : daysAgo(ri(0, 2), usedDaysAgoJitter || 6),
+  expireAt: status === 'revoked' ? daysAgo(9) : now() + ri(60, 400) * 864e5,
+  createdAt: daysAgo(ri(70, 320)),
+}));
+const WH_EVENTS = [['topup.success', '充值成功'], ['consume.success', '消费成功'], ['risk.triggered', '风控触发'], ['order.changed', '订单状态变更']];
+openWebhooks = [
+  [1, 0, 'https://biz.dubaipay.ae/hooks/topup', 'success', 0],
+  [1, 2, 'https://biz.dubaipay.ae/hooks/risk', 'success', 1],
+  [2, 1, 'https://app.riyadhwallet.sa/hooks/consume', 'failed', 3],
+  [2, 3, 'https://app.riyadhwallet.sa/hooks/order', 'success', 0],
+  [4, 0, 'https://dist.channel-ucard.com/hooks/topup', 'success', 0],
+].map(([appId, evIdx, url, lastSt, fails], i) => ({
+  id: i + 1, appId, event: WH_EVENTS[evIdx][0], eventLabel: WH_EVENTS[evIdx][1], url,
+  retry: pick(['3 次 · 指数退避(1m/5m/30m)', '5 次 · 指数退避', '3 次 · 固定间隔 5m']),
+  lastPush: { status: lastSt, httpCode: lastSt === 'success' ? 200 : 504, at: daysAgo(ri(0, 2), 8) },
+  failCount: fails, pushCount: ri(320, 5800),
+  pushes: [0, 1].map(k => ({ id: k + 1, at: daysAgo(ri(0, 3), 10), status: k === 0 ? lastSt : 'success', httpCode: k === 0 ? (lastSt === 'success' ? 200 : 504) : 200, ms: ri(80, 900) })),
+}));
+openApiLogs = buildOpenApiLogs();
+
+// P4.6 消息通知中心: 渠道 / 模板 / 发送记录
+notifyChannels = [
+  ['inapp', '站内信', '🔔', true, { 通道: '平台内置', 保留天数: '90 天', 免打扰: '23:00 - 07:00' }],
+  ['email', '邮件', '📧', true, { SMTP: 'smtp.ucard.io:465', 发件人: 'no-reply@ucard.io', 加密: 'TLS' }],
+  ['sms', '短信', '💬', true, { 网关: 'Twilio / Unifonic', 签名: '【U-Card】', 单价: '$0.045 / 条' }],
+  ['whatsapp', 'WhatsApp', '🟢', true, { 接入: 'WhatsApp Business API', 号码: '+971 4 *** ****', 模板审核: '已通过' }],
+  ['webhook', 'Webhook', '🔗', true, { 回调地址: 'https://biz.ucard.io/notify', 签名: 'HMAC-SHA256', 重试: '3 次指数退避' }],
+  ['push', 'App Push', '📱', true, { 通道: 'FCM + APNs', 角标: '开启', 离线保留: '7 天' }],
+  ['voice', '语音电话', '📞', false, { 平台: 'Twilio Voice', 用途: '风控高危外呼', 单价: '$0.12 / 分钟' }],
+].map(([key, name, icon, enabled, config], i) => ({ id: i + 1, key, name, icon, enabled, config }));
+const NT_EVENTS = [['topup.success', '充值成功'], ['consume.success', '消费成功'], ['risk.triggered', '风控触发'], ['kyc.passed', 'KYC 通过'], ['order.shipped', '订单发货']];
+notifyTemplates = [
+  ['inapp', 0, '充值到账', '{{userName}} 您好, 您尾号 {{cardLast4}} 的 U 卡充值 {{amount}} 已到账, 交易号 {{transactionId}}, 时间 {{createdAt}}。', true],
+  ['email', 0, '【U-Card】充值成功通知', '尊敬的 {{userName}}:\n\n您尾号 {{cardLast4}} 的卡片于 {{createdAt}} 成功充值 {{amount}}, 交易号 {{transactionId}}。\n\n如非本人操作请立即冻结卡片并联系客服。\n\nU-Card 优卡团队', true],
+  ['sms', 0, '', '【U-Card】尾号{{cardLast4}}充值{{amount}}已到账,交易号{{transactionId}}', true],
+  ['whatsapp', 1, '', '🛍️ *{{userName}}*, 您刚完成一笔消费\n\n💰 金额: {{amount}}\n💳 卡片: **** {{cardLast4}}\n🔖 交易号: {{transactionId}}\n🕐 时间: {{createdAt}}\n\n感谢您使用 U-Card! ✨', true],
+  ['push', 1, '消费交易提醒', '您在商户消费 {{amount}}, 尾号 {{cardLast4}}, 本笔交易已返还积分, 点击查看详情。', true],
+  ['sms', 2, '', '【U-Card】检测到尾号{{cardLast4}}异常交易,卡片已保护性冻结,交易号{{transactionId}}', true],
+  ['email', 2, '【U-Card】风控安全提醒', '尊敬的 {{userName}}:\n\n系统检测到您尾号 {{cardLast4}} 的卡片存在风险交易({{amount}}, 交易号 {{transactionId}}), 卡片已保护性冻结。请通过 App 或客服完成身份核实后恢复。\n\nU-Card 风控中心 · {{createdAt}}', false],
+  ['inapp', 3, 'KYC 认证通过', '恭喜 {{userName}}, 您的 KYC 认证已通过, 交易与额度限制已提升, 详见「安全中心」。', true],
+  ['push', 4, '订单已发货', '{{userName}} 您好, 您的积分商城订单已发货, 消耗积分可在订单详情查看, 物流信息将同步更新。', true],
+  ['webhook', 4, '', '{\n  "event": "order.shipped",\n  "userName": "{{userName}}",\n  "transactionId": "{{transactionId}}",\n  "amount": "{{amount}}",\n  "cardLast4": "{{cardLast4}}",\n  "createdAt": "{{createdAt}}"\n}', false],
+].map(([channel, evIdx, title, body, enabled], i) => ({
+  id: i + 1, channel, event: NT_EVENTS[evIdx][0], eventLabel: NT_EVENTS[evIdx][1], title, body, enabled, updatedAt: daysAgo(ri(2, 40)),
+}));
+notifySends = buildNotifySends();
 rebuildLedgerSeed(); // P4.4: 为种子交易回填复式账本(与卡余额自洽) + 14 天余额快照 + 演示冻结余额
   inited = true;
 }
@@ -974,6 +1079,85 @@ function buildSysOpLogs() {
   return out.map((o, i) => ({ id: 910001 + i, ...o }));
 }
 
+// ---------------- P4 平台层工具(模块级, 依赖 initSeed 填充的冷数据) ----------------
+const TENANT_STATUS_LABEL = { pending: '待审核', trial: '试用', active: '正常', frozen: '冻结' };
+const TENANT_PLAN_LABEL = { Basic: 'Basic 基础版', Pro: 'Pro 专业版', Enterprise: 'Enterprise 旗舰版' };
+const pctStr = (v) => { const pc = v * 100; return (pc % 1 ? pc.toFixed(1) : pc) + '%'; };
+const pubTenant = (t) => ({ ...t,
+  statusLabel: TENANT_STATUS_LABEL[t.status] || t.status, planLabel: TENANT_PLAN_LABEL[t.plan] || t.plan,
+  expireDaysLeft: Math.max(0, Math.ceil((t.expireAt - now()) / 864e5)),
+  commissionDisplay: {
+    topup: t.commission.topup.map(pctStr), consume: t.commission.consume.map(pctStr),
+    card: t.commission.card.map(v => '$' + v),
+  },
+  users: t.isolation.users, cards: t.isolation.cards, gmv: t.isolation.gmv,
+});
+const maskSecret = (s) => 'sk-****' + String(s || '').slice(-4);
+// 开放 API 日志种子: 近 100 条调用(状态码/耗时/IP 为演示模拟)
+function buildOpenApiLogs() {
+  const EPS = ['balance.query', 'transaction.query', 'user.create', 'topup.callback', 'consume.callback', 'points.query', 'order.query', 'card.issue', 'kyc.submit', 'refund.create'];
+  const IPS = ['37.106.', '94.56.', '185.93.', '5.42.', '78.95.', '45.12.'];
+  const keys = openApps.filter(a => a.enabled).map(a => a.appKey);
+  const out = [];
+  let ts = now();
+  for (let i = 0; i < 100; i++) {
+    ts -= ri(2, 26) * 6e4 + ri(0, 59) * 1e3;
+    const ok = rnd() > 0.07;
+    out.push({ id: 950001 + i, createdAt: ts, appKey: pick(keys), endpoint: '/api/open/' + pick(EPS),
+      method: pick(['POST', 'POST', 'POST', 'GET']), status: ok ? 200 : pick([401, 429, 500]),
+      ms: ri(16, 420), ip: pick(IPS) + ri(10, 240) + '.' + ri(1, 254) });
+  }
+  return out;
+}
+// 消息发送记录种子: 近 100 条(渠道/事件/接收人/模板/状态/耗时), 失败可重发
+function buildNotifySends() {
+  const CH = notifyChannels.filter(c => c.enabled).map(c => c.key);
+  const maskMail = (m) => String(m).replace(/^(.).*(@.*)$/, '$1***$2');
+  const maskPhone = (p) => String(p).replace(/\s/g, '').replace(/^(\+\d{3})\d+(\d{2})$/, '$1 *****$2');
+  const out = [];
+  let ts = now();
+  for (let i = 0; i < 100; i++) {
+    ts -= ri(3, 42) * 6e4;
+    const channel = pick(CH);
+    const tpl = pick(notifyTemplates.filter(t => t.channel === channel)) || notifyTemplates[0];
+    const u = pick(users);
+    // 用示例值填模板变量, 生成"内容摘要"预览
+    const content = tpl.body.replace(/\{\{(\w+)\}\}/g, (m, k) => k === 'userName' ? u.name
+      : k === 'amount' ? '$' + (ri(120, 260000) / 100).toFixed(2)
+      : k === 'cardLast4' ? String(ri(1000, 9999))
+      : k === 'transactionId' ? 'TX' + ri(100000, 999999)
+      : k === 'createdAt' ? new Date(ts).toISOString().slice(0, 16).replace('T', ' ') : m).replace(/\n/g, ' ').slice(0, 90);
+    const sr = rnd();
+    let st = sr < 0.87 ? 'success' : sr < 0.955 ? 'failed' : 'retrying';
+    if (i === 2 || i === 23) st = 'failed';   // 保证演示/自测必有可重发记录
+    if (i === 8 || i === 37) st = 'retrying';
+    out.push({ id: 960001 + i, createdAt: ts, channel, event: tpl.event, eventLabel: tpl.eventLabel,
+      userName: u.name,
+      receiver: (channel === 'email' ? maskMail(u.email) : channel === 'webhook' ? 'https://biz.' + maskMail(u.email).split('@')[1] + '/notify' : maskPhone(u.phone)),
+      templateId: tpl.id, content, status: st, attempts: st === 'success' ? (rnd() < 0.06 ? 2 : 1) : ri(1, 3), ms: ri(38, 2400) });
+  }
+  return out;
+}
+// mock 调用写入开放 API 日志(上限 200 条)
+function logOpenApi(appKey, endpoint, method, status, ms, ip) {
+  openApiLogs.unshift({ id: openApiLogs.length ? Math.max(...openApiLogs.map(l => l.id)) + 1 : 950001, createdAt: now(), appKey, endpoint, method, status, ms, ip: ip || '127.0.0.1' });
+  if (openApiLogs.length > 200) openApiLogs.length = 200;
+}
+// P4.5 开放平台 mock 接口注册表: 供接口文档「在线调试」真实调用(只读模拟, 不动真实账本)
+const OPEN_MOCKS = {
+  'user.create': { label: '用户开户', data: (b) => ({ userId: ri(100, 999), name: b.name || 'OpenAPI User', kycLevel: 0, status: 'created', invitedBy: null, createdAt: now() }) },
+  'kyc.submit': { label: 'KYC 提交', data: (b) => ({ kycId: 'KYC-' + ri(100000, 999999), applyLevel: Math.min(2, +b.applyLevel || 1), docs: ['passport.jpg', 'selfie.jpg'], status: 'pending_review', sla: '2 小时' }) },
+  'card.issue': { label: '发卡', data: (b) => ({ cardId: ri(100, 999), cardNo: maskCardNo(genCardNo()), level: b.level || 'standard', status: 'active', balance: 0, expMonth: ri(1, 12), expYear: ri(28, 31) }) },
+  'balance.query': { label: '查询余额', data: (b) => { const u = users.find(x => x.id === +b.userId) || users[0]; const c = cards.find(x => x.userId === u.id); return { userId: u.id, userName: u.name, currency: 'USD', balance: c ? +c.balance.toFixed(2) : 0, available: c ? +c.balance.toFixed(2) : 0, frozen: 0, asOf: now() }; } },
+  'transaction.query': { label: '查询交易', data: (b) => ({ total: transactions.length, list: transactions.slice(0, 5).map(pubTx) }) },
+  'topup.callback': { label: '充值回调', data: (b) => ({ accepted: true, txId: 'TX' + ri(100000, 999999), amount: +b.amount || 100, currency: 'USD', method: b.method || 'usdt', status: 'settled', receivedAt: now() }) },
+  'consume.callback': { label: '消费回调', data: (b) => ({ accepted: true, txId: 'TX' + ri(100000, 999999), merchant: b.merchant || 'Amazon', amount: +b.amount || 58.4, fee: +(((+b.amount || 58.4) * 0.02)).toFixed(2), status: 'cleared', receivedAt: now() }) },
+  'refund.create': { label: '退款', data: (b) => ({ refundId: 'RF' + ri(100000, 999999), txId: b.txId || 'TX' + ri(100000, 999999), amount: +b.amount || 45, status: 'processing', eta: 'T+1 到账' }) },
+  'points.query': { label: '积分查询', data: (b) => { const u = users.find(x => x.id === +b.userId) || users[0]; const s = pointsSummary(u.id); return { userId: u.id, userName: u.name, available: s.available, frozen: s.frozen, expiringSoon: s.expiringSoon, totalEarned: s.total }; } },
+  'order.query': { label: '订单查询', data: (b) => (b.orderId ? { order: pubOrder(orders.find(o => o.id === +b.orderId) || orders[0]) } : { total: orders.length, list: orders.slice(0, 5).map(pubOrder) }) },
+};
+
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
 export function handleApi(method, p, q = {}, b = {}, h = {}) {
@@ -1416,6 +1600,123 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       }
       return J({ error: 'not found: ' + p }, 404);
     }
+    // ============ P4.1 多租户 / P4.5 开放平台 / P4.6 消息中心 (平台管理员=总监专属, 其余角色一律 403) ============
+    if (p.startsWith('/api/admin/tenants')) {
+      if (sid !== 1) return J({ error: '仅平台管理员(总监)可访问多租户管理' }, 403);
+      if (p === '/api/admin/tenants') {
+        const cnt = (st) => tenants.filter(t => t.status === st).length;
+        return J({ list: tenants.map(pubTenant),
+          summary: { total: tenants.length, active: cnt('active'), trial: cnt('trial'), pending: cnt('pending'), frozen: cnt('frozen'),
+            gmv: +tenants.reduce((s, t) => s + t.isolation.gmv, 0).toFixed(2), users: tenants.reduce((s, t) => s + t.isolation.users, 0) } });
+      }
+      const mTn = p.match(/^\/api\/admin\/tenants\/(\d+)$/);
+      if (mTn && method === 'PATCH') { // 状态流转(审核/冻结/解冻) 或 租户配置字段保存
+        const t = tenants.find(x => x.id === +mTn[1]);
+        if (!t) return J({ error: '租户不存在' }, 404);
+        if (b.status) {
+          if (!TENANT_STATUS_LABEL[b.status]) return J({ error: '无效的租户状态: ' + b.status }, 400);
+          if (t.isMain && b.status !== 'active') return J({ error: '主租户不可冻结或变更状态' }, 400);
+          t.status = b.status;
+        }
+        ['domain', 'currency', 'locale', 'timezone', 'brandColor'].forEach(k => { if (b[k] != null) t[k] = String(b[k]).slice(0, 120); });
+        if (b.commission) ['topup', 'consume', 'card'].forEach(k => {
+          const arr = b.commission[k];
+          if (Array.isArray(arr) && arr.length === 3) t.commission[k] = arr.map(v => Math.max(0, +v || 0));
+        });
+        return J({ tenant: pubTenant(t) });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    if (p.startsWith('/api/admin/open/')) {
+      if (sid !== 1) return J({ error: '仅平台管理员(总监)可访问开放平台' }, 403);
+      if (p === '/api/admin/open/apps') {
+        return J({ list: openApps.map(a => ({ ...a,
+          keyCount: openKeys.filter(k => k.appId === a.id && k.status === 'active').length,
+          hookCount: openWebhooks.filter(w => w.appId === a.id).length })) });
+      }
+      const mApp = p.match(/^\/api\/admin\/open\/apps\/(\d+)$/);
+      if (mApp && method === 'PATCH') { // 应用启停
+        const a = openApps.find(x => x.id === +mApp[1]);
+        if (!a) return J({ error: '应用不存在' }, 404);
+        if (typeof b.enabled === 'boolean') a.enabled = b.enabled;
+        return J({ app: { ...a } });
+      }
+      if (p === '/api/admin/open/keys') { // 密钥列表(Secret 服务端掩码, 不回传明文)
+        return J({ list: openKeys.map(k => ({ id: k.id, appId: k.appId, appName: (openApps.find(a => a.id === k.appId) || {}).name || '—',
+          secretMask: maskSecret(k.appSecret), scopes: k.scopes, status: k.status, lastUsedAt: k.lastUsedAt, expireAt: k.expireAt, createdAt: k.createdAt })) });
+      }
+      const mKey = p.match(/^\/api\/admin\/open\/keys\/(\d+)\/revoke$/);
+      if (mKey && method === 'POST') { // 密钥吊销
+        const k = openKeys.find(x => x.id === +mKey[1]);
+        if (!k) return J({ error: '密钥不存在' }, 404);
+        if (k.status === 'revoked') return J({ error: '该密钥已处于吊销状态' }, 400);
+        k.status = 'revoked';
+        return J({ ok: true, key: { ...k, secretMask: maskSecret(k.appSecret) } });
+      }
+      if (p === '/api/admin/open/webhooks') {
+        return J({ list: openWebhooks.map(w => ({ ...w, appName: (openApps.find(a => a.id === w.appId) || {}).name || '—' })) });
+      }
+      const mWh = p.match(/^\/api\/admin\/open\/webhooks\/(\d+)\/test$/);
+      if (mWh && method === 'POST') { // 测试推送: 追加一条成功推送记录
+        const w = openWebhooks.find(x => x.id === +mWh[1]);
+        if (!w) return J({ error: 'Webhook 配置不存在' }, 404);
+        const push = { id: (w.pushes.length ? Math.max(...w.pushes.map(x => x.id)) : 0) + 1, at: now(), status: 'success', httpCode: 200, ms: ri(60, 420) };
+        w.pushes.unshift(push);
+        if (w.pushes.length > 20) w.pushes.length = 20;
+        w.lastPush = { status: 'success', httpCode: 200, at: now() };
+        w.pushCount++;
+        return J({ ok: true, webhook: { ...w, appName: (openApps.find(a => a.id === w.appId) || {}).name || '—' }, push });
+      }
+      if (p === '/api/admin/open/apilogs') { // 近 100 条调用日志
+        const list = [...openApiLogs].sort((a, b) => b.createdAt - a.createdAt).slice(0, 100);
+        const ok = openApiLogs.filter(l => l.status === 200).length;
+        return J({ list, summary: { total: openApiLogs.length, ok, fail: openApiLogs.length - ok,
+          avgMs: Math.round(openApiLogs.reduce((s, l) => s + l.ms, 0) / Math.max(1, openApiLogs.length)) } });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    if (p.startsWith('/api/admin/notify/')) {
+      if (sid !== 1) return J({ error: '仅平台管理员(总监)可访问消息中心' }, 403);
+      if (p === '/api/admin/notify/templates') {
+        return J({ list: notifyTemplates.map(t => ({ ...t, channelName: (notifyChannels.find(c => c.key === t.channel) || {}).name || t.channel })),
+          channels: notifyChannels.map(c => ({ key: c.key, name: c.name })) });
+      }
+      const mTpl = p.match(/^\/api\/admin\/notify\/templates\/(\d+)$/);
+      if (mTpl && method === 'PATCH') { // 模板启停
+        const t = notifyTemplates.find(x => x.id === +mTpl[1]);
+        if (!t) return J({ error: '模板不存在' }, 404);
+        if (typeof b.enabled === 'boolean') { t.enabled = b.enabled; t.updatedAt = now(); }
+        return J({ template: { ...t } });
+      }
+      if (p === '/api/admin/notify/sends') { // 近 100 条发送记录
+        const list = [...notifySends].sort((a, b) => b.createdAt - a.createdAt).slice(0, 100)
+          .map(s => ({ ...s, channelName: (notifyChannels.find(c => c.key === s.channel) || {}).name || s.channel }));
+        const cnt = (st) => notifySends.filter(s => s.status === st).length;
+        const okN = cnt('success'), totalN = notifySends.length;
+        return J({ list, summary: { total: totalN, success: okN, failed: cnt('failed'), retrying: cnt('retrying'), rate: totalN ? Math.round(okN / totalN * 1000) / 10 : 0 } });
+      }
+      const mSnd = p.match(/^\/api\/admin\/notify\/sends\/(\d+)\/retry$/);
+      if (mSnd && method === 'POST') { // 失败重发: 状态翻成功
+        const s = notifySends.find(x => x.id === +mSnd[1]);
+        if (!s) return J({ error: '发送记录不存在' }, 404);
+        if (s.status !== 'failed' && s.status !== 'retrying') return J({ error: '仅失败/重试中的记录可重发' }, 400);
+        s.status = 'success'; s.attempts = (s.attempts || 1) + 1; s.ms = ri(60, 900); s.retriedAt = now();
+        return J({ ok: true, send: { ...s, channelName: (notifyChannels.find(c => c.key === s.channel) || {}).name || s.channel } });
+      }
+      if (p === '/api/admin/notify/channels') {
+        return J({ list: notifyChannels.map(c => ({ ...c, sends: notifySends.filter(s => s.channel === c.key).length })) });
+      }
+      const mCh = p.match(/^\/api\/admin\/notify\/channels\/([a-z]+)$/);
+      if (mCh && method === 'PATCH') { // 渠道启停 / 配置编辑(内存)
+        const c = notifyChannels.find(x => x.key === mCh[1]);
+        if (!c) return J({ error: '渠道不存在: ' + mCh[1] }, 404);
+        if (typeof b.enabled === 'boolean') c.enabled = b.enabled;
+        if (b.config && typeof b.config === 'object') Object.keys(b.config).forEach(k => { c.config[k] = String(b.config[k]).slice(0, 160); });
+        return J({ channel: { ...c } });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    // ============ P4.4 资金账本(总监专属, 其他角色一律 403) ============
     if (p.startsWith('/api/admin/ledger')) {
       if (sid !== 1) return J({ error: '仅运营总监可访问资金账本' }, 403);
       const frozenOf = (key) => lgR2(frozenBalances.filter(f => f.accountKey === key && f.status === 'frozen').reduce((s, f) => s + f.amount, 0));
@@ -1563,6 +1864,25 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       return J({ ok: true, unread: after.unread });
     }
     return J({ error: 'not found' }, 404);
+  }
+
+  // ============ P4.5 开放平台 mock 接口(接口文档「在线调试」真实可调; AppKey 鉴权, 不动真实账本) ============
+  if (p.startsWith('/api/open/')) {
+    const appKey = h['x-app-key'] || h['X-App-Key'] || '';
+    const app = openApps.find(a => a.appKey === appKey);
+    if (!app) return J({ error: '401 Unauthorized: 无效的 x-app-key, 请在「开放平台 → 应用管理」获取启用的 AppKey' }, 401);
+    if (!app.enabled) return J({ error: '403 Forbidden: 应用已停用, 拒绝访问' }, 403);
+    const mock = p.slice('/api/open/'.length);
+    const def = OPEN_MOCKS[mock];
+    if (!def) {
+      logOpenApi(app.appKey, p, method, 404, ri(4, 18), h['x-forwarded-for']);
+      return J({ error: '404 Not Found: 未知的开放接口: /api/open/' + mock, available: Object.keys(OPEN_MOCKS) }, 404);
+    }
+    const data = def.data(b || {});
+    const ms = ri(16, 180);
+    app.todayCalls++; app.totalCalls++;
+    logOpenApi(app.appKey, p, method, 200, ms, h['x-forwarded-for']);
+    return J({ ok: true, endpoint: mock, label: def.label, app: app.name, latencyHint: ms + 'ms', data });
   }
   return null; // 非 API
 }

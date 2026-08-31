@@ -13,7 +13,7 @@ import { handleApi } from './core.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const body = (req) => new Promise(r => { let s = ''; req.on('data', c => s += c); req.on('end', () => { try { r(JSON.parse(s || '{}')); } catch { r({}); } }); });
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type,x-user,x-sales', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' }; // 允许 file:// 双击打开页面直连本服务
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type,x-user,x-sales,x-app-key', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' }; // 允许 file:// 双击打开页面直连本服务
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
