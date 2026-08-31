@@ -883,6 +883,45 @@
       </div>
     </section>
 
+    <!-- 39. 审批中心 (P4.2) -->
+    <section class="page" id="page-approvals">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <div class="tabs" id="apTabs">
+            <button class="tab active" data-t="todo" onclick="switchApBox('todo')">📥 我的待办</button>
+            <button class="tab" data-t="mine" onclick="switchApBox('mine')">📤 我发起的</button>
+            <button class="tab" data-t="all" onclick="switchApBox('all')">🗂️ 审批记录</button>
+          </div>
+          <select class="select" style="width:150px" id="apTypeSel" onchange="LOADERS.approvals()">
+            <option value="">全部流程</option>
+          </select>
+        </div>
+        <span class="dim">批准 / 驳回(需原因) / 转交 / 撤回 · 点击行查看完整审批时间轴 · ⏰ = 超 48 小时未处理</span>
+      </div>
+      <div id="apSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title" id="apTitle">我的待办</div>
+        <div class="card-sub">5 类流程: 发卡申请 / KYC 升级 / 退款申请 / 佣金结算 / 调账申请 · 全部节点通过后自动执行业务动作(发卡/退款冲正/佣金打款/调账入账)</div>
+        <div class="tbl-wrap" id="apBody"></div>
+      </div>
+    </section>
+
+    <!-- 40. 规则引擎 (P4.3) -->
+    <section class="page" id="page-engine">
+      <div class="notice">🧠 结构化规则引擎: 条件(字段 + 操作符 + 阈值, 支持 且/或 组合) → 动作(拦截 / 冻结 / 人工审核 / 标记)。用户端每笔充值与消费实时求值 — 拦截直接拒绝交易并返回规则名; 冻结放行本笔但冻结卡片; 审核/标记转风控中心人工处置。规则增删改自动生成策略小版本。</div>
+      <div class="toolbar">
+        <div class="tabs" id="engTabs">
+          <button class="tab active" data-t="rules" onclick="switchEngTab('rules')">📐 规则配置</button>
+          <button class="tab" data-t="scores" onclick="switchEngTab('scores')">🎯 风险评分</button>
+          <button class="tab" data-t="hits" onclick="switchEngTab('hits')">⚡ 命中记录</button>
+          <button class="tab" data-t="versions" onclick="switchEngTab('versions')">🗂️ 策略版本</button>
+        </div>
+        <span class="dim" id="engVer"></span>
+        <button class="btn" onclick="openEngineRuleModal()">➕ 新建规则</button>
+      </div>
+      <div class="card"><div class="tbl-wrap" id="engineBody"></div></div>
+    </section>
+
   </div>
 </div>
 
@@ -961,7 +1000,8 @@ var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'�
              accounts:'账号管理', roles:'角色管理', perms:'权限配置', org:'组织架构', params:'系统参数', dicts:'字典管理', loginlogs:'登录日志', oplogs:'操作日志',
              tenants:'租户管理', tenantConfig:'租户配置',
              apps:'应用管理', keys:'API 密钥', webhooks:'Webhook', apilogs:'API 日志', docs:'接口文档',
-             templates:'通知模板', sends:'发送记录', channels:'渠道配置'};
+             templates:'通知模板', sends:'发送记录', channels:'渠道配置',
+             approvals:'审批中心', engine:'规则引擎'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
@@ -972,13 +1012,14 @@ var MENU = [
   {cap:'U卡支付运营', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核']]},
   {cap:'CRM 销售', items:[['crm','👥','客户管理'],['tx','💸','客户交易'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
   {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]},
-  {cap:'风控中心', lv0:true, items:[['risk','🚨','风险事件'],['riskRules','📐','风险规则'],['riskLists','⛔','黑白名单'],['riskTags','🏷️','风险标签']]},
+  {cap:'风控中心', lv0:true, items:[['risk','🚨','风险事件'],['riskRules','📐','风险规则'],['engine','🧠','规则引擎'],['riskLists','⛔','黑白名单'],['riskTags','🏷️','风险标签']]},
   {cap:'财务结算', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]},
   {cap:'资金账本', lv0:true, items:[['ledgerAccounts','📒','账户总览'],['ledgerEntries','🧾','资金流水'],['ledgerSnapshots','📸','余额快照']]},
   {cap:'系统管理', lv0:true, items:[['accounts','👤','账号管理'],['roles','🧩','角色管理'],['perms','🔐','权限配置'],['org','🌳','组织架构'],['params','⚙️','系统参数'],['dicts','📚','字典管理'],['loginlogs','📝','登录日志'],['oplogs','🗒️','操作日志']]},
   {cap:'平台管理', lv0:true, items:[['tenants','🏢','租户管理'],['tenantConfig','🎛️','租户配置']]},
   {cap:'开放平台', lv0:true, items:[['apps','🔌','应用管理'],['keys','🔑','API 密钥'],['webhooks','🪝','Webhook'],['apilogs','📊','API 日志'],['docs','📘','接口文档']]},
-  {cap:'消息中心', lv0:true, items:[['templates','📨','通知模板'],['sends','📤','发送记录'],['channels','📻','渠道配置']]}
+  {cap:'消息中心', lv0:true, items:[['templates','📨','通知模板'],['sends','📤','发送记录'],['channels','📻','渠道配置']]},
+  {cap:'审批中心', lv0:true, items:[['approvals','📝','审批中心']]}
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -1000,7 +1041,7 @@ window.addEventListener('hashchange', navigate);
 
 /* ================= 实时自动监听(轮询) ================= */
 // 驾驶舱/分销链路/客户交易等展示型页面定时重拉, 用户端每笔操作数秒内自动出现, 无需手动刷新
-var AUTO_PAGES = {dashboard: 5000, chain: 5000, tx: 8000, commission: 10000};
+var AUTO_PAGES = {dashboard: 5000, chain: 5000, tx: 8000, commission: 10000, approvals: 10000};
 var pollTimer = null, lastChainKey = null, lastTxKey = null;
 var LAST_SIG = {}; // 每页最近一次数据指纹: 轮询时数据未变则不碰 DOM(零闪烁的无感刷新)
 function sigChanged(key, data){
@@ -3224,7 +3265,7 @@ var LEDGER_ACCOUNTS = [];      // 账户下拉缓存
 var LEDGER_ACCT_TAB = '';      // 账户总览类型筛选
 var LEDGER_ACCT_DATA = null;   // accounts 接口缓存(tab 切换时本地重渲染, 不重复请求)
 var LEDGER_TYPE_PILL = { channel: 'pill-blue', card: 'pill-indigo', merchant: 'pill-amber', income: 'pill-green', expense: 'pill-gray' };
-var LEDGER_TX_LABEL = { RF: '↩️ 退款冲正', ORD: '🎁 积分兑换', COMM: '💰 佣金打款', FEE: '💳 开卡月费', OPEN: '📐 期初余额', ADJ: '🔧 人工调账' };
+var LEDGER_TX_LABEL = { RF: '↩️ 退款冲正', ORD: '🎁 积分兑换', COMM: '💰 佣金打款', FEE: '💳 开卡月费', OPEN: '📐 期初余额', ADJ: '🔧 人工调账', STL: '🏦 商户结算打款' };
 function ledgerTypePill(t, label){
   return '<span class="pill ' + (LEDGER_TYPE_PILL[t] || 'pill-gray') + '">' + esc(label || t) + '</span>';
 }
@@ -3401,6 +3442,385 @@ LOADERS.ledgerSnapshots = function(){
           '<td><span class="pill pill-red">' + esc(f.status === 'frozen' ? '冻结中' : f.status) + '</span></td></tr>';
       }).join('') + '</tbody></table>' : emptyBox('无冻结余额');
   }).catch(function(e){ $('#ledgerSnapBody').innerHTML = errBox(e); $('#ledgerSnapChart').innerHTML = ''; });
+}
+
+/* ================= 39. 审批中心 (P4.2) ================= */
+var AP_LIST = [], AP_TYPES_CACHE = [];
+var AP_BOX = 'todo';
+var AP_TYPE_PILL = {
+  card_issue: '<span class="pill pill-indigo">💳 发卡申请</span>',
+  kyc_upgrade: '<span class="pill pill-blue">🛡️ KYC 升级</span>',
+  refund: '<span class="pill pill-amber">↩️ 退款申请</span>',
+  commission_settle: '<span class="pill pill-gold">💰 佣金结算</span>',
+  adjust: '<span class="pill pill-gray">🔧 调账申请</span>'
+};
+var AP_STATUS_PILL = {
+  pending: '<span class="pill pill-amber">⏳ 审批中</span>',
+  approved: '<span class="pill pill-green">✅ 已通过</span>',
+  rejected: '<span class="pill pill-red">❌ 已驳回</span>',
+  cancelled: '<span class="pill pill-gray">🚫 已撤回</span>'
+};
+var AP_BOX_TITLE = { todo: '我的待办', mine: '我发起的', all: '审批记录' };
+function switchApBox(t){
+  AP_BOX = t;
+  $$('#apTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.t === t); });
+  LOADERS.approvals();
+}
+LOADERS.approvals = function(silent){
+  if (!silent) $('#apBody').innerHTML = loadingBox();
+  var typeSel = $('#apTypeSel'), typeVal = typeSel ? typeSel.value : '';
+  api('/api/admin/approvals?box=' + AP_BOX + '&type=' + (typeVal || '')).then(function(d){
+    if (silent && !sigChanged('approvals', d)) return; // 静默轮询: 数据未变不碰 DOM
+    AP_LIST = d.list || [];
+    var types = d.types || [];
+    if (typeSel && JSON.stringify(AP_TYPES_CACHE) !== JSON.stringify(types)) {
+      AP_TYPES_CACHE = types;
+      typeSel.innerHTML = '<option value="">全部流程</option>' + types.map(function(t){ return '<option value="' + t.key + '">' + esc(t.label) + '</option>'; }).join('');
+      typeSel.value = typeVal || '';
+    }
+    renderApSum(d.summary || {});
+    renderApTable();
+  }).catch(function(e){ if (!silent){ $('#apBody').innerHTML = errBox(e); $('#apSum').innerHTML = ''; } });
+};
+function renderApSum(s){
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#apSum').innerHTML =
+    sc('📥', '#fef3c7', String(nz(s.todo)), '待我审批') +
+    sc('📤', '#e0f2fe', String(nz(s.mine)), '我发起·审批中') +
+    sc('✅', '#dcfce7', String(nz(s.approved)), '已通过') +
+    sc('❌', '#fee2e2', String(nz(s.rejected)), '已驳回') +
+    sc('⏰', '#f1f5f9', String(nz(s.timeout)), '超时(>48h)');
+}
+function apNodeCell(a){
+  var cur = a.currentNode;
+  if (!cur) return '<span class="dim">' + esc(a.resultNote ? String(a.resultNote).slice(0, 40) : '已完结') + '</span>';
+  var modePill = cur.mode === '会签'
+    ? '<span class="pill pill-indigo">会签 ' + cur.approvedNames.length + '/' + cur.approvers.length + '</span>'
+    : '<span class="pill pill-blue">或签</span>';
+  var wait = cur.mode === '会签' ? ' · 待签: ' + esc(cur.remaining.join(', ')) : '';
+  return '<b>' + esc(cur.name) + '</b> ' + modePill + '<div class="sub-line dim">节点 ' + a.step + '/' + a.steps + wait + '</div>';
+}
+function renderApTable(){
+  $('#apTitle').textContent = AP_BOX_TITLE[AP_BOX] || '审批中心';
+  if (!AP_LIST.length){ $('#apBody').innerHTML = emptyBox('当前视图下没有审批单'); return; }
+  var rows = AP_LIST.map(function(a){
+    var acts = '';
+    if (a.status === 'pending'){
+      acts += '<button class="btn-ok-sm" onclick="event.stopPropagation();apApprove(' + a.id + ')">批准</button> ';
+      acts += '<button class="btn-danger" onclick="event.stopPropagation();apReject(' + a.id + ')">驳回</button> ';
+      acts += '<button class="btn-outline btn-sm" onclick="event.stopPropagation();apTransfer(' + a.id + ')">转交</button> ';
+      acts += '<button class="btn-outline btn-sm" onclick="event.stopPropagation();apCancel(' + a.id + ')">撤回</button>';
+    } else acts = '<span class="dim">已完结</span>';
+    return '<tr style="cursor:pointer" onclick="openApDrawer(' + a.id + ')" title="点击查看审批时间轴">' +
+      '<td><b>' + esc(a.title) + '</b><div class="sub-line dim">' + esc(a.bizRef || '') + '</div></td>' +
+      '<td>' + (AP_TYPE_PILL[a.type] || esc(a.typeLabel || a.type)) + '</td>' +
+      '<td>' + esc(a.applicant) + '</td>' +
+      '<td>' + apNodeCell(a) + '</td>' +
+      '<td class="num">' + (a.amount != null ? fmtMoney(a.amount) : '—') + '</td>' +
+      '<td>' + (AP_STATUS_PILL[a.status] || esc(a.statusLabel || a.status)) + (a.timeout ? ' <span title="超 48 小时未处理">⏰</span>' : '') + '</td>' +
+      '<td class="dim num" style="white-space:nowrap">' + fmtTime(a.updatedAt || a.createdAt) + '</td>' +
+      '<td onclick="event.stopPropagation()" style="white-space:nowrap">' + acts + '</td></tr>';
+  }).join('');
+  $('#apBody').innerHTML = '<table><thead><tr><th>申请事项</th><th>流程类型</th><th>发起人</th><th>当前节点</th><th>金额</th><th>状态</th><th>最近流转</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function apFind(id){ var out = null; AP_LIST.forEach(function(x){ if (x.id === id) out = x; }); return out; }
+/* 批准: 会签节点可选择以哪位审批人身份签批(演示代签); 或签一人通过即过 */
+function apApprove(id){
+  var a = apFind(id); if (!a) return;
+  var cur = a.currentNode; if (!cur) return;
+  var asSelect = '';
+  if (cur.mode === '会签' && cur.remaining.length) {
+    asSelect = '<div class="field"><label>以哪位审批人身份签批(会签演示)</label><select class="select" id="apAs">' +
+      cur.remaining.map(function(n, i){ return '<option value="' + esc(n) + '"' + (i === 0 ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
+      '</select><div class="dim" style="margin-top:5px">会签需全部审批人通过: 已签 ' + cur.approvedNames.length + '/' + cur.approvers.length + ', 待签 ' + esc(cur.remaining.join(', ')) + '</div></div>';
+  }
+  showModal('✅ 批准审批单',
+    '<div class="notice" style="margin-bottom:12px">' + esc(a.title) + '<br><span class="dim">当前节点「' + esc(cur.name) + '」(' + cur.mode + ') · 通过后' + (a.step < a.steps ? '流转下一节点' : '执行业务动作') + '</span></div>' +
+    asSelect +
+    '<div class="field" style="margin-top:10px"><label>审批意见(可选)</label><textarea class="textarea" id="apApproveNote" placeholder="如: 资料已核实"></textarea></div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="doApAction(' + id + ',\'approve\')">确认批准</button></div>');
+}
+function apReject(id){
+  showModal('❌ 驳回审批单',
+    '<div class="notice" style="margin-bottom:12px">驳回后流程立即终止, <b>不会触达任何业务数据</b>。请填写驳回原因(必填)。</div>' +
+    '<div class="field"><label>驳回原因 *</label><textarea class="textarea" id="apRejectReason" placeholder="如: 证件照片模糊, 请重传后重新发起"></textarea></div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" style="background:var(--bad)" onclick="doApAction(' + id + ',\'reject\')">确认驳回</button></div>');
+}
+function apTransfer(id){
+  showModal('🔁 转交审批',
+    '<div class="notice" style="margin-bottom:12px">将当前节点转交给其他审批人处理, 流程模式(或签/会签)保持不变。</div>' +
+    '<div class="field"><label>转交给(审批人姓名) *</label><input class="input" id="apToName" placeholder="如: Khalid Al-Suwaidi"></div>' +
+    '<div class="field" style="margin-top:10px"><label>转交说明(可选)</label><input class="input" id="apTransferReason" placeholder="如: 该笔涉及外汇口径, 请财务主管复核"></div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="doApAction(' + id + ',\'transfer\')">确认转交</button></div>');
+}
+function apCancel(id){
+  showModal('🚫 撤回审批单',
+    '<div class="notice" style="margin-bottom:12px">仅发起人可撤回; 撤回后流程终止, 业务数据不变动。</div>' +
+    '<div class="field"><label>撤回原因(可选)</label><input class="input" id="apCancelReason" placeholder="如: 客户主动取消"></div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" style="background:var(--bad)" onclick="doApAction(' + id + ',\'cancel\')">确认撤回</button></div>');
+}
+function doApAction(id, action){
+  var body = { action: action };
+  var asEl = $('#apAs'), noteEl = $('#apApproveNote'), rejEl = $('#apRejectReason'), toEl = $('#apToName'), trEl = $('#apTransferReason'), caEl = $('#apCancelReason');
+  if (action === 'approve'){ if (asEl) body.as = asEl.value; if (noteEl) body.reason = noteEl.value; }
+  if (action === 'reject'){ if (!rejEl || !rejEl.value.trim()){ toast('驳回必须填写原因', 'warn'); return; } body.reason = rejEl.value; }
+  if (action === 'transfer'){ if (!toEl || !toEl.value.trim()){ toast('请填写转交给谁', 'warn'); return; } body.toName = toEl.value.trim(); if (trEl) body.reason = trEl.value; }
+  if (action === 'cancel' && caEl) body.reason = caEl.value;
+  post('/api/admin/approvals/' + id + '/action', body).then(function(r){
+    closeModal(); closeDrawer();
+    var names = { approve: '批准', reject: '驳回', transfer: '转交', cancel: '撤回' };
+    var a = r.approval || {};
+    if (action === 'approve' && r.executed) toast('✅ 审批通过并已执行: ' + (r.bizNote || a.resultNote || ''));
+    else if (action === 'approve' && r.advanced) toast('本节点通过, 已流转至「' + r.nextNode + '」');
+    else if (action === 'approve') toast('会签已记录, 还需其他审批人签批');
+    else toast(names[action] + '成功' + (action === 'reject' || action === 'cancel' ? ', 业务数据未变动' : ''));
+    LOADERS.approvals();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* 审批单详情抽屉: 基础信息 + 完整时间轴(发起 → 节点流转 → 终态) */
+function openApDrawer(id){
+  var a = apFind(id); if (!a) return;
+  var info = [
+    ['流程类型', AP_TYPE_PILL[a.type] || esc(a.typeLabel || a.type)],
+    ['申请事项', '<b>' + esc(a.title) + '</b>'],
+    ['业务对象', esc(a.bizRef || '—')],
+    ['涉及金额', a.amount != null ? '<b class="num">' + fmtMoney(a.amount) + '</b>' : '—'],
+    ['发起人', '<b>' + esc(a.applicant) + '</b>'],
+    ['发起时间', '<span class="num">' + fmtTime(a.createdAt) + '</span>'],
+    ['流程', '<div style="font-size:12.5px;line-height:1.7">' + esc(a.flowLabel) + '</div>'],
+    ['状态', (AP_STATUS_PILL[a.status] || esc(a.statusLabel)) + (a.timeout ? ' <span title="超 48 小时未处理">⏰ 超时</span>' : '')],
+    ['申请说明', esc(a.applyNote || '—')],
+    ['执行结果', a.resultNote ? esc(a.resultNote) : '<span class="dim">待审批通过后执行</span>'],
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+  var VERDICT_ICON = { approve: '✅', reject: '❌', transfer: '🔁' };
+  var VERDICT_LABEL = { approve: '通过', reject: '驳回', transfer: '转交' };
+  var tl = [{ ts: a.createdAt, icon: '📝', label: '发起申请(' + a.typeLabel + ')', note: a.applyNote || '', op: a.applicant }];
+  (a.nodes || []).forEach(function(n){
+    (n.acts || []).forEach(function(x){
+      tl.push({ ts: x.ts, icon: VERDICT_ICON[x.verdict] || '📌', label: n.name + ' · ' + (VERDICT_LABEL[x.verdict] || x.verdict) + '(' + n.mode + ')', note: x.note || '', op: x.name });
+    });
+    if (n.state === 'active') {
+      var signed = (n.acts || []).filter(function(x){ return x.verdict === 'approve'; }).map(function(x){ return x.name; });
+      var wait = n.approvers.filter(function(p){ return signed.indexOf(p) < 0; });
+      tl.push({ ts: a.updatedAt || a.createdAt, icon: '⏳', label: n.name + ' · 等待审批(' + n.mode + ')', note: (n.mode === '会签' ? '会签需全部通过 · ' : '或签任一通过即过 · ') + '待签: ' + wait.join(', '), op: '' });
+    } else if (n.state === 'waiting') {
+      tl.push({ ts: null, icon: '⌛', label: n.name + ' · 待前置节点流转', note: '', op: '' });
+    }
+  });
+  if (a.status === 'approved') tl.push({ ts: a.finishedAt, icon: '🚀', label: '终态 · 已通过并执行', note: a.resultNote, op: '系统' });
+  if (a.status === 'rejected') tl.push({ ts: a.finishedAt, icon: '⛔', label: '终态 · 已驳回', note: a.resultNote, op: '' });
+  if (a.status === 'cancelled') tl.push({ ts: a.finishedAt, icon: '🚫', label: '终态 · 已撤回', note: a.resultNote, op: '' });
+  var tlHtml = '<div class="tl">' + tl.map(function(t){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + t.icon + ' ' + esc(t.label) + '</span>' + (t.ts ? '<span class="num">' + fmtTime(t.ts) + '</span>' : '') + (t.op ? '<span class="dim">· ' + esc(t.op) + '</span>' : '') + '</div>' +
+      '<div class="tl-content">' + esc(t.note || '') + '</div></div>';
+  }).join('') + '</div>';
+  var foot = '';
+  if (a.status === 'pending') foot =
+    '<button class="btn-outline" onclick="apReject(' + a.id + ')">❌ 驳回</button>' +
+    '<button class="btn-outline" onclick="apTransfer(' + a.id + ')">🔁 转交</button>' +
+    '<button class="btn-outline" onclick="apCancel(' + a.id + ')">🚫 撤回</button>' +
+    '<button class="btn" onclick="apApprove(' + a.id + ')">✅ 批准</button>';
+  else foot = '<span class="dim" style="align-self:center">该审批单已完结 · 业务联动: ' + esc(a.resultNote || '—') + '</span>';
+  showDrawer('📝 审批单 #' + a.id + ' ' + (AP_STATUS_PILL[a.status] || ''),
+    '<div class="info-grid">' + info + '</div>' +
+    ovSection('🕒 审批时间轴(发起 → 节点流转 → 终态)', tlHtml),
+    '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">' + foot + '</div>');
+}
+
+/* ================= 40. 规则引擎 (P4.3) ================= */
+var ENG_TAB = 'rules';
+var ENG_RULES = [], ENG_FIELDS = {}, ENG_OPS = {}, ENG_SCORES = [], ENG_HITS = [], ENG_VERSIONS = [], ENG_VER = 'v1.0';
+var ENG_ACTION_PILL = {
+  block: '<span class="pill pill-red">🛑 拦截</span>',
+  freeze: '<span class="pill pill-red">❄️ 冻结</span>',
+  review: '<span class="pill pill-blue">👀 人工审核</span>',
+  mark: '<span class="pill pill-gray">🏷️ 标记</span>'
+};
+var ENG_GRADE_PILL = { high: '<span class="pill pill-red">🔴 高风险</span>', mid: '<span class="pill pill-amber">🟡 中风险</span>', low: '<span class="pill pill-green">🟢 低风险</span>' };
+var ENG_RESULT_PILL = { blocked: '<span class="pill pill-red">已拦截</span>', frozen: '<span class="pill pill-red">已冻结</span>', review: '<span class="pill pill-blue">转人工</span>', marked: '<span class="pill pill-gray">已标记</span>' };
+function switchEngTab(t){
+  ENG_TAB = t;
+  $$('#engTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.t === t); });
+  renderEngine();
+}
+LOADERS.engine = function(){
+  $('#engineBody').innerHTML = loadingBox();
+  Promise.all([
+    api('/api/admin/risk-engine/rules'),
+    api('/api/admin/risk-engine/scores'),
+    api('/api/admin/risk-engine/hits'),
+    api('/api/admin/risk-engine/versions')
+  ]).then(function(rs){
+    ENG_RULES = rs[0].list || []; ENG_FIELDS = rs[0].fields || {}; ENG_OPS = rs[0].ops || {}; ENG_VER = rs[0].version || ENG_VER;
+    ENG_SCORES = rs[1].list || [];
+    ENG_HITS = rs[2].list || [];
+    ENG_VERSIONS = rs[3].list || [];
+    $('#engVer').textContent = '当前策略版本 ' + ENG_VER + ' · 规则 ' + ENG_RULES.length + ' 条(启用 ' + ENG_RULES.filter(function(r){ return r.enabled; }).length + ')';
+    renderEngine();
+  }).catch(function(e){ $('#engineBody').innerHTML = errBox(e); });
+};
+function renderEngine(){
+  var el = $('#engineBody');
+  if (ENG_TAB === 'rules') { el.innerHTML = renderEngRules(); return; }
+  if (ENG_TAB === 'scores') { el.innerHTML = renderEngScores(); return; }
+  if (ENG_TAB === 'hits') { el.innerHTML = renderEngHits(); return; }
+  el.innerHTML = renderEngVersions();
+}
+function renderEngRules(){
+  if (!ENG_RULES.length) return emptyBox('暂无规则, 点击右上角「新建规则」');
+  var rows = ENG_RULES.map(function(r){
+    return '<tr>' +
+      '<td class="num"><b>' + nz(r.priority) + '</b></td>' +
+      '<td><b>' + esc(r.name) + '</b><div class="sub-line dim">' + esc(r.desc || '') + '</div></td>' +
+      '<td><span class="pill pill-gray">' + esc(r.sceneLabel) + '</span></td>' +
+      '<td style="max-width:260px;white-space:normal;font-size:12.5px"><code style="background:#f1f5f9;border-radius:6px;padding:2px 7px">' + esc(r.condStr) + '</code></td>' +
+      '<td>' + (ENG_ACTION_PILL[r.action] || esc(r.actionLabel || r.action)) + '</td>' +
+      '<td class="num">' + nz(r.weight) + '<div class="sub-line dim">评分权重</div></td>' +
+      '<td class="num"><b>' + nz(r.hits) + '</b><div class="sub-line dim">30天内 ' + nz(r.hitCount) + '</div></td>' +
+      '<td>' + (r.enabled ? '<span class="pill pill-green">启用</span>' : '<span class="pill pill-gray">停用</span>') + '</td>' +
+      '<td style="white-space:nowrap">' +
+        '<button class="' + (r.enabled ? 'btn-danger' : 'btn-ok-sm') + '" onclick="engToggle(' + r.id + ',' + r.enabled + ')">' + (r.enabled ? '停用' : '启用') + '</button> ' +
+        '<button class="btn-outline btn-sm" onclick="openEngineRuleModal(' + r.id + ')">编辑</button> ' +
+        '<button class="btn-outline btn-sm" style="color:var(--bad)" onclick="engDel(' + r.id + ')">删除</button></td></tr>';
+  }).join('');
+  return '<table><thead><tr><th>优先级</th><th>规则名</th><th>场景</th><th>条件(结构化)</th><th>动作</th><th>权重</th><th>累计命中</th><th>状态</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function renderEngScores(){
+  var s = ENG_SCORES.reduce(function(o, x){ o[x.grade] = (o[x.grade] || 0) + 1; return o; }, {});
+  var head = '<div class="sum-row" style="margin-bottom:14px">' +
+    '<div class="sum-card"><div class="ic" style="background:#fee2e2">🔴</div><div><div class="v num">' + nz(s.high) + '</div><div class="k">高风险(≥60)</div></div></div>' +
+    '<div class="sum-card"><div class="ic" style="background:#fef3c7">🟡</div><div><div class="v num">' + nz(s.mid) + '</div><div class="k">中风险(30-59)</div></div></div>' +
+    '<div class="sum-card"><div class="ic" style="background:#dcfce7">🟢</div><div><div class="v num">' + nz(s.low) + '</div><div class="k">低风险(&lt;30)</div></div></div></div>';
+  var rows = ENG_SCORES.map(function(x){
+    return '<tr>' +
+      '<td><b>' + esc(x.user) + '</b><div class="sub-line dim">UID ' + nz(x.userId) + ' · KYC L' + nz(x.kycLevel) + '</div></td>' +
+      '<td class="num dim">' + esc(x.cardNoMask) + '</td>' +
+      '<td class="num"><b style="font-size:16px;color:' + (x.grade === 'high' ? 'var(--bad)' : x.grade === 'mid' ? 'var(--warn)' : 'var(--ok)') + '">' + nz(x.score) + '</b><div class="sub-line dim">满分 100</div></td>' +
+      '<td>' + (ENG_GRADE_PILL[x.grade] || esc(x.grade)) + '</td>' +
+      '<td class="num">' + nz(x.hits30d) + ' 笔<div class="sub-line dim">权重分 ' + nz(x.hitScore) + '</div></td>' +
+      '<td class="num">' + nz(x.riskEvents) + ' 条<div class="sub-line dim">扣 ' + nz(x.evScore) + ' 分</div></td>' +
+      '<td>' + cardStatusBadge(x.cardStatus) + '</td></tr>';
+  }).join('');
+  return head + '<table><thead><tr><th>用户</th><th>卡号</th><th>风险评分</th><th>等级</th><th>近30天命中</th><th>历史风险事件</th><th>卡状态</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function renderEngHits(){
+  if (!ENG_HITS.length) return emptyBox('暂无命中记录 — 在用户端发起一笔超额交易即可实时命中');
+  var rows = ENG_HITS.map(function(h){
+    return '<tr>' +
+      '<td class="dim num" style="white-space:nowrap">' + fmtTime(h.createdAt) + '</td>' +
+      '<td><b>' + esc(h.ruleName) + '</b><div class="sub-line dim">规则 #' + nz(h.ruleId) + '</div></td>' +
+      '<td><b>' + esc(h.user) + '</b><div class="sub-line dim">UID ' + nz(h.userId) + ' · ' + esc(h.cardNoMask) + '</div></td>' +
+      '<td>' + esc(h.scene) + (h.merchant ? ' · ' + esc(h.merchant) : '') + '</td>' +
+      '<td class="num"><b>' + fmtMoney(h.amount) + '</b></td>' +
+      '<td>' + (ENG_ACTION_PILL[h.action] || esc(h.action)) + '</td>' +
+      '<td>' + (ENG_RESULT_PILL[h.result] || esc(h.result)) + '</td>' +
+      '<td class="num dim">' + (h.txId != null ? '交易 #' + h.txId : '未产生交易') + '</td></tr>';
+  }).join('');
+  return '<table><thead><tr><th>时间</th><th>命中规则</th><th>用户</th><th>场景</th><th>交易金额</th><th>规则动作</th><th>处置结果</th><th>关联交易</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function renderEngVersions(){
+  if (!ENG_VERSIONS.length) return emptyBox('暂无版本记录');
+  var tl = '<div class="tl">' + ENG_VERSIONS.map(function(v){
+    return '<div class="tl-item"><div class="tl-head"><span class="tl-type">' + (v.ver === ENG_VER ? '🟢 当前 ' : '📦 ') + esc(v.ver) + '</span><span class="num">' + fmtTime(v.at) + '</span><span class="dim">· ' + esc(v.by) + '</span></div>' +
+      '<div class="tl-content">' + esc(v.note || '') +
+      ((v.changes || []).length ? '<ul style="margin:6px 0 0 16px;padding:0;font-size:12.5px;color:var(--ink2)">' + v.changes.map(function(c){ return '<li>' + esc(c) + '</li>'; }).join('') + '</ul>' : '') +
+      '</div></div>';
+  }).join('') + '</div>';
+  return tl;
+}
+function engToggle(id, wasEnabled){
+  patch('/api/admin/risk-engine/rules/' + id, { enabled: !wasEnabled }).then(function(r){
+    toast((wasEnabled ? '规则已停用: ' : '规则已启用: ') + r.rule.name + ' · 策略版本 ' + r.version);
+    LOADERS.engine();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function engDel(id){
+  var r = ENG_RULES.find(function(x){ return x.id === id; });
+  showModal('🗑️ 删除规则',
+    '<div class="notice" style="margin-bottom:12px">将删除规则「<b>' + esc(r ? r.name : id) + '</b>」, 用户端交易立即不再求值该规则; 历史命中记录保留。此操作会生成新的策略版本。</div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" style="background:var(--bad)" onclick="engDelDo(' + id + ')">确认删除</button></div>');
+}
+function engDelDo(id){
+  api('/api/admin/risk-engine/rules/' + id, { method: 'DELETE' }).then(function(r){
+    closeModal(); toast('已删除规则「' + r.removed + '」· 策略版本 ' + r.version);
+    LOADERS.engine();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* 规则编辑表单(新建/编辑共用): 条件行动态增删 */
+function engCondRowHtml(c){
+  c = c || {};
+  var val = Array.isArray(c.value) ? c.value.join(', ') : (c.value != null ? c.value : '');
+  var fieldOpts = Object.keys(ENG_FIELDS).map(function(k){ return '<option value="' + k + '"' + (k === (c.field || 'amount') ? ' selected' : '') + '>' + esc(ENG_FIELDS[k].label) + '</option>'; }).join('');
+  var opOpts = Object.keys(ENG_OPS).map(function(k){ return '<option value="' + k + '"' + (k === (c.op || '>') ? ' selected' : '') + '>' + esc(ENG_OPS[k]) + '(' + k + ')</option>'; }).join('');
+  return '<div class="form-grid" style="grid-template-columns:1.5fr 1.2fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px" data-engcond>' +
+    '<div class="field"><label>条件字段</label><select class="select engc-field">' + fieldOpts + '</select></div>' +
+    '<div class="field"><label>操作符</label><select class="select engc-op">' + opOpts + '</select></div>' +
+    '<div class="field"><label>阈值(列表用逗号分隔)</label><input class="input engc-val" placeholder="如 1000 或 SA, AE, QA" value="' + esc(val) + '"></div>' +
+    '<div class="field"><label>&nbsp;</label><button type="button" class="btn-outline btn-sm" onclick="this.closest(\'[data-engcond]\').remove()">✕</button></div></div>';
+}
+function engAddCond(c){
+  var box = $('#engConds'); if (!box) return;
+  var tpl = document.createElement('div');
+  tpl.innerHTML = engCondRowHtml(c);
+  box.appendChild(tpl.firstElementChild);
+}
+function openEngineRuleModal(id){
+  var r = id ? ENG_RULES.find(function(x){ return x.id === id; }) : null;
+  var actOpts = [['block', '🛑 拦截(拒绝交易)'], ['freeze', '❄️ 冻结(放行本笔+冻卡)'], ['review', '👀 人工审核(转风控中心)'], ['mark', '🏷️ 标记(仅记录)']]
+    .map(function(x){ return '<option value="' + x[0] + '"' + ((r ? r.action : 'review') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('');
+  var lvlOpts = [['high', '🔴 高'], ['mid', '🟡 中'], ['low', '🔵 低']]
+    .map(function(x){ return '<option value="' + x[0] + '"' + ((r ? r.level : 'mid') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('');
+  showModal((r ? '✏️ 编辑规则: ' + esc(r.name) : '➕ 新建风控规则'),
+    '<form onsubmit="return submitEngineRule(event, ' + (r ? r.id : 0) + ')">' +
+    '<div class="form-grid">' +
+    '<div class="field"><label>规则名 *</label><input class="input" id="engName" required maxlength="30" value="' + esc(r ? r.name : '') + '" placeholder="如: 深夜大额交易拦截"></div>' +
+    '<div class="field"><label>优先级(数字越小越先求值)</label><input class="input num" id="engPriority" type="number" value="' + (r ? nz(r.priority) : 100) + '"></div></div>' +
+    '<div class="form-grid" style="margin-top:10px">' +
+    '<div class="field"><label>动作</label><select class="select" id="engAction">' + actOpts + '</select></div>' +
+    '<div class="field"><label>风险等级</label><select class="select" id="engLevel">' + lvlOpts + '</select></div></div>' +
+    '<div class="form-grid" style="margin-top:10px">' +
+    '<div class="field"><label>评分权重(0-100, 命中一次加多少分)</label><input class="input num" id="engWeight" type="number" min="0" max="100" value="' + (r ? nz(r.weight) : 15) + '"></div>' +
+    '<div class="field"><label>条件间关系</label><select class="select" id="engCondOp"><option value="and"' + (!r || r.condOp !== 'or' ? ' selected' : '') + '>且(全部满足)</option><option value="or"' + (r && r.condOp === 'or' ? ' selected' : '') + '>或(任一满足)</option></select></div></div>' +
+    '<div class="field" style="margin-top:10px"><label>适用场景</label><div style="display:flex;gap:16px;padding-top:6px">' +
+    '<label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="engScPay"' + (!r || (r.scene || []).indexOf('pay') >= 0 ? ' checked' : '') + '> 消费支付</label>' +
+    '<label style="display:flex;gap:6px;align-items:center;font-weight:400"><input type="checkbox" id="engScTop"' + (!r || (r.scene || []).indexOf('topup') >= 0 ? ' checked' : '') + '> 充值</label></div></div>' +
+    '<div style="margin-top:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label style="font-size:12.5px;color:var(--ink2);font-weight:500">触发条件(至少 1 条)</label><button type="button" class="btn-outline btn-sm" onclick="engAddCond()">＋ 加条件</button></div>' +
+    '<div id="engConds"></div></div>' +
+    '<div class="field" style="margin-top:6px"><label>说明</label><input class="input" id="engDesc" maxlength="80" value="' + esc(r ? r.desc || '' : '') + '" placeholder="规则用途说明"></div>' +
+    (r ? '<div class="dim" style="margin-top:8px">保存后将自动生成策略小版本并记入版本历史; 启停状态: ' + (r.enabled ? '启用中' : '已停用') + '</div>' : '<div class="dim" style="margin-top:8px">保存后立即生效(默认启用), 用户端下一笔交易即开始求值</div>') +
+    '<div class="form-foot"><button type="button" class="btn-outline" onclick="closeModal()">取消</button><button type="submit" class="btn">' + (r ? '保存修改' : '创建规则') + '</button></div></form>');
+  var box = $('#engConds');
+  var conds = r && r.conditions && r.conditions.length ? r.conditions : [{ field: 'amount', op: '>', value: 1000 }];
+  conds.forEach(function(c){ engAddCond(c); });
+}
+function submitEngineRule(e, id){
+  e.preventDefault();
+  var conds = [];
+  var ok = true;
+  $$('#engConds [data-engcond]').forEach(function(row){
+    if (!ok) return;
+    var val = row.querySelector('.engc-val').value.trim();
+    conds.push({ field: row.querySelector('.engc-field').value, op: row.querySelector('.engc-op').value, value: val });
+  });
+  if (!conds.length){ toast('至少需要 1 条条件', 'warn'); return; }
+  var body = {
+    name: $('#engName').value.trim(),
+    priority: +$('#engPriority').value || 100,
+    action: $('#engAction').value,
+    level: $('#engLevel').value,
+    weight: +$('#engWeight').value || 0,
+    condOp: $('#engCondOp').value,
+    scene: [].concat($('#engScPay').checked ? ['pay'] : [], $('#engScTop').checked ? ['topup'] : []),
+    conditions: conds,
+    desc: $('#engDesc').value.trim()
+  };
+  var req = id ? patch('/api/admin/risk-engine/rules/' + id, body) : post('/api/admin/risk-engine/rules', body);
+  req.then(function(r){
+    closeModal();
+    toast((id ? '规则已更新: ' : '规则已创建: ') + r.rule.name + ' · 策略版本 ' + r.version);
+    LOADERS.engine();
+  }).catch(function(e2){ toast(e2.message, 'err'); });
+  return false;
 }
 
 /* ================= 登录 / 身份 ================= */

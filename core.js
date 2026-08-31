@@ -43,6 +43,8 @@ let sysAccounts, sysRoles, sysPerms, sysLogs, opLogs, sysParams, sysDicts; // P3
 let tenants; // P4.1 多租户(轻量演示): 租户 + 租户级配置(品牌/币种/佣金/积分规则/数据隔离视图)
 let openApps, openKeys, openWebhooks, openApiLogs; // P4.5 开放平台: 应用 / API密钥 / Webhook / 调用日志
 let notifyTemplates, notifySends, notifyChannels; // P4.6 消息通知中心: 模板 / 发送记录 / 渠道配置
+let approvals; // P4.2 审批中心: 5 类流程实例(发卡/KYC升级/退款/佣金结算/调账), 节点支持或签/会签
+let engineRules, engineHits, engineVersions; // P4.3 风控规则引擎: 结构化规则 / 命中记录 / 策略版本
 let inited = false;
 function initSeed() {
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
@@ -424,6 +426,146 @@ notifyTemplates = [
   id: i + 1, channel, event: NT_EVENTS[evIdx][0], eventLabel: NT_EVENTS[evIdx][1], title, body, enabled, updatedAt: daysAgo(ri(2, 40)),
 }));
 notifySends = buildNotifySends();
+
+// ---------------- P4.2 审批中心种子: 5 类流程 × 混合状态 ----------------
+// 节点 mode: '或签'=任一审批人通过即过 / '会签'=全部审批人都通过才过; acts 记录审批动作(含代签演示)
+const apNode = (name, mode, approvers, state, acts) => ({ key: name, name, mode: mode || '或签', approvers, state: state || 'waiting', acts: acts || [] });
+const apAct = (name, verdict, note, ts) => ({ name, verdict, note: note || '', ts });
+const AP_TYPES = {
+  card_issue:       '发卡申请', kyc_upgrade: 'KYC 升级', refund: '退款申请',
+  commission_settle: '佣金结算', adjust: '调账申请',
+};
+const doneNodes = (defs) => defs.map(d => apNode(d[0], d[1], d[2], 'done', d[3] || []));
+const refTx = (pred) => transactions.find(pred); // 取一笔种子交易做退款申请载体
+approvals = [];
+// 发卡申请 ×4: 待办(超时) / 待办(新) / 已通过 / 已驳回
+approvals.push(
+  { id: nid(), type: 'card_issue', title: 'Aisha Abdullah 增发 Platinum 白金卡', bizRef: '客户持有 Gold 卡, 因商旅需求申请增发', amount: 15,
+    payload: { userId: 4, level: 'platinum' }, applicant: 'Layla Al-Saad', applicantId: 20, applyNote: '客户月均消费 $4,200, 已补充收入证明',
+    status: 'pending', nodes: [apNode('运营审核', '或签', ['Noura Al-Faisal'], 'active', [])],
+    createdAt: daysAgo(3, 4), updatedAt: daysAgo(3, 4), finishedAt: null, resultNote: '' },
+  { id: nid(), type: 'card_issue', title: 'Hassan Ali 首卡 Gold 金卡', bizRef: '新开户客户首卡(KYC L0 → 提交升级材料中)', amount: 5,
+    payload: { userId: 7, level: 'gold' }, applicant: 'Majed Al-Ghamdi', applicantId: 36, applyNote: '随 KYC 升级一并申请首卡',
+    status: 'pending', nodes: [apNode('运营审核', '或签', ['Noura Al-Faisal'], 'active', [])],
+    createdAt: daysAgo(0, 5), updatedAt: daysAgo(0, 5), finishedAt: null, resultNote: '' },
+  { id: nid(), type: 'card_issue', title: 'Ali Al-Mansouri 增发 Standard 标准卡', bizRef: '客户申请副卡给家属使用', amount: 1,
+    payload: { userId: 9, level: 'standard' }, applicant: 'Iman Fathi', applicantId: 38, applyNote: '主卡使用正常, 副卡限额消费',
+    status: 'approved', nodes: doneNodes([['运营审核', '或签', ['Noura Al-Faisal'], [apAct('Noura Al-Faisal', 'approve', '资料齐全, 同意发卡', daysAgo(6, 2))]]]),
+    createdAt: daysAgo(6, 5), updatedAt: daysAgo(6, 2), finishedAt: daysAgo(6, 2), resultNote: '已发卡(Standard), 发卡佣金已计入, 月费已计提' },
+  { id: nid(), type: 'card_issue', title: 'Zainab Ibrahim 增发 Gold 金卡', bizRef: '申请主体与客户资料姓名不一致', amount: 5,
+    payload: { userId: 10, level: 'gold' }, applicant: 'Bakr Al-Marri', applicantId: 39, applyNote: '客户自称代亲属申请',
+    status: 'rejected', nodes: doneNodes([['运营审核', '或签', ['Noura Al-Faisal'], [apAct('Noura Al-Faisal', 'reject', '申请主体与客户资料不符, 驳回后请补充授权书', daysAgo(4, 1))]]]),
+    createdAt: daysAgo(4, 6), updatedAt: daysAgo(4, 1), finishedAt: daysAgo(4, 1), resultNote: '驳回于「运营审核」: 申请主体与客户资料不符' }
+);
+// KYC 升级 ×2: 待办 / 已驳回
+approvals.push(
+  { id: nid(), type: 'kyc_upgrade', title: 'Mohammed Al-Mutairi KYC L1 → L2', bizRef: '护照 + 地址证明 + 银行流水', amount: null,
+    payload: { userId: 3, toLevel: 2 }, applicant: 'Saad Al-Dosari', applicantId: 32, applyNote: '客户提额需求: 单笔限额 $1,000 → $10,000',
+    status: 'pending', nodes: [apNode('风控审核', '或签', ['Noura Al-Faisal'], 'active', [])],
+    createdAt: daysAgo(1, 3), updatedAt: daysAgo(1, 3), finishedAt: null, resultNote: '' },
+  { id: nid(), type: 'kyc_upgrade', title: 'Omar Farouk KYC L0 → L1', bizRef: '国民 ID + 自拍照', amount: null,
+    payload: { userId: 11, toLevel: 1 }, applicant: 'Bakr Al-Marri', applicantId: 40, applyNote: 'L0 限额过低, 客户申请升级',
+    status: 'rejected', nodes: doneNodes([['风控审核', '或签', ['Noura Al-Faisal'], [apAct('Noura Al-Faisal', 'reject', '证件照片模糊无法核验, 请重传', daysAgo(2, 2))]]]),
+    createdAt: daysAgo(2, 8), updatedAt: daysAgo(2, 2), finishedAt: daysAgo(2, 2), resultNote: '驳回于「风控审核」: 证件照片模糊无法核验' }
+);
+// 退款申请 ×3: 待办 / 已通过(历史退款) / 已撤回
+approvals.push(
+  (() => { const t = refTx(x => x.type === 'consume' && x.status === 'success' && x.userId === 1); return {
+    id: nid(), type: 'refund', title: 'Ahmed Al-Rashid 退款 · ' + ((t || {}).merchant || '商户'), bizRef: '交易 #' + ((t || {}).id || '—') + ' · 与商户协商未果申请平台退款',
+    amount: (t || {}).amount || 0, payload: { txId: (t || {}).id }, applicant: 'Tariq Al-Harbi', applicantId: 30, applyNote: '客户称重复扣款, 提供了商户回复截图',
+    status: 'pending', nodes: [apNode('财务审核', '或签', ['Noura Al-Faisal'], 'active', [])],
+    createdAt: daysAgo(0, 8), updatedAt: daysAgo(0, 8), finishedAt: null, resultNote: '' }; })(),
+  (() => { const t = refTx(x => x.type === 'consume' && x.status === 'refunded'); return {
+    id: nid(), type: 'refund', title: (users[(t || {}).userId - 1] || { name: '客户' }).name + ' 退款 · ' + ((t || {}).merchant || '商户'), bizRef: '交易 #' + ((t || {}).id || '—') + ' · 商品未按约定发货',
+    amount: (t || {}).amount || 0, payload: { txId: (t || {}).id }, applicant: 'Rania Sameer', applicantId: 33, applyNote: '商户超期未发货, 客户提供聊天记录',
+    status: 'approved', nodes: doneNodes([['财务审核', '或签', ['Noura Al-Faisal'], [apAct('Noura Al-Faisal', 'approve', '证据充分, 同意全额退款', daysAgo(7, 3))]]]),
+    createdAt: daysAgo(7, 6), updatedAt: daysAgo(7, 3), finishedAt: daysAgo(7, 3), resultNote: '交易已全额退款, 反向分录已入账' }; })(),
+  { id: nid(), type: 'refund', title: 'Mariam Al-Zahrani 退款 · Namshi', bizRef: '交易退货申请 · 客户撤回', amount: 89.9,
+    payload: { txId: null }, applicant: 'Dalia Kamel', applicantId: 37, applyNote: '客户申请尺码不对退货退款',
+    status: 'cancelled', nodes: [apNode('财务审核', '或签', ['Noura Al-Faisal'], 'waiting', [])],
+    createdAt: daysAgo(5, 2), updatedAt: daysAgo(4, 9), finishedAt: daysAgo(4, 9), resultNote: '发起人撤回: 客户与商户自行协商解决' }
+);
+// 佣金结算 ×2: 待办 / 已通过
+approvals.push(
+  (() => { const pend = commissions.filter(c => c.salesId === 20 && c.status === 'pending'); return {
+    id: nid(), type: 'commission_settle', title: 'Layla Al-Saad 团队半月佣金打款', bizRef: '待结算佣金 ' + pend.length + ' 笔(直属+团队)',
+    amount: +pend.reduce((s, c) => s + c.amount, 0).toFixed(2), payload: { salesId: 20 }, applicant: 'Layla Al-Saad', applicantId: 20, applyNote: '2026-09 上半月佣金, 请财务确认打款',
+    status: 'pending', nodes: [apNode('财务确认', '或签', ['Noura Al-Faisal'], 'active', [])],
+    createdAt: daysAgo(0, 3), updatedAt: daysAgo(0, 3), finishedAt: null, resultNote: '' }; })(),
+  { id: nid(), type: 'commission_settle', title: 'Omar Hassan 团队半月佣金打款', bizRef: 'T+3 佣金账期已到',
+    amount: 286.4, payload: { salesId: 10 }, applicant: 'Omar Hassan', applicantId: 10, applyNote: '8 月下半月佣金, 已与业绩核对一致',
+    status: 'approved', nodes: doneNodes([['财务确认', '或签', ['Noura Al-Faisal'], [apAct('Noura Al-Faisal', 'approve', '与业绩报表核对一致, 同意打款', daysAgo(9, 1))]]]),
+    createdAt: daysAgo(9, 4), updatedAt: daysAgo(9, 1), finishedAt: daysAgo(9, 1), resultNote: '待结算佣金已批量打款, 渠道出金分录已入账' }
+);
+// 调账申请 ×3: 待办(或签多级) / 待办(会签, 已批 1/2) / 已通过 —— 或签/会签对照演示
+approvals.push(
+  { id: nid(), type: 'adjust', title: '卡账户补偿 +$200 · 重复扣款', bizRef: '客户卡 ' + (cards[2] ? maskCardNo(cards[2].cardNo) : '—') + ' · 系统重复扣款补偿',
+    amount: 200, payload: { cardId: 3, amount: 200, ref: '重复扣款补偿' }, applicant: 'Saad Al-Dosari', applicantId: 31, applyNote: '渠道对账发现重复扣款一笔, 申请补偿入卡',
+    status: 'pending', nodes: [
+      apNode('运营初审', '或签', ['Noura Al-Faisal'], 'done', [apAct('Noura Al-Faisal', 'approve', '对账差异清单已核实, 属渠道重复扣款', daysAgo(1, 5))]),
+      apNode('财务复审', '或签', ['Khalid Al-Suwaidi', 'Sara Ahmed'], 'active', []),
+    ],
+    createdAt: daysAgo(1, 8), updatedAt: daysAgo(1, 5), finishedAt: null, resultNote: '' },
+  { id: nid(), type: 'adjust', title: '卡账户追回 -$150 · 优惠券重复核销', bizRef: '客户卡 ' + (cards[7] ? maskCardNo(cards[7].cardNo) : '—') + ' · 营销优惠重复享受需追回',
+    amount: -150, payload: { cardId: 8, amount: -150, ref: '优惠券重复核销追回' }, applicant: 'Dalia Kamel', applicantId: 37, applyNote: '客户分两次使用同一张满减券, 需追回多享优惠',
+    status: 'pending', nodes: [
+      apNode('风控合规会签', '会签', ['Noura Al-Faisal', 'Mona Sharif'], 'active', [apAct('Noura Al-Faisal', 'approve', '核实为系统漏洞导致重复核销, 同意追回', daysAgo(2, 3))]),
+    ],
+    createdAt: daysAgo(2, 6), updatedAt: daysAgo(2, 3), finishedAt: null, resultNote: '' },
+  { id: nid(), type: 'adjust', title: '卡账户补偿 +$120 · 退款未到账', bizRef: '商户已退款但卡账户未入账',
+    amount: 120, payload: { cardId: 5, amount: 120, ref: '退款未到账补偿' }, applicant: 'Amira Zaki', applicantId: 35, applyNote: '商户回执已退款, 卡账户漏入账',
+    status: 'approved', nodes: doneNodes([
+      ['运营初审', '或签', ['Noura Al-Faisal'], [apAct('Noura Al-Faisal', 'approve', '商户回执核实无误', daysAgo(8, 4))]],
+      ['财务复审', '或签', ['Khalid Al-Suwaidi', 'Sara Ahmed'], [apAct('Khalid Al-Suwaidi', 'approve', '同意补偿, 或签节点一人通过即生效', daysAgo(8, 1))]],
+    ]),
+    createdAt: daysAgo(8, 6), updatedAt: daysAgo(8, 1), finishedAt: daysAgo(8, 1), resultNote: '调账已执行 +$120.00, 卡余额与资金账本已同步(ADJ 分录)' }
+);
+// 佣金结算待办金额随种子浮动修正(上面 286.4 为演示值, 不参与计算)
+approvals.forEach(a => { a.typeLabel = AP_TYPES[a.type] || a.type; });
+
+// ---------------- P4.3 风控规则引擎种子: 结构化规则(条件/动作/优先级/启停/权重) ----------------
+// 阈值演示口径: 内置规则不干扰日常演示动线(拦截阈值 $1,000 高于常规操作金额), 现场可改阈值/动作触发
+engineRules = [
+  { id: 201, name: '大额交易拦截', priority: 10, enabled: true, action: 'block', level: 'high', weight: 40, scene: ['pay', 'topup'],
+    condOp: 'and', conditions: [{ field: 'amount', op: '>', value: 1000 }],
+    desc: '单笔交易金额超过 $1,000 直接拦截(充值/消费均生效), 阈值现场可调', hits: 23, createdAt: daysAgo(45), updatedAt: daysAgo(18) },
+  { id: 202, name: '高风险地区交易', priority: 20, enabled: true, action: 'review', level: 'high', weight: 30, scene: ['pay', 'topup'],
+    condOp: 'and', conditions: [{ field: 'country', op: 'not_in', value: ['SA', 'AE', 'QA', 'KW', 'EG', 'BH', 'OM', 'US', 'GB'] }],
+    desc: '交易发起国不在允许清单(海湾区+英美), 转人工审核', hits: 6, createdAt: daysAgo(45), updatedAt: daysAgo(45) },
+  { id: 203, name: '24 小时高频交易', priority: 30, enabled: true, action: 'review', level: 'mid', weight: 20, scene: ['pay', 'topup'],
+    condOp: 'and', conditions: [{ field: 'txCount24h', op: '>', value: 10 }],
+    desc: '同一用户 24 小时内交易(含本笔)超过 10 笔, 转人工审核', hits: 11, createdAt: daysAgo(45), updatedAt: daysAgo(45) },
+  { id: 204, name: '连续支付失败保护', priority: 40, enabled: true, action: 'freeze', level: 'mid', weight: 25, scene: ['pay'],
+    condOp: 'and', conditions: [{ field: 'payFailStreak', op: '>=', value: 3 }],
+    desc: '连续 3 笔支付失败(挂失/冻结/限额/余额不足)后再次支付, 本笔放行但保护性冻结卡片', hits: 4, createdAt: daysAgo(30), updatedAt: daysAgo(30) },
+  { id: 205, name: '新设备大额充值', priority: 50, enabled: false, action: 'mark', level: 'low', weight: 10, scene: ['topup'],
+    condOp: 'and', conditions: [{ field: 'deviceAgeHours', op: '<', value: 24 }, { field: 'amount', op: '>', value: 300 }],
+    desc: '新绑定设备(注册 < 24h)首充超过 $300, 仅标记观察(演示停用状态)', hits: 2, createdAt: daysAgo(30), updatedAt: daysAgo(6) },
+];
+// 命中记录种子: [userIdx, ruleId, scene, amount, result, daysAgo] — 规则名/等级快照自规则
+const EHS = [
+  [11, 201, '充值', 1500, 'blocked', 4],
+  [11, 204, '消费', 60, 'frozen', 2],
+  [5, 203, '消费', 30, 'review', 5],
+  [6, 201, '消费', 1200, 'blocked', 8],
+  [2, 203, '消费', 45, 'review', 3],
+  [9, 205, '充值', 600, 'marked', 12],
+  [4, 203, '消费', 80, 'review', 6],
+];
+engineHits = EHS.map(([ui, ruleId, scene, amount, result, d]) => {
+  const u = users[ui]; const rule = engineRules.find(r => r.id === ruleId); const card = cards.find(c => c.userId === u.id);
+  return { id: nid(), ruleId, ruleName: rule.name, action: rule.action, level: rule.level,
+    userId: u.id, user: u.name, cardId: card ? card.id : null, cardNoMask: card ? maskCardNo(card.cardNo) : '—',
+    scene, merchant: scene === '消费' ? pick(['Noon', 'Amazon', 'Talabat']) : '', amount, result,
+    txId: result === 'blocked' ? null : nid(), createdAt: daysAgo(d, ri(1, 20)) };
+}).sort((a, b) => b.createdAt - a.createdAt);
+// 策略版本种子: 每次规则增删改自动追加小版本
+engineVersions = [
+  { ver: 'v1.0', at: daysAgo(45), by: 'Noura Al-Faisal', note: '初始策略上线: 5 条内置规则覆盖 拦截/审核/冻结/标记 四类动作', changes: ['创建规则: 大额交易拦截 / 高风险地区交易 / 24 小时高频交易 / 连续支付失败保护 / 新设备大额充值'] },
+  { ver: 'v1.1', at: daysAgo(18), by: 'Noura Al-Faisal', note: '收紧大额拦截口径', changes: ['规则「大额交易拦截」条件 amount > 2000 → amount > 1000'] },
+  { ver: 'v1.2', at: daysAgo(6), by: 'Noura Al-Faisal', note: '停用新设备观察规则', changes: ['规则「新设备大额充值」启用 → 停用'] },
+];
+
 rebuildLedgerSeed(); // P4.4: 为种子交易回填复式账本(与卡余额自洽) + 14 天余额快照 + 演示冻结余额
   inited = true;
 }
@@ -719,6 +861,8 @@ const scopeOf = (headers) => { // 数据范围: 未传=总监全量; 传销售 i
 // ---------------- 业务动作 ----------------
 function doTopup(userId, amount, method) {
   amount = +(amount || 0).toFixed(2); // 金额量化到分, 保证账本分录与卡余额增量严格一致
+  const rkGate = riskGateForTx(userId, 'topup', { amount, method }); // P4.3 规则引擎前置: 拦截类规则直接拒绝(保持原返回结构)
+  if (!rkGate.ok) return { error: rkGate.error };
   const card = cards.find(c => c.userId === userId);
   if (!card) return { error: '未找到卡' };
   if (card.status === 'lost') return { error: '卡已挂失, 无法充值, 请联系客服' };
@@ -730,10 +874,13 @@ function doTopup(userId, amount, method) {
   addPointsLog(userId, Math.floor(amount * 5), '充值奖励', tx.id, now());
   addCommissions(card.salesRepId, 'topup', amount, tx.id, now());
   ledgerForTopup(tx, card); // P4.4: 渠道+amt / 卡+(amt-fee) / 平台手续费+fee
+  afterRiskGate(rkGate, userId, tx, card); // P4.3 后置: 冻结/审核/标记动作(不改返回结构)
   return { tx, balance: card.balance };
 }
 function doPay(userId, amount, merchant, usePoints) {
   amount = +(amount || 0).toFixed(2); // 金额量化到分, 保证账本分录与卡余额增量严格一致
+  const rkGate = riskGateForTx(userId, 'pay', { amount, merchant, usePoints }); // P4.3 规则引擎前置: 拦截类规则直接拒绝(保持原返回结构)
+  if (!rkGate.ok) return { error: rkGate.error };
   const card = cards.find(c => c.userId === userId);
   const user = users.find(u => u.id === userId);
   if (!card) return { error: '未找到卡' };
@@ -754,6 +901,7 @@ function doPay(userId, amount, merchant, usePoints) {
   addPointsLog(userId, pts, '消费返积分', tx.id, now());
   addCommissions(card.salesRepId, 'consume', payUsd, tx.id, now());
   ledgerForConsume(tx, card, payUsd); // P4.4: 卡-amt / 商户待结算+(amt-fee) / 手续费+fee, 积分抵扣计积分成本
+  afterRiskGate(rkGate, userId, tx, card); // P4.3 后置: 冻结/审核/标记动作(不改返回结构)
   return { tx, balance: card.balance, pointsEarned: pts, pointsUsed };
 }
 function doRedeem(userId, productId) {
@@ -920,10 +1068,10 @@ const maskCardNo = (no) => { const d = String(no || '').replace(/\s/g, ''); retu
 const pubRiskEvent = (e) => {
   const u = users.find(x => x.id === e.userId);
   const card = cards.find(c => c.id === e.cardId);
-  const rule = riskRules.find(r => r.id === e.ruleId);
+  const rule = riskRules.find(r => r.id === e.ruleId) || (engineRules || []).find(r => r.id === e.ruleId); // P4.3: 引擎命中的事件 ruleId 在 201+ 段
   return { ...e, levelLabel: RISK_LEVEL_LABEL[e.level] || e.level, statusLabel: RISK_STATUS_LABEL[e.status] || e.status,
     user: u ? u.name : '—', cardNoMask: card ? maskCardNo(card.cardNo) : '—', cardStatus: card ? card.status : '—',
-    ruleName: rule ? rule.name : '已删除规则', ruleAction: rule ? rule.action : '', ruleExpr: rule ? rule.expr : '' };
+    ruleName: rule ? rule.name : '已删除规则', ruleAction: rule ? rule.action : '', ruleExpr: rule ? (rule.expr || (rule.conditions ? engineCondStr(rule) : '')) : '' };
 };
 // 对账: 三类交易按天(dayKey)分组; 应入账=平台口径, 实际=渠道回执(按 financeMeta.diffs 注入模拟差异), 差异=应入-实际
 const RECON_DEFS = {
@@ -965,6 +1113,248 @@ function merchantRows() {
       voucher: 'MC-' + String(i + 1).padStart(2, '0') + (lastTxAt ? '-' + dayKey(lastTxAt).replace('-', '') : ''),
       lastTxAt };
   }).sort((a, b) => b.consumeAmt - a.consumeAmt);
+}
+
+// ---------------- P4.3 风控规则引擎(模块级): 结构化规则求值 / 命中记录 / 评分 / 版本 ----------------
+// 规则 = 条件组(字段+操作符+阈值, 且/或) → 动作(block 拦截 / freeze 冻结 / review 人工审核 / mark 标记)
+const ENGINE_FIELDS = {
+  amount:         { label: '交易金额(USD)', type: 'number' },
+  country:        { label: '交易发起国家码', type: 'list' },
+  txCount24h:     { label: '24h 交易笔数(含本笔)', type: 'number' },
+  payFailStreak:  { label: '连续支付失败次数', type: 'number' },
+  deviceAgeHours: { label: '设备绑定时长(小时)', type: 'number' },
+  kycLevel:       { label: '用户 KYC 等级', type: 'number' },
+  balance:        { label: '卡当前余额(USD)', type: 'number' },
+};
+const ENGINE_OPS = { '>': '大于', '>=': '大于等于', '<': '小于', '<=': '小于等于', '==': '等于', '!=': '不等于', 'in': '属于', 'not_in': '不属于' };
+const ENGINE_ACTION_LABEL = { block: '拦截', freeze: '冻结', review: '人工审核', mark: '标记' };
+const ENGINE_RESULT_LABEL = { blocked: '拦截', frozen: '冻结', review: '人工审核', marked: '标记' };
+const AP_TYPE_LABEL = { card_issue: '发卡申请', kyc_upgrade: 'KYC 升级', refund: '退款申请', commission_settle: '佣金结算', adjust: '调账申请' };
+const AP_STATUS_LABEL = { pending: '审批中', approved: '已通过', rejected: '已驳回', cancelled: '已撤回' };
+function condMatch(c, ctx) {
+  const v = ctx[c.field]; const t = c.value;
+  if (v == null || t == null) return false;
+  switch (c.op) {
+    case '>': return v > t; case '>=': return v >= t; case '<': return v < t; case '<=': return v <= t;
+    case '==': return v == t; case '!=': return v != t; // eslint-disable-line eqeqeq
+    case 'in': case 'not_in': {
+      const list = (Array.isArray(t) ? t : [t]).map(String);
+      const hit = list.includes(String(v));
+      return c.op === 'in' ? hit : !hit;
+    }
+    default: return false;
+  }
+}
+function ruleMatch(rule, ctx) {
+  const conds = rule.conditions || [];
+  if (!conds.length) return false;
+  return rule.condOp === 'or' ? conds.some(c => condMatch(c, ctx)) : conds.every(c => condMatch(c, ctx));
+}
+// 交易前置求值: doPay/doTopup 开头调用; 返回按优先级排序的命中规则 + 最高严重度动作
+function runRiskRules(userId, tx) {
+  if (!engineRules) return { hits: [], action: null, ctx: {} };
+  const user = users.find(u => u.id === userId);
+  const card = cards.find(c => c.userId === userId);
+  const scene = tx.type === 'topup' ? 'topup' : 'pay';
+  const ctx = {
+    amount: +(tx.amount || 0),
+    country: user ? user.cc : '',
+    txCount24h: transactions.filter(t => t.userId === userId && t.createdAt >= now() - 864e5).length + 1,
+    payFailStreak: user ? (user.payFailStreak || 0) : 0,
+    deviceAgeHours: user ? +((now() - user.createdAt) / 36e5).toFixed(1) : 0,
+    kycLevel: user ? user.kycLevel : 0,
+    balance: card ? card.balance : 0,
+  };
+  const hits = engineRules
+    .filter(r => r.enabled && (r.scene || ['pay', 'topup']).includes(scene) && ruleMatch(r, ctx))
+    .sort((a, b) => (a.priority || 99) - (b.priority || 99));
+  const RANK = { block: 0, freeze: 1, review: 2, mark: 3 };
+  const action = hits.length ? hits.slice().sort((a, b) => RANK[a.action] - RANK[b.action])[0].action : null;
+  return { hits, action, ctx };
+}
+// 与 doPay 内校验同口径的成败预判(仅用于连续失败计数, 不改业务行为)
+function predictPayFail(user, card, amount, usePoints) {
+  if (!card || card.status !== 'active') return true;
+  const lim = KYC_LIMITS[user ? user.kycLevel : 0] || KYC_LIMITS[0];
+  if (amount > lim.perTx) return true;
+  let pointsUsed = 0;
+  if (usePoints && user) pointsUsed = Math.min(user.points, Math.floor(amount * 0.3 * 100));
+  return +(amount - pointsUsed / 100).toFixed(2) > card.balance;
+}
+// 前置门: 拦截类规则命中 → 返回原样错误结构(由 doPay/doTopup 直接 return)
+function riskGateForTx(userId, scene, tx) {
+  if (!engineRules) return { ok: true, rk: null };
+  const user = users.find(u => u.id === userId);
+  const rk = runRiskRules(userId, Object.assign({ type: scene }, tx));
+  const willFail = scene === 'pay' && user
+    ? predictPayFail(user, cards.find(c => c.userId === userId), +(tx.amount || 0), tx.usePoints)
+    : false;
+  const applyStreak = () => { if (user) user.payFailStreak = willFail ? (user.payFailStreak || 0) + 1 : 0; };
+  const blocker = rk.hits.find(r => r.action === 'block');
+  if (blocker) {
+    logEngineHit(blocker, userId, Object.assign({ type: scene }, tx), 'blocked', null);
+    riskEvents.unshift(engineEvent(blocker, userId, tx, 'pending', 'blocked'));
+    applyStreak();
+    return { ok: false, rk, error: '风控拦截: 命中规则「' + blocker.name + '」, 本笔交易已拒绝; 如需放行请让风控总监调整规则阈值' };
+  }
+  applyStreak();
+  return { ok: true, rk };
+}
+// 后置钩: 交易成功入账后执行 冻结/审核/标记 类动作(不改 doPay/doTopup 返回结构)
+function afterRiskGate(gate, userId, tx, card) {
+  const rk = gate && gate.rk;
+  if (!rk || !rk.hits || !rk.hits.length) return;
+  rk.hits.forEach(r => {
+    if (r.action === 'block') return; // 拦截已在门内返回, 不会走到这
+    if (r.action === 'freeze') {
+      logEngineHit(r, userId, tx, 'frozen', tx.id);
+      riskEvents.unshift(engineEvent(r, userId, tx, 'frozen', 'frozen', card));
+      if (card && card.status === 'active') {
+        card.status = 'frozen';
+        ensureCardLedgerAccount(card);
+        frozenBalances.push({ id: nid(), accountKey: 'card:' + card.id, amount: lgR2(card.balance),
+          reason: '规则引擎冻结 · 命中「' + r.name + '」· 交易 #' + tx.id + ' 入账后保护性冻结(待结算余额全额冻结)',
+          createdAt: now(), status: 'frozen', eventId: null });
+      }
+    } else if (r.action === 'review') {
+      logEngineHit(r, userId, tx, 'review', tx.id);
+      riskEvents.unshift(engineEvent(r, userId, tx, 'pending', 'review', card));
+    } else {
+      logEngineHit(r, userId, tx, 'marked', tx.id);
+      riskEvents.unshift(engineEvent(r, userId, tx, 'pending', 'marked', card));
+    }
+  });
+}
+function logEngineHit(rule, userId, tx, result, txId) {
+  const u = users.find(x => x.id === userId);
+  const card = cards.find(c => c.userId === userId);
+  engineHits.unshift({ id: nid(), ruleId: rule.id, ruleName: rule.name, action: rule.action, level: rule.level,
+    userId, user: u ? u.name : '—', cardId: card ? card.id : null, cardNoMask: card ? maskCardNo(card.cardNo) : '—',
+    scene: tx.type === 'topup' ? '充值' : '消费', merchant: tx.merchant || '',
+    amount: +(tx.amount || 0), result, txId: txId != null ? txId : null, createdAt: now() });
+  rule.hits = (rule.hits || 0) + 1;
+}
+// 引擎命中生成 P1.5 风险事件(进入风控中心统一处置; ruleId 引擎规则段 201+, pubRiskEvent 会回查引擎规则)
+function engineEvent(rule, userId, tx, status, resultLabel, card) {
+  const c = card || cards.find(x => x.userId === userId);
+  const TAIL = { blocked: ', 交易已拒绝', frozen: ', 交易已入账, 卡片保护性冻结', review: ', 交易已放行, 转人工处置', marked: ', 交易已放行, 已标记观察' };
+  return { id: nid(), userId, cardId: c ? c.id : null, ruleId: rule.id, level: rule.level,
+    reason: '规则引擎命中「' + rule.name + '」(' + engineCondStr(rule) + ') → ' + (ENGINE_RESULT_LABEL[resultLabel] || rule.action) + (TAIL[resultLabel] || ''),
+    status, amount: +(tx.amount || 0),
+    scene: (tx.type === 'topup' ? '充值' : '消费') + ' $' + (+(tx.amount || 0)).toFixed(2) + (tx.merchant ? ' · ' + tx.merchant : ''),
+    deviceId: 'DEV-engine', createdAt: now(),
+    timeline: [{ ts: now(), node: 'created', label: '事件产生', note: '规则引擎实时求值命中「' + rule.name + '」(' + (engineVersions[engineVersions.length - 1] || {}).ver + ')', operator: '风控规则引擎' }] };
+}
+function engineCondStr(rule) {
+  return (rule.conditions || []).map(c => {
+    const f = ENGINE_FIELDS[c.field] || { label: c.field };
+    const v = Array.isArray(c.value) ? ('[' + c.value.join(' / ') + ']') : c.value;
+    return f.label + ' ' + (ENGINE_OPS[c.op] || c.op) + ' ' + v;
+  }).join(rule.condOp === 'or' ? ' 或 ' : ' 且 ');
+}
+function serializeEngineRule(r) {
+  return { ...r, actionLabel: ENGINE_ACTION_LABEL[r.action] || r.action, levelLabel: RISK_LEVEL_LABEL[r.level] || r.level,
+    sceneLabel: (r.scene || []).map(s => (s === 'pay' ? '消费' : '充值')).join(' / '), condStr: engineCondStr(r),
+    hitCount: engineHits.filter(h => h.ruleId === r.id).length };
+}
+// 风险评分: 近 30 天命中权重合计 + 历史风险事件扣分(high 12 / mid 6 / low 2), 上限 100
+function engineScoreAll() {
+  const EV_DEDUCT = { high: 12, mid: 6, low: 2 };
+  const cutoff = now() - 30 * 864e5;
+  return users.map(u => {
+    const hits = engineHits.filter(h => h.userId === u.id && h.createdAt >= cutoff);
+    const hitScore = hits.reduce((s, h) => { const r = engineRules.find(x => x.id === h.ruleId); return s + ((r && r.weight) || 10); }, 0);
+    const evs = riskEvents.filter(e => e.userId === u.id);
+    const evScore = evs.reduce((s, e) => s + (EV_DEDUCT[e.level] || 2), 0);
+    const score = Math.min(100, hitScore + evScore);
+    const card = cards.find(c => c.userId === u.id);
+    return { userId: u.id, user: u.name, cc: u.cc, country: u.country, kycLevel: u.kycLevel,
+      cardId: card ? card.id : null, cardNoMask: card ? maskCardNo(card.cardNo) : '—', cardStatus: card ? card.status : '—',
+      hits30d: hits.length, riskEvents: evs.length, hitScore, evScore, score,
+      grade: score >= 60 ? 'high' : score >= 30 ? 'mid' : 'low' };
+  }).sort((a, b) => b.score - a.score);
+}
+// 规则增删改自动追加策略小版本(v1.x)
+function bumpEngineVersion(by, note, changes) {
+  const cur = engineVersions[engineVersions.length - 1] || { ver: 'v1.0' };
+  const m = /^v(\d+)\.(\d+)$/.exec(cur.ver) || [null, '1', '0'];
+  const ver = 'v' + m[1] + '.' + (parseInt(m[2], 10) + 1);
+  engineVersions.push({ ver, at: now(), by, note, changes: changes || [] });
+  return ver;
+}
+
+// ---------------- P4.2 审批中心(模块级): 视图 / 业务联动执行 ----------------
+const apTimeout = (a) => a.status === 'pending' && (now() - (a.updatedAt || a.createdAt)) > 48 * 36e5;
+function pubApproval(a) {
+  const cur = a.nodes.find(n => n.state === 'active') || null;
+  const idx = a.nodes.indexOf(cur);
+  return { ...a,
+    statusLabel: AP_STATUS_LABEL[a.status] || a.status,
+    currentNode: cur ? {
+      name: cur.name, mode: cur.mode, approvers: cur.approvers,
+      approvedNames: cur.acts.filter(x => x.verdict === 'approve').map(x => x.name),
+      remaining: cur.approvers.filter(n => !cur.acts.some(x => x.verdict === 'approve' && x.name === n)),
+    } : null,
+    step: cur ? idx + 1 : a.nodes.length + 1, steps: a.nodes.length,
+    flowLabel: a.nodes.map(n => (n.state === 'done' ? '✓ ' : n === cur ? '▶ ' : '') + n.name + '(' + n.mode + ')').join(' → ') + (a.status === 'approved' ? ' → ✓ 执行' : ''),
+    timeout: apTimeout(a) };
+}
+// 审批全部通过后的业务联动(与后台对应手工接口同一套逻辑; 驳回/撤回不触达业务数据)
+function executeApprovalBiz(a) {
+  const pl = a.payload || {};
+  if (a.type === 'card_issue') {
+    const u = users.find(x => x.id === pl.userId);
+    if (!u) return '用户不存在, 未发卡';
+    const card = { id: nid(), userId: u.id, cardNo: genCardNo(), cvv: String(ri(100, 999)), expMonth: ri(1, 12), expYear: 30,
+      level: pl.level || 'standard', status: 'active', balance: 0, salesRepId: u.salesRepId, createdAt: now() };
+    cards.push(card);
+    addCommissions(card.salesRepId, 'card', 1, card.id, now());
+    ensureCardLedgerAccount(card);
+    ledgerForMonthlyFee(card, now());
+    const cust = customers.find(c => c.userId === u.id);
+    if (cust && ['线索', '意向', '方案'].includes(cust.stage)) cust.stage = '开卡';
+    return '已发卡 ' + maskCardNo(card.cardNo) + '(' + ((CARD_LEVELS[card.level] || {}).label || card.level) + '), 发卡佣金已计入, 首月月费已计提';
+  }
+  if (a.type === 'kyc_upgrade') {
+    const u = users.find(x => x.id === pl.userId);
+    if (!u) return '用户不存在, 未调整 KYC';
+    u.kycLevel = Math.max(0, Math.min(2, pl.toLevel != null ? +pl.toLevel : u.kycLevel + 1));
+    u.kycStatus = 'approved';
+    addPointsLog(u.id, 200, 'KYC 认证奖励', 'KYC', now());
+    return u.name + ' KYC 已生效为 L' + u.kycLevel + ', 认证奖励 200 积分已发放';
+  }
+  if (a.type === 'refund') {
+    const t = transactions.find(x => x.id === pl.txId);
+    if (!t || t.type !== 'consume') return '交易不存在, 未执行退款';
+    if (t.status === 'refunded') return '交易 #' + t.id + ' 此前已退款, 无需重复执行';
+    t.status = 'refunded';
+    const card = cards.find(c => c.id === t.cardId);
+    if (card) card.balance = +(card.balance + t.amount).toFixed(2);
+    ledgerForRefund(t, now());
+    return '交易 #' + t.id + ' 已全额退款 $' + lgR2(t.amount).toFixed(2) + ', 卡余额已回补, 反向分录已入账';
+  }
+  if (a.type === 'commission_settle') {
+    if (!pl.salesId) return '未指定销售, 未打款';
+    let n = 0, sum = 0;
+    commissions.forEach(c => {
+      if (c.salesId === +pl.salesId && c.status !== 'settled') { ledgerForCommissionSettle(c, now()); c.status = 'settled'; n++; sum += c.amount; }
+    });
+    const rep = repById(+pl.salesId);
+    return (rep ? rep.name : '销售#' + pl.salesId) + ' 待结算佣金 ' + n + ' 笔共 $' + lgR2(sum).toFixed(2) + ' 已打款, 渠道出金分录已入账';
+  }
+  if (a.type === 'adjust') {
+    const card = cards.find(c => c.id === pl.cardId);
+    if (!card) return '卡不存在, 未执行调账';
+    const delta = +pl.amount || 0;
+    const before = card.balance;
+    card.balance = +(card.balance + delta).toFixed(2);
+    const adjTx = { id: nid(), type: 'adjust', userId: card.userId, cardId: card.id, amount: delta, fee: 0, method: 'adjust',
+      ref: 'AP-' + a.id + ' · ' + (pl.ref || '审批调账'), pointsEarned: 0, status: 'success', createdAt: now() };
+    transactions.unshift(adjTx);
+    ledgerForAdjust(adjTx, card, +(card.balance - before).toFixed(2));
+    return '调账已执行 ' + (delta >= 0 ? '+' : '') + delta.toFixed(2) + ', 卡余额 $' + before.toFixed(2) + ' → $' + card.balance.toFixed(2) + ', ADJ 分录已入账';
+  }
+  return '已归档';
 }
 
 // ---------------- P3 系统管理工具(模块级, 依赖 initSeed 填充的冷数据) ----------------
@@ -1434,11 +1824,25 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
         } else if (b.action === 'release') {
           ev.status = 'released';
           if (card && card.status === 'frozen') card.status = 'active'; // 解除风控=解冻关联卡(挂失卡不自动恢复)
-          ev.timeline.push({ ts: now(), node: 'release', label: '解除风控', note: '复核通过, 风险解除' + (card && card.status === 'active' ? ', 关联卡已解冻' : ''), operator: me.name });
+          // P4.4 收尾: 解除风控时同步移除本事件产生的待结算冻结余额记录
+          const fzKey = card ? 'card:' + card.id : '';
+          for (let i = frozenBalances.length - 1; i >= 0; i--) {
+            const f = frozenBalances[i];
+            if (f.status !== 'frozen') continue;
+            if (f.eventId === ev.id || (fzKey && f.accountKey === fzKey && (String(f.reason || '').startsWith('风控') || String(f.reason || '').startsWith('规则引擎冻结')))) frozenBalances.splice(i, 1);
+          }
+          ev.timeline.push({ ts: now(), node: 'release', label: '解除风控', note: '复核通过, 风险解除' + (card && card.status === 'active' ? ', 关联卡已解冻, 冻结余额已释放' : ''), operator: me.name });
         } else if (b.action === 'freeze') {
           ev.status = 'frozen';
-          if (card && card.status === 'active') card.status = 'frozen';
-          ev.timeline.push({ ts: now(), node: 'freeze', label: '自动冻结', note: '手动触发自动冻结动作, 关联卡已冻结', operator: me.name });
+          if (card && card.status === 'active') {
+            card.status = 'frozen';
+            // P4.4 收尾: 冻结=卡待结算余额全额冻结, 记入冻结余额台账(事件维度可回溯)
+            ensureCardLedgerAccount(card);
+            frozenBalances.push({ id: nid(), accountKey: 'card:' + card.id, amount: lgR2(card.balance),
+              reason: '风控冻结 · 事件 #' + ev.id + ' · ' + String(ev.reason || '').slice(0, 60),
+              createdAt: now(), status: 'frozen', eventId: ev.id });
+          }
+          ev.timeline.push({ ts: now(), node: 'freeze', label: '自动冻结', note: '手动触发自动冻结动作, 关联卡已冻结, 待结算余额已全额冻结', operator: me.name });
         } else return J({ error: '无效动作, 支持 review / release / freeze' }, 400);
         return J({ event: pubRiskEvent(ev) });
       }
@@ -1486,8 +1890,26 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
         const name = decodeURIComponent(mMer[1]);
         const row = merchantRows().find(r => r.merchant === name);
         if (!row) return J({ error: '商户不存在: ' + name }, 404);
+        const wasSettled = financeMeta.merchantSettled[name] === true;
         financeMeta.merchantSettled[name] = b.settled !== false;
-        return J({ row: { ...row, settled: financeMeta.merchantSettled[name] } });
+        // P4.4 收尾: 标记结算时, 按未打款净额生成「商户待结算 → 渠道出金」转账分录(复式, 借贷平衡)
+        let stlPosted = 0, stlTxId = '';
+        if (b.settled !== false && !wasSettled) {
+          const paid = +(financeMeta.merchantSettledAmt || {})[name] || 0;
+          const due = +lgR2(row.net - paid);
+          if (due > 0.005) {
+            stlTxId = 'STL-' + name + '-' + isoDay(now());
+            ensureMerchantLedgerAccount(name);
+            postLedgerTx(stlTxId, '商户结算打款 · ' + name + ' · T+2', now(), [
+              { key: 'merchant:' + name, dir: 'debit', amount: due, memo: '结算出金 · 净额(扣 2% 手续费) · 凭证 ' + row.voucher },
+              { key: 'channel:fiat', dir: 'credit', amount: due, memo: '渠道出金支付商户结算款 · ' + name },
+            ]);
+            stlPosted = due;
+            financeMeta.merchantSettledAmt = financeMeta.merchantSettledAmt || {};
+            financeMeta.merchantSettledAmt[name] = row.net;
+          }
+        }
+        return J({ row: { ...row, settled: financeMeta.merchantSettled[name], stlPosted, stlTxId } });
       }
       if (p === '/api/admin/finance/report') { // 月度汇总报表
         const nD = new Date();
@@ -1774,6 +2196,185 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
           detailToday: balanceSnapshots.filter(s => s.day === isoDay(now())) });
       }
       if (p === '/api/admin/ledger/verify') return J(verifyLedger());
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    // ============ P4.2 审批中心(总监专属, 其他角色一律 403) ============
+    if (p === '/api/admin/approvals' || p.startsWith('/api/admin/approvals/')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问审批中心' }, 403);
+      if (p === '/api/admin/approvals' && method === 'GET') { // ?box=todo|mine|all & type= 流程类型
+        const box = ['todo', 'mine', 'all'].indexOf(q.box) >= 0 ? q.box : 'todo';
+        let list = [...approvals];
+        if (box === 'todo') list = list.filter(a => a.status === 'pending');
+        if (box === 'mine') list = list.filter(a => a.applicantId === sid);
+        if (q.type) list = list.filter(a => a.type === q.type);
+        list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+        const cnt = (st) => approvals.filter(a => a.status === st).length;
+        return J({ box,
+          summary: { todo: cnt('pending'), mine: approvals.filter(a => a.applicantId === sid && a.status === 'pending').length,
+            approved: cnt('approved'), rejected: cnt('rejected'), cancelled: cnt('cancelled'),
+            timeout: approvals.filter(apTimeout).length, total: approvals.length },
+          types: Object.keys(AP_TYPE_LABEL).map(k => ({ key: k, label: AP_TYPE_LABEL[k] })),
+          list: list.map(pubApproval) });
+      }
+      const mApAct = p.match(/^\/api\/admin\/approvals\/(\d+)\/action$/);
+      if (mApAct && method === 'POST') { // 动作: approve / reject(需原因) / transfer(转交) / cancel(发起人撤回)
+        const a = approvals.find(x => x.id === +mApAct[1]);
+        if (!a) return J({ error: '审批单不存在' }, 404);
+        if (a.status !== 'pending') return J({ error: '该审批单已' + (AP_STATUS_LABEL[a.status] || a.status) + ', 不能再操作' }, 400);
+        const node = a.nodes.find(n => n.state === 'active');
+        if (b.action === 'cancel') {
+          if (a.applicantId !== sid) return J({ error: '仅发起人可撤回审批单' }, 403);
+          a.status = 'cancelled';
+          a.nodes.forEach(n => { if (n.state === 'active') n.state = 'waiting'; });
+          a.resultNote = '发起人撤回' + (b.reason ? ': ' + String(b.reason).slice(0, 120) : '') + ' (业务数据未变动)';
+          a.finishedAt = a.updatedAt = now();
+          return J({ approval: pubApproval(a) });
+        }
+        if (!node) return J({ error: '该审批单没有待办节点' }, 400);
+        if (b.action === 'transfer') {
+          const toName = String(b.toName || '').trim();
+          if (!toName) return J({ error: '请填写转交给谁(审批人姓名)' }, 400);
+          node.acts.push({ name: me.name, verdict: 'transfer', note: '转交给 ' + toName + (b.reason ? ' · ' + String(b.reason).slice(0, 120) : ''), ts: now() });
+          node.approvers = [toName]; // 转交后由被转交人审批(或签/会签模式保持)
+          a.updatedAt = now();
+          return J({ approval: pubApproval(a) });
+        }
+        if (b.action === 'reject') {
+          const reason = String(b.reason || '').trim();
+          if (!reason) return J({ error: '驳回必须填写原因' }, 400);
+          node.acts.push({ name: me.name, verdict: 'reject', note: reason.slice(0, 200), ts: now() });
+          node.state = 'done';
+          a.nodes.forEach(n => { if (n.state === 'active' || n.state === 'waiting') n.state = 'done'; });
+          a.status = 'rejected';
+          a.resultNote = '驳回于「' + node.name + '」: ' + reason.slice(0, 120) + ' (业务数据未变动)';
+          a.finishedAt = a.updatedAt = now();
+          return J({ approval: pubApproval(a) });
+        }
+        if (b.action === 'approve') {
+          // 会签演示: b.as 可指定以节点内某审批人身份签批(默认总监本人); 或签=任一人通过即过, 会签=全部通过才过
+          const acting = (b.as && node.approvers.indexOf(String(b.as)) >= 0) ? String(b.as) : me.name;
+          if (node.acts.some(x => x.name === acting && x.verdict === 'approve')) return J({ error: acting + ' 在本节点已审批通过, 不能重复审批' }, 400);
+          node.acts.push({ name: acting, verdict: 'approve', note: String(b.reason || '').slice(0, 200), ts: now() });
+          const okNames = node.acts.filter(x => x.verdict === 'approve').map(x => x.name);
+          const passed = node.mode === '会签' ? node.approvers.every(n => okNames.indexOf(n) >= 0) : true;
+          if (passed) {
+            node.state = 'done';
+            const next = a.nodes.find(n => n.state === 'waiting');
+            if (next) {
+              next.state = 'active';
+              a.updatedAt = now();
+              return J({ approval: pubApproval(a), advanced: true, nextNode: next.name });
+            }
+            a.status = 'approved';
+            a.finishedAt = a.updatedAt = now();
+            a.resultNote = executeApprovalBiz(a); // 业务联动: 发卡/退款冲正/佣金打款/调账/KYC 生效
+          } else a.updatedAt = now();
+          return J({ approval: pubApproval(a), executed: a.status === 'approved', bizNote: a.resultNote || '' });
+        }
+        return J({ error: '无效动作, 支持 approve / reject / transfer / cancel' }, 400);
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    // ============ P4.3 风控规则引擎(总监专属, 其他角色一律 403) ============
+    if (p.startsWith('/api/admin/risk-engine')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问风控规则引擎' }, 403);
+      const normalizeConds = (raw) => {
+        if (!Array.isArray(raw)) return null;
+        const out = [];
+        for (const c of raw) {
+          const field = String(c.field || '');
+          const op = String(c.op || '');
+          if (!ENGINE_FIELDS[field] || !ENGINE_OPS[op]) return null;
+          let v = c.value;
+          if (op === 'in' || op === 'not_in') {
+            const arr = Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,，\s]+/);
+            v = arr.map(String).map(s => s.trim()).filter(Boolean);
+            if (!v.length) return null;
+          } else {
+            v = +(v || 0);
+            if (!isFinite(v)) return null;
+          }
+          out.push({ field, op, value: v });
+        }
+        return out.length ? out : null;
+      };
+      if (p === '/api/admin/risk-engine/rules' && method === 'GET') {
+        return J({ fields: ENGINE_FIELDS, ops: ENGINE_OPS,
+          list: [...engineRules].sort((a, b) => (a.priority || 99) - (b.priority || 99)).map(serializeEngineRule),
+          version: (engineVersions[engineVersions.length - 1] || {}).ver || 'v1.0' });
+      }
+      if (p === '/api/admin/risk-engine/rules' && method === 'POST') { // 新建规则
+        const name = String(b.name || '').trim();
+        if (!name) return J({ error: '请填写规则名' }, 400);
+        if (engineRules.some(r => r.name === name)) return J({ error: '规则名已存在: ' + name }, 409);
+        const conditions = normalizeConds(b.conditions);
+        if (!conditions) return J({ error: '条件不合法: 需至少 1 条「字段+操作符+阈值」且字段/操作符受支持' }, 400);
+        const scene = Array.isArray(b.scene) ? b.scene.filter(s => s === 'pay' || s === 'topup') : [];
+        if (!scene.length) return J({ error: '请选择适用场景(消费/充值 至少一项)' }, 400);
+        const action = ENGINE_ACTION_LABEL[b.action] ? b.action : 'review';
+        const level = ['high', 'mid', 'low'].indexOf(b.level) >= 0 ? b.level : 'mid';
+        const rule = { id: nid(), name, priority: +b.priority || 100, enabled: b.enabled !== false,
+          action, level, weight: Math.max(0, Math.min(100, +b.weight || 15)), scene,
+          condOp: b.condOp === 'or' ? 'or' : 'and', conditions,
+          desc: String(b.desc || '').slice(0, 160), hits: 0, createdAt: now(), updatedAt: now() };
+        engineRules.push(rule);
+        const ver = bumpEngineVersion(me.name, '新增规则「' + name + '」', ['新增: ' + name + ' · ' + engineCondStr(rule) + ' → ' + ENGINE_ACTION_LABEL[action]]);
+        return J({ rule: serializeEngineRule(rule), version: ver });
+      }
+      const mER = p.match(/^\/api\/admin\/risk-engine\/rules\/(\d+)$/);
+      if (mER && method === 'PATCH') { // 编辑规则; 仅传 {enabled} 时为轻量启停
+        const r = engineRules.find(x => x.id === +mER[1]);
+        if (!r) return J({ error: '规则不存在' }, 404);
+        if (Object.keys(b).length === 1 && typeof b.enabled === 'boolean') {
+          r.enabled = b.enabled; r.updatedAt = now();
+          const ver = bumpEngineVersion(me.name, (b.enabled ? '启用' : '停用') + '规则「' + r.name + '」', ['规则「' + r.name + '」' + (b.enabled ? '停用 → 启用' : '启用 → 停用')]);
+          return J({ rule: serializeEngineRule(r), version: ver });
+        }
+        const changes = [];
+        if (b.name != null) { const name = String(b.name).trim(); if (!name) return J({ error: '规则名不能为空' }, 400); if (name !== r.name) { changes.push('名称 ' + r.name + ' → ' + name); r.name = name; } }
+        if (Array.isArray(b.conditions)) {
+          const conditions = normalizeConds(b.conditions);
+          if (!conditions) return J({ error: '条件不合法: 需至少 1 条「字段+操作符+阈值」' }, 400);
+          const before = engineCondStr(r);
+          r.conditions = conditions;
+          const after = engineCondStr(r);
+          if (before !== after) changes.push('条件 ' + before + ' → ' + after);
+        }
+        if (Array.isArray(b.scene)) { const scene = b.scene.filter(s => s === 'pay' || s === 'topup'); if (!scene.length) return J({ error: '适用场景不能为空' }, 400); if (scene.join() !== (r.scene || []).join()) { changes.push('场景 → ' + scene.join('/')); r.scene = scene; } }
+        if (b.action != null && ENGINE_ACTION_LABEL[b.action] && b.action !== r.action) { changes.push('动作 ' + (ENGINE_ACTION_LABEL[r.action] || r.action) + ' → ' + ENGINE_ACTION_LABEL[b.action]); r.action = b.action; }
+        if (b.level != null && ['high', 'mid', 'low'].indexOf(b.level) >= 0 && b.level !== r.level) { changes.push('等级 → ' + b.level); r.level = b.level; }
+        if (b.priority != null && isFinite(+b.priority) && +b.priority !== r.priority) { changes.push('优先级 ' + r.priority + ' → ' + (+b.priority)); r.priority = +b.priority; }
+        if (b.weight != null && isFinite(+b.weight)) { const w = Math.max(0, Math.min(100, +b.weight)); if (w !== r.weight) { changes.push('权重 ' + r.weight + ' → ' + w); r.weight = w; } }
+        if (b.condOp != null) { const co = b.condOp === 'or' ? 'or' : 'and'; if (co !== r.condOp) { changes.push('条件关系 → ' + (co === 'or' ? '或' : '且')); r.condOp = co; } }
+        if (b.desc != null) r.desc = String(b.desc).slice(0, 160);
+        if (typeof b.enabled === 'boolean' && b.enabled !== r.enabled) { changes.push(b.enabled ? '停用 → 启用' : '启用 → 停用'); r.enabled = b.enabled; }
+        r.updatedAt = now();
+        const ver = bumpEngineVersion(me.name, '编辑规则「' + r.name + '」', changes.length ? changes : ['编辑规则「' + r.name + '」(元数据更新)']);
+        return J({ rule: serializeEngineRule(r), version: ver });
+      }
+      if (mER && method === 'DELETE') {
+        const i = engineRules.findIndex(x => x.id === +mER[1]);
+        if (i < 0) return J({ error: '规则不存在' }, 404);
+        const removed = engineRules.splice(i, 1)[0];
+        const ver = bumpEngineVersion(me.name, '删除规则「' + removed.name + '」', ['删除: ' + removed.name + ' · ' + engineCondStr(removed) + ' (历史命中记录保留)']);
+        return J({ ok: true, removed: removed.name, version: ver });
+      }
+      if (p === '/api/admin/risk-engine/scores') {
+        const list = engineScoreAll();
+        const cnt = (g) => list.filter(x => x.grade === g).length;
+        return J({ list, summary: { users: list.length, high: cnt('high'), mid: cnt('mid'), low: cnt('low'),
+          avg: list.length ? Math.round(list.reduce((s, x) => s + x.score, 0) / list.length) : 0 },
+          version: (engineVersions[engineVersions.length - 1] || {}).ver || 'v1.0' });
+      }
+      if (p === '/api/admin/risk-engine/hits') {
+        return J({ list: engineHits.slice(0, 200), summary: { total: engineHits.length,
+          blocked: engineHits.filter(h => h.result === 'blocked').length, frozen: engineHits.filter(h => h.result === 'frozen').length,
+          review: engineHits.filter(h => h.result === 'review').length, marked: engineHits.filter(h => h.result === 'marked').length } });
+      }
+      if (p === '/api/admin/risk-engine/versions') {
+        return J({ current: (engineVersions[engineVersions.length - 1] || {}).ver || 'v1.0',
+          list: [...engineVersions].sort((a, b) => b.at - a.at) });
+      }
       return J({ error: 'not found: ' + p }, 404);
     }
     return J({ error: 'not found: ' + p }, 404);
