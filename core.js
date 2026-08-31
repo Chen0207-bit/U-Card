@@ -47,6 +47,8 @@ let approvals; // P4.2 审批中心: 5 类流程实例(发卡/KYC升级/退款/�
 let engineRules, engineHits, engineVersions; // P4.3 风控规则引擎: 结构化规则 / 命中记录 / 策略版本
 let orchAdapters, orchTxs, orchHealthLog, orchWebhookLogs, orchReconFixed; // P5.1 支付编排: 适配器注册表 / 编排交易 / 健康探测日志 / 出站通知记录 / 对账已处理差异
 let kybCases, sanctions, peps, strReports, userDocs, compCases, countryRules; // P5.2 合规中心: KYB / 制裁名单 / PEP / STR / 证件 / 合规案件 / 国家政策
+let entAccounts, entMembers, entDepts, entCards, entTxApprovals, entBills, entDeptLogs; // P5.3 企业服务: 企业 / 成员 / 部门成本中心 / 企业卡 / 消费审批 / 账单发票 / 预算变更历史
+let mchAccounts, mchOrders, mchRefunds, mchSettles, mchSplits, mchRisk; // P5.4 商户平台: 收单商户 / 收款订单 / 退款单 / 结算批次 / 订单分账 / 商户风控
 let inited = false;
 function initSeed() {
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
@@ -780,6 +782,7 @@ countryRules = [
 ];
 
 rebuildLedgerSeed(); // P4.4: 为种子交易回填复式账本(与卡余额自洽) + 14 天余额快照 + 演示冻结余额
+initEntMchSeeds(); // P5.3/P5.4: 企业服务 + 商户平台种子(企业期初/收单回填/结算分录直接入账本, 末尾重算余额快照)
   inited = true;
 }
 
@@ -814,11 +817,12 @@ function addCommissions(salesId, type, baseAmt, refId, ts) {
 // ---------------- P4.4 资金账本(复式记账): 模块级模型与工具 ----------------
 // 账户类型: channel=资金渠道(资产, 借增贷减) / card=用户卡账户(平台负债, 贷增借减) / merchant=商户待结算(负债, 贷增)
 //           income=平台收入(手续费/卡月费, 贷增) / expense=平台支出(佣金/积分成本, 借增)
+//           ent=企业主账户(P5.3, 平台负债, 贷增借减: 充值贷增, 员工消费/账单服务费借减)
 // 恒等式: ①任一业务单(txId) sum(借)===sum(贷) ②账户余额===流水重放===末条流水 balanceAfter ③卡账户余额===卡实际余额
 // 流水只追加、永不修改/删除; 退款走反向分录, 不冲销历史。
 let ledgerAccounts, ledgerEntries, balanceSnapshots, frozenBalances;
-const LEDGER_DEBIT_POSITIVE = { channel: true, expense: true, card: false, merchant: false, income: false };
-const LEDGER_TYPE_LABEL = { channel: '资金渠道', card: '用户卡账户', merchant: '商户待结算', income: '平台收入', expense: '平台支出' };
+const LEDGER_DEBIT_POSITIVE = { channel: true, expense: true, card: false, merchant: false, income: false, ent: false };
+const LEDGER_TYPE_LABEL = { channel: '资金渠道', card: '用户卡账户', merchant: '商户待结算', income: '平台收入', expense: '平台支出', ent: '企业主账户(负债)' };
 const lgR2 = (x) => +(+x || 0).toFixed(2);
 const isoDay = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + d2(d.getMonth() + 1) + '-' + d2(d.getDate()); };
 function ensureLedgerAccount(key, type, name) {
@@ -831,6 +835,7 @@ function ensureCardLedgerAccount(card) {
   return ensureLedgerAccount('card:' + card.id, 'card', '用户卡 · ' + (u ? u.name : 'UID ' + card.userId) + ' ' + maskCardNo(card.cardNo));
 }
 function ensureMerchantLedgerAccount(name) { return ensureLedgerAccount('merchant:' + name, 'merchant', '商户待结算 · ' + name); }
+function ensureEntLedgerAccount(e) { return ensureLedgerAccount('ent:' + e.id, 'ent', '企业主账户 · ' + e.name); } // P5.3: 企业预存主账户(负债)
 // 追加一条流水(只增不改): 按账户类型×借贷方向确定余额增量, 记录 balanceAfter
 function postLedgerEntry(txId, accountKey, dir, amount, memo, ts) {
   const acc = ledgerAccounts.find(a => a.key === accountKey);
@@ -1567,6 +1572,10 @@ function executeApprovalBiz(a) {
     ledgerForAdjust(adjTx, card, +(card.balance - before).toFixed(2));
     return '调账已执行 ' + (delta >= 0 ? '+' : '') + delta.toFixed(2) + ', 卡余额 $' + before.toFixed(2) + ' → $' + card.balance.toFixed(2) + ', ADJ 分录已入账';
   }
+  if (a.type === 'ent_card_issue') { // P5.3 企业批量发卡备案单: 卡已在发卡动作中即时生成, 备案通过仅作联动确认
+    const ent = entAccounts.find(e => e.id === pl.entId);
+    return '企业「' + (ent ? ent.name : '#' + pl.entId) + '」批量发卡 ×' + (pl.count || 1) + ' 备案确认, 卡已随发卡动作生效, 无需重复执行';
+  }
   return '已归档';
 }
 
@@ -1969,6 +1978,465 @@ const KYB_STATUS_LABEL = { pending: '待审核', approved: '已通过', rejected
 const STR_STATUS_LABEL = { draft: '草稿', submitted: '已报送', closed: '已结案' };
 const COMP_CASE_TYPE_LABEL = { aml: 'AML 反洗钱', kyc: 'KYC 尽调', kyb: 'KYB 企业尽调', str: 'STR 报送跟进' };
 const COUNTRY_LEVEL_LABEL = { prohibited: '禁止', restricted: '限制', allowed: '允许' };
+
+// ---------------- P5.3 企业服务 + P5.4 商户平台: 模块级模型 / 工具 / 种子(initSeed 末尾调用) ----------------
+// P5.3 企业服务模型: 企业(entAccounts) → 成员(entMembers, 5 类角色) → 部门/成本中心(entDepts, 月度预算) → 企业卡(entCards, 卡段 5311*)
+//   消费审批(entTxApprovals): 员工卡消费「超部门剩余预算 或 超卡单笔限额」→ 需审批人批准; 通过后复式记账+扣部门预算
+//   账单(entBills): 月度账单 = 当月已入账消费汇总 + 0.5% 账单服务费; 支付 = 从企业主账户扣服务费(借 ent 贷 fee)
+const ENT_STATUS_LABEL = { active: '正常', frozen: '已冻结', pending: '待开户' };
+const ENT_LEVEL_LABEL = { business: '商务版', enterprise: '旗舰版' };
+const ENT_MEMBER_ROLE_LABEL = { admin: '企业管理员', finance: '财务人员', approver: '审批人', employee: '普通员工', cardholder: '持卡员工' };
+const ENT_MEMBER_STATUS_LABEL = { active: '在职', suspended: '已停用' };
+const ENT_AP_STATUS_LABEL = { pending: '待审批', approved: '已通过', rejected: '已驳回', auto: '免审入账' };
+const ENT_BILL_STATUS_LABEL = { pending: '待支付', paid: '已支付' };
+const ENT_CARD_PRESET = { standard: { single: 500, daily: 1500, monthly: 20000 }, gold: { single: 2000, daily: 6000, monthly: 80000 }, platinum: { single: 10000, daily: 30000, monthly: 400000 } };
+const genEntCardNo = () => '5311 ' + String(ri(1000, 9999)) + ' ' + String(ri(1000, 9999)) + ' ' + String(ri(1000, 9999)); // 企业卡专属卡段 5311*
+const ENT_BILL_FEE_RATE = 0.005; // 账单服务费率(按当月消费汇总)
+const ENT_CONSUME_FEE_RATE = 0.015; // 企业卡收单手续费率
+const entById = (id) => entAccounts.find(e => e.id === +id);
+const entDeptById = (id) => entDepts.find(d => d.id === +id);
+const entCardById = (id) => entCards.find(c => c.id === +id);
+const entMembersOf = (entId) => entMembers.filter(m => m.entId === +entId);
+const entDeptsOf = (entId) => entDepts.filter(d => d.entId === +entId);
+const entCardsOf = (entId) => entCards.filter(c => c.entId === +entId);
+const entDeptRemaining = (dept) => lgR2((dept.monthlyBudget || 0) - (dept.used || 0));
+const kybOf = (holder) => holder && holder.kybCaseId ? kybCases.find(k => k.id === holder.kybCaseId) : null;
+function entTimelineAdd(ent, node, note, operator, ts) { ent.timeline.unshift({ ts: ts || now(), node, note, operator: operator || '系统' }); }
+function entConsumePost(appr) { // 企业卡消费入账(免审通过 / 审批通过共用): 借企业主账户 / 贷商户待结算净额 / 贷平台手续费, 并扣部门预算
+  const ent = entById(appr.entId), dept = entDeptById(appr.deptId);
+  const A = lgR2(appr.amount), F = lgR2(A * ENT_CONSUME_FEE_RATE);
+  ensureEntLedgerAccount(ent);
+  ensureMerchantLedgerAccount(appr.merchant);
+  postLedgerTx('ENTX' + appr.id, '企业卡消费 · ' + ent.name + ' · ' + appr.memberName + ' @ ' + appr.merchant, now(), [
+    { key: 'ent:' + ent.id, dir: 'debit', amount: A, memo: '企业主账户扣款 · ' + appr.memberName + ' · ' + appr.merchant },
+    { key: 'merchant:' + appr.merchant, dir: 'credit', amount: lgR2(A - F), memo: '商户待结算净额(扣 1.5% 收单手续费)' },
+    { key: 'fee', dir: 'credit', amount: F, memo: '企业卡收单手续费 $' + F.toFixed(2) },
+  ]);
+  ent.balance = lgR2(ent.balance - A);
+  if (dept) dept.used = lgR2((dept.used || 0) + A);
+  return F;
+}
+function pubEntCard(c) {
+  const ent = entAccounts.find(e => e.id === c.entId) || {};
+  const dept = entDepts.find(d => d.id === c.deptId) || {};
+  return { ...c, entName: ent.name || '—', deptName: dept.name || '未分配', ccNo: dept.ccNo || '—',
+    holderName: c.holderName || (entMembers.find(m => m.id === c.memberId) || {}).name || '—',
+    levelLabel: ((CARD_LEVELS[c.level] || {}).label) || ENT_LEVEL_LABEL[c.level] || c.level,
+    statusLabel: c.status === 'active' ? '使用中' : c.status === 'frozen' ? '已冻结' : c.status };
+}
+function pubEntApproval(a) {
+  const ent = entAccounts.find(e => e.id === a.entId) || {};
+  const dept = entDepts.find(d => d.id === a.deptId) || {};
+  const card = entCards.find(c => c.id === a.cardId) || {};
+  return { ...a, entName: ent.name || '—', deptName: dept.name || '—', cardNo: card.cardNo ? maskCardNo(card.cardNo) : '—',
+    statusLabel: ENT_AP_STATUS_LABEL[a.status] || a.status };
+}
+function pubEntBill(b) {
+  const ent = entAccounts.find(e => e.id === b.entId) || {};
+  return { ...b, entName: ent.name || '—', statusLabel: ENT_BILL_STATUS_LABEL[b.status] || b.status,
+    invoiced: !!b.invoiceNo, payable: lgR2(b.total != null ? b.total : b.serviceFee) };
+}
+function pubEnt(e) { // 列表行(含 KYB 联动 / 成员卡数 / 部门预算汇总)
+  const kyb = kybOf(e);
+  const depts = entDeptsOf(e.id);
+  return { ...e, levelLabel: ENT_LEVEL_LABEL[e.level] || e.level, statusLabel: ENT_STATUS_LABEL[e.status] || e.status,
+    kybCaseId: e.kybCaseId, kybCompany: kyb ? kyb.company : '', kybStatus: kyb ? kyb.status : null,
+    kybStatusLabel: kyb ? (KYB_STATUS_LABEL[kyb.status] || kyb.status) : '未提交',
+    memberCount: entMembersOf(e.id).length, deptCount: depts.length, cardCount: entCardsOf(e.id).length,
+    pendingApprovals: entTxApprovals.filter(a => a.entId === e.id && a.status === 'pending').length,
+    pendingBills: entBills.filter(x => x.entId === e.id && x.status === 'pending').length,
+    deptBudgetTotal: lgR2(depts.reduce((s, d) => s + (d.monthlyBudget || 0), 0)), deptUsedTotal: lgR2(depts.reduce((s, d) => s + (d.used || 0), 0)) };
+}
+
+// P5.4 商户平台模型: 收单商户(mchAccounts, 费率/封顶/T+N) → 收款订单(mchOrders) → 退款(mchRefunds, 反向分录)
+//   → 结算批次(mchSettles, STL- 复式分录 + 分账拆付) / 分账规则(mchSplits, 订单级) / 商户风控(mchRisk)
+const MCC_LABEL = { '5411': '商超百货 / 电商', '5651': '服装电商', '4121': '运输出行服务', '5812': '餐饮外卖', '5045': '计算机设备批发', '4215': '货运物流', '7372': '数字媒体服务' };
+const MCH_STATUS_LABEL = { pending: '待审核', active: '已开通', rejected: '已驳回' };
+const MCH_ORDER_STATUS_LABEL = { paid: '已支付', refunded: '已退款', disputed: '拒付处理中' };
+const MCH_PAY_LABEL = { credit: '贷记卡', debit: '借记卡' };
+const MCH_REFUND_STATUS_LABEL = { pending: '待审核', approved: '已退款', rejected: '已驳回' };
+const MCH_SETTLE_STATUS_LABEL = { pending: '待结算', settled: '已结算' };
+const SPLIT_TYPE_LABEL = { sub: '子商户', partner: '合作服务商', platform: '平台服务费' };
+const MCH_RISK_THRESHOLD = { score: 70, chargeback: 1.5, refundRate: 3 }; // 超阈值标红
+const mchById = (id) => mchAccounts.find(m => m.id === +id);
+const mchOrderById = (id) => mchOrders.find(o => o.id === +id);
+const mchOrdersOf = (mchId) => mchOrders.filter(o => o.mchId === +mchId);
+const mchFeeOf = (mch, amount, method) => method === 'debit'
+  ? lgR2(Math.min(lgR2(amount) * (mch.rate.debit || 0), mch.rate.debitCap || 99))
+  : lgR2(lgR2(amount) * (mch.rate.credit || 0));
+const genMchNo = () => 'M' + ri(80000000, 89999999);
+const genMchApiKey = () => { const hx = '0123456789abcdef'; let s = ''; for (let i = 0; i < 18; i++) s += hx[ri(0, 15)]; return 'mk_live_' + s; };
+function mchTimelineAdd(m, node, note, operator, ts) { m.timeline.unshift({ ts: ts || now(), node, note, operator: operator || '系统' }); }
+// 收款订单入账(种子回填): 借收单渠道清算入金 / 贷商户待结算净额 / 贷平台手续费
+function mchOrderLedgerPost(o, ts) {
+  ensureMerchantLedgerAccount(o.merchant);
+  postLedgerTx('MO' + o.id, '收单入账 · ' + o.merchant + ' · ' + o.orderNo, ts, [
+    { key: 'channel:fiat', dir: 'debit', amount: lgR2(o.amount), memo: '卡组织清算入金 · ' + o.channel + ' · ' + o.orderNo },
+    { key: 'merchant:' + o.merchant, dir: 'credit', amount: lgR2(o.net), memo: '商户待结算净额(扣收单费率)' },
+    { key: 'fee', dir: 'credit', amount: lgR2(o.fee), memo: '收单手续费 $' + lgR2(o.fee).toFixed(2) },
+  ]);
+}
+// 商户退款反向分录: 借商户待结算净额 + 借手续费冲回 / 贷渠道原路退回
+function mchRefundLedgerPost(rf, ts) {
+  const o = mchOrderById(rf.orderId);
+  ensureMerchantLedgerAccount(o.merchant);
+  postLedgerTx('MRFD' + rf.id, '商户退款 · ' + o.merchant + ' · 订单 ' + o.orderNo, ts, [
+    { key: 'merchant:' + o.merchant, dir: 'debit', amount: lgR2(o.net), memo: '冲回商户待结算净额 · ' + o.orderNo },
+    { key: 'fee', dir: 'debit', amount: lgR2(o.fee), memo: '冲回收单手续费 $' + lgR2(o.fee).toFixed(2) },
+    { key: 'channel:fiat', dir: 'credit', amount: lgR2(o.amount), memo: '原路退回付款人 · ' + o.orderNo },
+  ]);
+}
+// 结算打款(STL- 模式, 与 P4.4 商户结算同一记账口径): 借商户待结算 / [贷分账接收方×N] / 贷渠道出金(净额-分账)
+function mchSettleLedgerPost(batch, ts) {
+  const mch = mchById(batch.mchId);
+  ensureMerchantLedgerAccount(mch.name);
+  const splits = mchSplits.filter(s => (batch.orderIds || []).includes(s.orderId));
+  const splitSum = lgR2(splits.reduce((s, x) => s + x.amount, 0));
+  const legs = [{ key: 'merchant:' + mch.name, dir: 'debit', amount: lgR2(batch.net), memo: '结算出金 · ' + (batch.orderIds || []).length + ' 笔订单净额 · T+' + (mch.settleDays || 0) }];
+  splits.forEach(s => {
+    ensureMerchantLedgerAccount(s.receiver);
+    const o = mchOrderById(s.orderId);
+    legs.push({ key: 'merchant:' + s.receiver, dir: 'credit', amount: lgR2(s.amount), memo: '分账拆付 · ' + (SPLIT_TYPE_LABEL[s.receiverType] || s.receiverType) + ' ' + Math.round((s.pct || 0) * 10000) / 100 + '% · 订单 ' + (o ? o.orderNo : s.orderId) });
+  });
+  legs.push({ key: 'channel:fiat', dir: 'credit', amount: lgR2(lgR2(batch.net) - splitSum), memo: '渠道出金支付商户结算款' + (splits.length ? '(已扣分账 $' + splitSum.toFixed(2) + ')' : '') });
+  const voucher = 'STL-' + mch.name + '-' + isoDay(ts);
+  postLedgerTx(voucher, '商户结算打款 · ' + mch.name, ts, legs);
+  batch.status = 'settled'; batch.settledAt = ts; batch.voucherNo = voucher;
+  batch.paidOut = lgR2(lgR2(batch.net) - splitSum);
+  batch.splitSum = splitSum;
+  batch.splitDetail = splits.map(s => { const o = mchOrderById(s.orderId); return { ...s, receiverTypeLabel: SPLIT_TYPE_LABEL[s.receiverType] || s.receiverType, orderNo: o ? o.orderNo : '—' }; });
+  return { voucher, splitSum, payout: batch.paidOut, splitCount: splits.length };
+}
+// 结算批次按 orderIds 重算金额(退款冲回后联动)
+function mchBatchRecompute(batch) {
+  const orders = (batch.orderIds || []).map(mchOrderById).filter(Boolean);
+  batch.orderCount = orders.length;
+  batch.gross = lgR2(orders.reduce((s, o) => s + o.amount, 0));
+  batch.fee = lgR2(orders.reduce((s, o) => s + o.fee, 0));
+  batch.net = lgR2(orders.reduce((s, o) => s + o.net, 0));
+  if (batch.status === 'settled') batch.net = lgR2(batch.net); // 已结算批次金额为历史快照, 不重算(此处不会出现)
+}
+function pubMchAccount(m) {
+  const kyb = kybOf(m);
+  const pend = mchOrdersOf(m.id).filter(o => o.status === 'paid');
+  return { ...m, mccLabel: MCC_LABEL[m.mcc] || m.mcc, statusLabel: MCH_STATUS_LABEL[m.status] || m.status,
+    kybCaseId: m.kybCaseId, kybCompany: kyb ? kyb.company : '', kybStatus: kyb ? kyb.status : null,
+    kybStatusLabel: kyb ? (KYB_STATUS_LABEL[kyb.status] || kyb.status) : '—',
+    rateLabel: '贷记 ' + (m.rate.credit * 100).toFixed(2) + '% / 借记 ' + (m.rate.debit * 100).toFixed(2) + '% / 换汇 ' + (m.rate.fx * 100).toFixed(2) + '%',
+    settleLabel: 'T+' + m.settleDays,
+    orderCount: mchOrdersOf(m.id).length, paidVolume: lgR2(pend.reduce((s, o) => s + o.amount, 0)),
+    pendingSettles: mchSettles.filter(b => b.mchId === m.id && b.status === 'pending').length };
+}
+function pubMchOrder(o) {
+  const mch = mchAccounts.find(m => m.id === o.mchId) || {};
+  return { ...o, merchantName: o.merchant, mccLabel: mch.mccLabel || (MCC_LABEL[mch.mcc] || ''), methodLabel: MCH_PAY_LABEL[o.method] || o.method,
+    statusLabel: MCH_ORDER_STATUS_LABEL[o.status] || o.status,
+    splits: mchSplits.filter(s => s.orderId === o.id).map(s => ({ ...s, receiverTypeLabel: SPLIT_TYPE_LABEL[s.receiverType] || s.receiverType })) };
+}
+function pubMchRefund(r) {
+  const o = mchOrderById(r.orderId) || {};
+  return { ...r, orderNo: o.orderNo || '—', amount: o.amount != null ? o.amount : r.amount, merchant: o.merchant || '—', merchantId: o.mchId,
+    statusLabel: MCH_REFUND_STATUS_LABEL[r.status] || r.status, orderStatus: o.status };
+}
+function pubMchSettle(b) {
+  const mch = mchAccounts.find(m => m.id === b.mchId) || {};
+  return { ...b, merchant: mch.name || '—', mccLabel: mch.mccLabel || '', settleLabel: 'T+' + (mch.settleDays || 0),
+    statusLabel: MCH_SETTLE_STATUS_LABEL[b.status] || b.status, splitSum: b.splitSum || 0, paidOut: b.paidOut != null ? b.paidOut : (b.status === 'pending' ? b.net : b.paidOut) };
+}
+function mchReportRows(dim) { // 商户维度经营报表: dim=day|month → 交易量/笔数/成功率/平均客单/退款率
+  const rows = [];
+  mchAccounts.filter(m => m.status === 'active').forEach(m => {
+    const orders = mchOrdersOf(m.id);
+    const groups = new Map();
+    orders.forEach(o => {
+      const d = new Date(o.createdAt);
+      const key = dim === 'month' ? d.getFullYear() + '-' + d2(d.getMonth() + 1) : isoDay(o.createdAt);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(o);
+    });
+    groups.forEach((list, key) => {
+      const total = list.length, paid = list.filter(o => o.status === 'paid').length, refunded = list.filter(o => o.status === 'refunded').length, disputed = list.filter(o => o.status === 'disputed').length;
+      const amount = lgR2(list.reduce((s, o) => s + o.amount, 0));
+      rows.push({ mchId: m.id, merchant: m.name, mccLabel: MCC_LABEL[m.mcc] || m.mcc, period: key, dim,
+        amount, count: total, successRate: total ? +(100 * (paid + refunded) / total).toFixed(1) : 100,
+        refundRate: total ? +(100 * refunded / total).toFixed(1) : 0, disputeRate: total ? +(100 * disputed / total).toFixed(1) : 0,
+        avgOrder: total ? lgR2(amount / total) : 0, fee: lgR2(list.reduce((s, o) => s + o.fee, 0)), net: lgR2(list.reduce((s, o) => s + o.net, 0)) });
+    });
+  });
+  return rows.sort((a, b) => (a.period < b.period ? 1 : a.period > b.period ? -1 : a.merchant.localeCompare(b.merchant)));
+}
+
+// ---- P5.3 / P5.4 种子(initSeed 在 rebuildLedgerSeed 之后调用: 企业期初 / 收单回填 / 结算分录直接入账本) ----
+function initEntMchSeeds() {
+  // ===== 企业 ×4(3 active + 1 pending) =====
+  entAccounts = [
+    { id: 8101, name: 'Gulf Logistics LLC', regNo: 'AE-DXB-882910', country: 'AE', kybCaseId: 7203, openAmt: 260000, balance: 0, creditLimit: 150000, level: 'enterprise', status: 'active', contact: 'Khalid Al-Mutawa · +971 50 ***8821', createdAt: daysAgo(186, 4), timeline: [] },
+    { id: 8102, name: 'Desert Tech Solutions FZ-LLC', regNo: 'AE-DXB-901255', country: 'AE', kybCaseId: 7204, openAmt: 95000, balance: 0, creditLimit: 60000, level: 'business', status: 'active', contact: 'Laila Al-Fahim · +971 55 ***1042', createdAt: daysAgo(122, 7), timeline: [] },
+    { id: 8103, name: 'ME Retail Group', regNo: 'SA-RUH-77103', country: 'SA', kybCaseId: 7206, openAmt: 410000, balance: 0, creditLimit: 250000, level: 'enterprise', status: 'active', contact: 'Maha Al-Qahtani · +966 55 ***3390', createdAt: daysAgo(230, 2), timeline: [] },
+    { id: 8104, name: 'Oasis Foods Trading', regNo: 'KW-KWC-88432', country: 'KW', kybCaseId: null, openAmt: 0, balance: 0, creditLimit: 40000, level: 'business', status: 'pending', contact: 'Bader Al-Kandari · +965 55 ***7716', createdAt: daysAgo(2, 6), timeline: [] },
+  ];
+  // ===== 成员(每企业 3-6 人, 覆盖 5 类角色) =====
+  entMembers = [
+    { id: 8201, entId: 8101, name: 'Khalid Al-Mutawa', role: 'admin', status: 'active', title: '财务总监' },
+    { id: 8202, entId: 8101, name: 'Faisal Al-Harbi', role: 'finance', status: 'active', title: '资金经理' },
+    { id: 8203, entId: 8101, name: 'Noura Al-Sabah', role: 'approver', status: 'active', title: '运营副总 · 消费审批人' },
+    { id: 8204, entId: 8101, name: 'Omar Bin Rashid', role: 'cardholder', status: 'active', title: '运营经理' },
+    { id: 8205, entId: 8101, name: 'Salem Al-Marri', role: 'cardholder', status: 'active', title: '仓储主管' },
+    { id: 8206, entId: 8102, name: 'Laila Al-Fahim', role: 'admin', status: 'active', title: 'CEO' },
+    { id: 8207, entId: 8102, name: 'Yousef Karim', role: 'finance', status: 'active', title: '财务主管' },
+    { id: 8208, entId: 8102, name: 'Dana Al-Suwaidi', role: 'approver', status: 'active', title: 'COO · 消费审批人' },
+    { id: 8209, entId: 8102, name: 'Ahmed Nasser', role: 'cardholder', status: 'active', title: '运维工程师' },
+    { id: 8210, entId: 8102, name: 'Reem Al-Hashimi', role: 'employee', status: 'active', title: '市场专员' },
+    { id: 8211, entId: 8103, name: 'Maha Al-Qahtani', role: 'admin', status: 'active', title: '集团 CFO' },
+    { id: 8212, entId: 8103, name: 'Tariq Al-Otaibi', role: 'finance', status: 'active', title: '资金结算经理' },
+    { id: 8213, entId: 8103, name: 'Hessa Al-Shammari', role: 'approver', status: 'active', title: '运营总监 · 消费审批人' },
+    { id: 8214, entId: 8103, name: 'Saad Al-Dosari', role: 'cardholder', status: 'active', title: '门店运营经理' },
+    { id: 8215, entId: 8103, name: 'Amina Al-Zahrani', role: 'cardholder', status: 'active', title: '采购主管' },
+    { id: 8216, entId: 8103, name: 'Jassim Al-Harbi', role: 'cardholder', status: 'active', title: '市场经理' },
+    { id: 8217, entId: 8104, name: 'Bader Al-Kandari', role: 'admin', status: 'active', title: '总经理' },
+    { id: 8218, entId: 8104, name: 'Maryam Al-Sager', role: 'finance', status: 'active', title: '会计' },
+    { id: 8219, entId: 8104, name: 'Hamad Al-Ajmi', role: 'employee', status: 'active', title: '业务员' },
+  ];
+  // ===== 部门 / 成本中心(每企业 1-4 个, 月度预算) =====
+  entDepts = [
+    { id: 8401, entId: 8101, name: '总经办', ccNo: 'CC-GL-01', monthlyBudget: 40000, used: 0, owner: 'Khalid Al-Mutawa' },
+    { id: 8402, entId: 8101, name: '运营部', ccNo: 'CC-GL-02', monthlyBudget: 15000, used: 0, owner: 'Noura Al-Sabah' },
+    { id: 8403, entId: 8101, name: '仓储运输部', ccNo: 'CC-GL-03', monthlyBudget: 20000, used: 0, owner: 'Salem Al-Marri' },
+    { id: 8404, entId: 8101, name: '市场部', ccNo: 'CC-GL-04', monthlyBudget: 12000, used: 0, owner: 'Faisal Al-Harbi' },
+    { id: 8405, entId: 8102, name: '技术部', ccNo: 'CC-DT-01', monthlyBudget: 18000, used: 0, owner: 'Ahmed Nasser' },
+    { id: 8406, entId: 8102, name: '市场部', ccNo: 'CC-DT-02', monthlyBudget: 10000, used: 0, owner: 'Reem Al-Hashimi' },
+    { id: 8407, entId: 8102, name: '人事行政部', ccNo: 'CC-DT-03', monthlyBudget: 6000, used: 0, owner: 'Laila Al-Fahim' },
+    { id: 8408, entId: 8103, name: '采购部', ccNo: 'CC-MR-01', monthlyBudget: 45000, used: 0, owner: 'Amina Al-Zahrani' },
+    { id: 8409, entId: 8103, name: '门店运营部', ccNo: 'CC-MR-02', monthlyBudget: 50000, used: 0, owner: 'Saad Al-Dosari' },
+    { id: 8410, entId: 8103, name: '市场部', ccNo: 'CC-MR-03', monthlyBudget: 80000, used: 0, owner: 'Jassim Al-Harbi' },
+    { id: 8411, entId: 8103, name: '电商事业部', ccNo: 'CC-MR-04', monthlyBudget: 30000, used: 0, owner: 'Hessa Al-Shammari' },
+    { id: 8412, entId: 8104, name: '综合办公室', ccNo: 'CC-OF-01', monthlyBudget: 15000, used: 0, owner: 'Maryam Al-Sager' },
+  ];
+  // ===== 企业卡 ×8(卡段 5311*, 限额 = 单笔/日/月, 归属部门) =====
+  const mkCard = (id, entId, memberName, deptId, level, status, ageD) => {
+    const m = entMembers.find(x => x.entId === entId && x.name === memberName) || entMembersOf(entId)[0];
+    return { id, entId, memberId: m ? m.id : null, holderName: m ? m.name : '—', deptId, cardNo: genEntCardNo(), level,
+      limits: { ...(ENT_CARD_PRESET[level] || ENT_CARD_PRESET.standard) }, status, issuedAt: daysAgo(ageD != null ? ageD : 60, 6) };
+  };
+  entCards = [
+    mkCard(8501, 8101, 'Omar Bin Rashid', 8402, 'gold', 'active', 92),
+    mkCard(8502, 8101, 'Salem Al-Marri', 8403, 'standard', 'active', 88),
+    mkCard(8503, 8101, 'Faisal Al-Harbi', 8404, 'standard', 'active', 75),
+    mkCard(8504, 8102, 'Ahmed Nasser', 8405, 'gold', 'active', 61),
+    mkCard(8505, 8102, 'Yousef Karim', 8406, 'standard', 'frozen', 47),
+    mkCard(8506, 8103, 'Saad Al-Dosari', 8409, 'platinum', 'active', 120),
+    mkCard(8507, 8103, 'Amina Al-Zahrani', 8408, 'gold', 'active', 110),
+    mkCard(8508, 8103, 'Jassim Al-Harbi', 8410, 'gold', 'active', 96),
+  ];
+  // ===== 账本期初: 借渠道 / 贷企业主账户(企业预存) =====
+  entAccounts.forEach(e => {
+    if (!(e.openAmt > 0)) return;
+    ensureEntLedgerAccount(e);
+    postLedgerTx('ENTOPEN' + e.id, '企业期初充值结转 · ' + e.name, daysAgo(31, 4), [
+      { key: 'channel:fiat', dir: 'debit', amount: lgR2(e.openAmt), memo: '企业对公转账预存(期初结转)' },
+      { key: 'ent:' + e.id, dir: 'credit', amount: lgR2(e.openAmt), memo: '企业主账户预存入账' },
+    ]);
+    e.balance = lgR2(e.openAmt);
+    entTimelineAdd(e, '企业开户', '企业账户开通, 预存 $' + lgR2(e.openAmt).toLocaleString('en-US') + ' 入企业主账户', 'Noura Al-Faisal', daysAgo(31, 4));
+  });
+  // ===== 部门历史消费汇总(近 30 天, 一次性入账; 口径与卡消费分录一致) =====
+  const entHistSeed = [
+    [8403, 17600, 'ADNOC', 'ADNOC 燃油与仓储耗材采购汇总', 22], [8404, 11000, 'Google Ads', 'Google Ads / 本地媒体投放汇总', 18],
+    [8405, 15600, 'AWS', 'AWS / Datadog 云资源与监控汇总', 20], [8406, 4200, 'LinkedIn Ads', '行业展会与线索投放汇总', 15], [8407, 1500, 'Office One', '办公用品与团建汇总', 12],
+    [8408, 42000, 'Almarai Industrial', '冷链设备与包装耗材采购汇总', 19], [8409, 46500, 'Jotun Paints', '门店租金能耗与促销汇总', 16], [8410, 48800, 'TikTok Ads', '品牌营销与 KOL 投放汇总', 13], [8411, 12200, 'Noon Marketplace', '电商平台运营费汇总', 9],
+  ];
+  entHistSeed.forEach(([deptId, amt, merchant, memo, ageD]) => {
+    const dept = entDeptById(deptId);
+    const ent = entById(dept.entId);
+    const F = lgR2(amt * ENT_CONSUME_FEE_RATE);
+    ensureEntLedgerAccount(ent);
+    ensureMerchantLedgerAccount(merchant);
+    postLedgerTx('ENTH' + deptId, '部门消费汇总 · ' + ent.name + ' ' + dept.name, daysAgo(ageD, 8), [
+      { key: 'ent:' + ent.id, dir: 'debit', amount: lgR2(amt), memo: dept.name + ' · ' + memo },
+      { key: 'merchant:' + merchant, dir: 'credit', amount: lgR2(lgR2(amt) - F), memo: '商户待结算净额(扣 1.5% 收单手续费)' },
+      { key: 'fee', dir: 'credit', amount: F, memo: '企业卡收单手续费 $' + F.toFixed(2) },
+    ]);
+    dept.used = lgR2(amt);
+    ent.balance = lgR2(ent.balance - amt);
+  });
+  // ===== 消费审批 ×8(5 pending / 2 approved / 1 rejected) =====
+  entTxApprovals = [
+    { id: 8601, entId: 8101, cardId: 8501, memberId: 8204, memberName: 'Omar Bin Rashid', deptId: 8402, merchant: 'Emirates Airline', amount: 2350,
+      note: '团队赴利雅得现场协调航班', trigger: '超卡单笔限额($2,000)', status: 'approved', createdAt: daysAgo(8, 3), actedAt: daysAgo(7, 9), actNote: '差旅必需, 批准并计入运营部预算', actedBy: 'Noura Al-Sabah' },
+    { id: 8602, entId: 8101, cardId: 8502, memberId: 8205, memberName: 'Salem Al-Marri', deptId: 8403, merchant: 'ADNOC', amount: 3800,
+      note: '旺季车队燃油预付(月度框架)', trigger: '超部门剩余预算($2,400)', status: 'pending', createdAt: daysAgo(0, 6), actedAt: null, actNote: '', actedBy: '' },
+    { id: 8603, entId: 8101, cardId: 8503, memberId: 8202, memberName: 'Faisal Al-Harbi', deptId: 8404, merchant: 'Google Ads', amount: 1850,
+      note: 'Q4 获客campaign加投', trigger: '超部门剩余预算($1,000)', status: 'pending', createdAt: daysAgo(0, 4), actedAt: null, actNote: '', actedBy: '' },
+    { id: 8604, entId: 8102, cardId: 8504, memberId: 8209, memberName: 'Ahmed Nasser', deptId: 8405, merchant: 'AWS', amount: 4200,
+      note: '云资源预留实例年付', trigger: '超部门剩余预算 且 超卡单笔限额', status: 'rejected', createdAt: daysAgo(5, 7), actedAt: daysAgo(4, 8), actNote: '年付折价诱人但超预算, 改按月付并纳入下季规划', actedBy: 'Dana Al-Suwaidi' },
+    { id: 8605, entId: 8102, cardId: 8504, memberId: 8209, memberName: 'Ahmed Nasser', deptId: 8405, merchant: 'Datadog', amount: 2900,
+      note: '可观测性平台年度订阅', trigger: '超卡单笔限额($2,000)', status: 'pending', createdAt: daysAgo(0, 5), actedAt: null, actNote: '', actedBy: '' },
+    { id: 8606, entId: 8103, cardId: 8508, memberId: 8216, memberName: 'Jassim Al-Harbi', deptId: 8410, merchant: 'TikTok Ads', amount: 5600,
+      note: '斋月档期品牌投放', trigger: '超卡单笔限额($2,000)', status: 'approved', createdAt: daysAgo(6, 2), actedAt: daysAgo(5, 6), actNote: '档期投放窗口紧, 批准', actedBy: 'Hessa Al-Shammari' },
+    { id: 8607, entId: 8103, cardId: 8506, memberId: 8214, memberName: 'Saad Al-Dosari', deptId: 8409, merchant: 'Jotun Paints', amount: 6150,
+      note: '旗舰店翻新首期款', trigger: '超部门剩余预算($3,500)', status: 'pending', createdAt: daysAgo(1, 5), actedAt: null, actNote: '', actedBy: '' },
+    { id: 8608, entId: 8103, cardId: 8507, memberId: 8215, memberName: 'Amina Al-Zahrani', deptId: 8408, merchant: 'Almarai Industrial', amount: 4300,
+      note: '冷链设备采购定金', trigger: '超部门剩余预算($3,000)', status: 'pending', createdAt: daysAgo(0, 8), actedAt: null, actNote: '', actedBy: '' },
+  ];
+  // 已通过的两笔回填入账(借企业主账户/贷商户/贷手续费 + 扣部门预算)
+  entTxApprovals.filter(a => a.status === 'approved').forEach(a => {
+    const ent = entById(a.entId), dept = entDeptById(a.deptId), F = lgR2(a.amount * ENT_CONSUME_FEE_RATE);
+    ensureEntLedgerAccount(ent);
+    ensureMerchantLedgerAccount(a.merchant);
+    postLedgerTx('ENTX' + a.id, '企业卡消费 · ' + ent.name + ' · ' + a.memberName + ' @ ' + a.merchant, a.actedAt, [
+      { key: 'ent:' + ent.id, dir: 'debit', amount: lgR2(a.amount), memo: '审批通过扣款 · ' + a.memberName + ' · ' + a.merchant },
+      { key: 'merchant:' + a.merchant, dir: 'credit', amount: lgR2(lgR2(a.amount) - F), memo: '商户待结算净额(扣 1.5% 收单手续费)' },
+      { key: 'fee', dir: 'credit', amount: F, memo: '企业卡收单手续费 $' + F.toFixed(2) },
+    ]);
+    ent.balance = lgR2(ent.balance - a.amount);
+    dept.used = lgR2((dept.used || 0) + a.amount);
+  });
+  // ===== 部门预算变更历史 ×3 =====
+  entDeptLogs = [
+    { id: 8801, deptId: 8403, from: 16000, to: 20000, delta: 4000, note: '旺季运输量上调, 追加燃油预算', by: 'Khalid Al-Mutawa', at: daysAgo(12, 3) },
+    { id: 8802, deptId: 8410, from: 60000, to: 80000, delta: 20000, note: '斋月档期营销预算追加', by: 'Maha Al-Qahtani', at: daysAgo(9, 6) },
+    { id: 8803, deptId: 8405, from: 20000, to: 18000, delta: -2000, note: '云资源优化节约, 削减技术部预算', by: 'Laila Al-Fahim', at: daysAgo(6, 2) },
+  ];
+  // ===== 企业账单 ×4(上月口径: 消费汇总 + 0.5% 账单服务费; 2 paid / 2 pending) =====
+  const pm = new Date(now() - 26 * 864e5);
+  const pmLabel = pm.getFullYear() + '-' + d2(pm.getMonth() + 1);
+  const pm7 = new Date(now() - 56 * 864e5);
+  const pm7Label = pm7.getFullYear() + '-' + d2(pm7.getMonth() + 1);
+  const mkBill = (id, entId, period, consumption, status, inv, paidD) => {
+    const fee = lgR2(consumption * ENT_BILL_FEE_RATE);
+    return { id, entId, period, consumptionTotal: lgR2(consumption), serviceFee: fee, total: fee, status,
+      invoiceNo: inv ? 'INV-' + String(period).replace('-', '') + '-' + ri(1000, 9999) : null,
+      invoiceTitle: inv ? entById(entId).name : null, taxNo: inv ? 'TAX-' + ri(10000000, 99999999) : null, issuedAt: inv ? daysAgo(paidD != null ? paidD + 2 : 3, 5) : null,
+      paidAt: paidD != null ? daysAgo(paidD, 4) : null, voucherNo: paidD != null ? 'PB-' + ri(100000, 999999) : null,
+      items: [{ label: '当月企业卡消费汇总(已实时扣企业主账户)', amount: lgR2(consumption) }, { label: '账单服务费(消费 × 0.5%)', amount: fee }],
+      createdAt: daysAgo(paidD != null ? paidD + 3 : 3, 6) };
+  };
+  entBills = [
+    mkBill(8701, 8101, pmLabel, entDeptsOf(8101).reduce((s, d) => s + d.used, 0), 'paid', true, 2),
+    mkBill(8702, 8102, pmLabel, entDeptsOf(8102).reduce((s, d) => s + d.used, 0), 'pending', false, null),
+    mkBill(8703, 8103, pmLabel, entDeptsOf(8103).reduce((s, d) => s + d.used, 0), 'pending', false, null),
+    mkBill(8704, 8103, pm7Label, 138000, 'paid', true, 30),
+  ];
+  // 已支付账单回填: 借企业主账户 / 贷平台手续费(账单服务费)
+  entBills.filter(b => b.status === 'paid').forEach(b => {
+    const ent = entById(b.entId);
+    ensureEntLedgerAccount(ent);
+    postLedgerTx('ENTBILL' + b.id, '企业账单支付 · ' + ent.name + ' · ' + b.period, b.paidAt, [
+      { key: 'ent:' + ent.id, dir: 'debit', amount: lgR2(b.total), memo: '账单服务费 · ' + b.period + ' · 凭证 ' + b.voucherNo },
+      { key: 'fee', dir: 'credit', amount: lgR2(b.total), memo: '企业账单服务费收入 $' + lgR2(b.total).toFixed(2) },
+    ]);
+    ent.balance = lgR2(ent.balance - b.total);
+    entTimelineAdd(ent, '账单支付', b.period + ' 账单服务费 $' + lgR2(b.total).toFixed(2) + ' 已从企业主账户扣款' + (b.invoiceNo ? ', 发票 ' + b.invoiceNo : ''), 'Tariq Al-Otaibi', b.paidAt);
+  });
+
+  // ===== P5.4 商户 ×6(2 pending / 3 active / 1 rejected) =====
+  mchAccounts = [
+    { id: 8301, name: 'Noon', mchNo: 'M80120366', mcc: '5411', country: 'AE', kybCaseId: null, status: 'active',
+      settleAccount: { bank: 'Emirates NBD', iban: 'AE** **** **** **** 6602' }, rate: { credit: 0.024, debit: 0.012, fx: 0.010, debitCap: 3.5 }, settleDays: 2,
+      contact: '供应商管理部 · vendors@noon.example', appliedAt: daysAgo(420, 3), reviewedAt: daysAgo(415, 5), rejectReason: '', apiKey: genMchApiKey(), timeline: [] },
+    { id: 8302, name: 'Namshi', mchNo: 'M80455129', mcc: '5651', country: 'AE', kybCaseId: null, status: 'active',
+      settleAccount: { bank: 'Mashreq Bank', iban: 'AE** **** **** **** 3348' }, rate: { credit: 0.026, debit: 0.013, fx: 0.012, debitCap: 3.0 }, settleDays: 2,
+      contact: '财务部 · finance@namshi.example', appliedAt: daysAgo(380, 6), reviewedAt: daysAgo(376, 2), rejectReason: '', apiKey: genMchApiKey(), timeline: [] },
+    { id: 8303, name: 'Careem', mchNo: 'M80778310', mcc: '4121', country: 'AE', kybCaseId: null, status: 'active',
+      settleAccount: { bank: 'ADCB', iban: 'AE** **** **** **** 9017' }, rate: { credit: 0.021, debit: 0.011, fx: 0.008, debitCap: 2.5 }, settleDays: 1,
+      contact: '结算组 · settlement@careem.example', appliedAt: daysAgo(350, 2), reviewedAt: daysAgo(346, 8), rejectReason: '', apiKey: genMchApiKey(), timeline: [] },
+    { id: 8304, name: 'Emirates Tech Trading LLC', mchNo: null, mcc: '5045', country: 'AE', kybCaseId: 7201, status: 'pending',
+      settleAccount: { bank: 'Emirates NBD', iban: 'AE** **** **** **** 4821' }, rate: { credit: 0.028, debit: 0.014, fx: 0.012, debitCap: 4.0 }, settleDays: 3,
+      contact: 'Ahmed Bin Zayed · ops@ett.example', appliedAt: daysAgo(5, 3), reviewedAt: null, rejectReason: '', apiKey: null, timeline: [] },
+    { id: 8305, name: 'Doha Logistics W.L.L.', mchNo: null, mcc: '4215', country: 'QA', kybCaseId: 7202, status: 'pending',
+      settleAccount: { bank: 'Qatar National Bank', iban: 'QA** **** **** **** 7734' }, rate: { credit: 0.025, debit: 0.013, fx: 0.010, debitCap: 3.0 }, settleDays: 3,
+      contact: 'Mansour Al-Hail · pay@dohalog.example', appliedAt: daysAgo(3, 2), reviewedAt: null, rejectReason: '', apiKey: null, timeline: [] },
+    { id: 8306, name: 'Cairo Digital Media S.A.E.', mchNo: null, mcc: '7372', country: 'EG', kybCaseId: 7205, status: 'rejected',
+      settleAccount: { bank: 'Banque Misr', iban: 'EG** **** **** **** 0388' }, rate: { credit: 0.030, debit: 0.015, fx: 0.015, debitCap: 5.0 }, settleDays: 3,
+      contact: 'Karim Al-Nasser · info@cdm.example', appliedAt: daysAgo(12, 5), reviewedAt: daysAgo(9, 2), rejectReason: 'KYB 被驳回(公司章程缺失且 UBO 尽调无法完成), 6 个月后可重新申请', apiKey: null, timeline: [] },
+  ];
+  mchAccounts.forEach(m => {
+    m.mccLabel = MCC_LABEL[m.mcc] || m.mcc;
+    if (m.status === 'active') mchTimelineAdd(m, '商户开通', '入驻审核通过, 商户号 ' + m.mchNo + ' · 结算 T+' + m.settleDays, 'Noura Al-Faisal', m.reviewedAt);
+    else if (m.status === 'pending') mchTimelineAdd(m, '提交入驻申请', 'MCC ' + m.mcc + ' · 联动 KYB #' + m.kybCaseId + ' 尽调中', '商户自助', m.appliedAt);
+    else mchTimelineAdd(m, '入驻驳回', m.rejectReason, 'Noura Al-Faisal', m.reviewedAt);
+  });
+  // ===== 收款订单 ×34(3 个 active 商户, 近 14 天; 2 refunded / 2 disputed) =====
+  mchOrders = [];
+  const ACTIVE_MCH = [8301, 8302, 8303];
+  const REFUND_IDX = [9, 22], DISPUTE_IDX = [15, 27];
+  for (let i = 0; i < 34; i++) {
+    const mch = mchById(ACTIVE_MCH[i % 3]);
+    const isR = REFUND_IDX.includes(i), isD = DISPUTE_IDX.includes(i);
+    const amount = lgR2(ri(18, 940) + rnd());
+    const method = rnd() < 0.72 ? 'credit' : 'debit';
+    const fee = mchFeeOf(mch, amount, method);
+    const ageD = isR || isD ? ri(1, 2) : (i < 19 ? ri(4, 13) : (i % 5 < 2 ? 0 : ri(1, 3))); // 19-33 为近 3 日单; i%5<2 固定为「今日」单(8-340 分钟前, 商户端看板有数据)
+    const isToday = ageD === 0 && !isR && !isD;
+    const payer = users[(i * 5 + 3) % users.length];
+    const o = { id: 47201 + i, orderNo: 'PO' + (9123450 + i * 7), mchId: mch.id, merchant: mch.name,
+      amount, currency: 'USD', method, channel: i % 3 === 0 ? 'Visa' : 'Mastercard', payer: payer.name, cardMask: maskCardNo(genCardNo()),
+      fee, net: lgR2(amount - fee), status: isR ? 'refunded' : isD ? 'disputed' : 'paid',
+      createdAt: isToday ? now() - ri(8, 340) * 6e4 : daysAgo(ageD, ri(0, 22)), refundedAt: isR ? daysAgo(Math.max(0, ageD - 1), 6) : null };
+    mchOrders.push(o);
+    mchOrderLedgerPost(o, o.createdAt);
+  }
+  // ===== 退款单 ×4(1 pending 待审 / 2 approved 已回填反向分录 / 1 rejected) =====
+  const refTarget = mchOrders.find(o => o.mchId === 8301 && o.status === 'paid' && o.createdAt >= now() - 3 * 864e5) || mchOrdersOf(8301).find(o => o.status === 'paid');
+  const rejTarget = mchOrders.find(o => o.mchId === 8302 && o.status === 'paid' && o.id !== refTarget.id);
+  mchRefunds = [
+    { id: 48201, orderId: refTarget.id, mchId: refTarget.mchId, reason: '客户称重复扣款, 申请全额退款', status: 'pending', appliedAt: daysAgo(0, 3), appliedBy: '商户门户', approvedAt: null, approvedBy: '', actNote: '' },
+    { id: 48204, orderId: rejTarget.id, mchId: rejTarget.mchId, reason: '超过 30 天退款时限的售后申请', status: 'rejected', appliedAt: daysAgo(4, 6), appliedBy: '商户门户', approvedAt: daysAgo(3, 7), approvedBy: 'Noura Al-Faisal', actNote: '超出退款时限且商品已使用, 驳回' },
+  ];
+  mchOrders.filter(o => o.status === 'refunded').forEach((o, i) => {
+    const rf = { id: 48202 + i, orderId: o.id, mchId: o.mchId,
+      reason: i === 0 ? '客户重复下单, 商户核实后全额退款' : '商品缺货, 商户主动退款', status: 'approved',
+      appliedAt: o.refundedAt, appliedBy: '商户门户', approvedAt: o.refundedAt, approvedBy: 'Noura Al-Faisal', actNote: '核实无误, 同意全额退款(反向分录已入账)' };
+    mchRefundLedgerPost(rf, o.refundedAt);
+    mchRefunds.push(rf);
+  });
+  // ===== 分账规则 ×5(订单级; Careem 出行场景: 子商户车队 + 平台服务费) =====
+  mchSplits = [];
+  const careemPaid = mchOrdersOf(8303).filter(o => o.status === 'paid');
+  const careemOld = careemPaid.filter(o => o.createdAt < now() - 3 * 864e5).slice(0, 1);
+  const careemNew = careemPaid.filter(o => o.createdAt >= now() - 3 * 864e5).slice(0, 2);
+  careemOld.concat(careemNew).forEach((o, i) => {
+    const subPct = 0.8, platPct = 0.05;
+    mchSplits.push({ id: 50201 + i * 2, orderId: o.id, mchId: 8303, receiver: 'Careem Fleet Partners', receiverType: 'sub', pct: subPct, amount: lgR2(o.net * subPct), createdAt: daysAgo(10, 4) });
+    mchSplits.push({ id: 50202 + i * 2, orderId: o.id, mchId: 8303, receiver: 'U-Card 收单服务', receiverType: 'platform', pct: platPct, amount: lgR2(o.net * platPct), createdAt: daysAgo(10, 4) });
+  });
+  // ===== 结算批次: 每商户 一批已结算(>3 天订单) + 近 3 天按日待结算 =====
+  mchSettles = [];
+  let settleSeq = 49201;
+  mchAccounts.filter(m => m.status === 'active').forEach(m => {
+    const olds = mchOrdersOf(m.id).filter(o => o.status === 'paid' && o.createdAt < now() - 3 * 864e5);
+    if (olds.length) {
+      const batch = { id: settleSeq++, mchId: m.id, day: isoDay(olds[0].createdAt), orderIds: olds.map(o => o.id), orderCount: olds.length,
+        gross: lgR2(olds.reduce((s, o) => s + o.amount, 0)), fee: lgR2(olds.reduce((s, o) => s + o.fee, 0)), net: lgR2(olds.reduce((s, o) => s + o.net, 0)),
+        status: 'pending', settledAt: null, voucherNo: null, paidOut: null, splitSum: 0, splitDetail: [] };
+      mchSettleLedgerPost(batch, Math.min(now(), olds[olds.length - 1].createdAt + (m.settleDays || 2) * 864e5)); // 种子回填: 直接落 STL 分录
+      mchSettles.push(batch);
+    }
+    const recents = mchOrdersOf(m.id).filter(o => o.status === 'paid' && o.createdAt >= now() - 3 * 864e5);
+    const byDay = new Map();
+    recents.forEach(o => { const k = isoDay(o.createdAt); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(o); });
+    byDay.forEach((list, day) => {
+      mchSettles.push({ id: settleSeq++, mchId: m.id, day, orderIds: list.map(o => o.id), orderCount: list.length,
+        gross: lgR2(list.reduce((s, o) => s + o.amount, 0)), fee: lgR2(list.reduce((s, o) => s + o.fee, 0)), net: lgR2(list.reduce((s, o) => s + o.net, 0)),
+        status: 'pending', settledAt: null, voucherNo: null, paidOut: null, splitSum: 0, splitDetail: [] });
+    });
+  });
+  // ===== 商户风控 ×6 =====
+  mchRisk = [
+    { mchId: 8301, score: 42, chargebackRate: 0.6, refundRate: 1.8, disputeCount: 2, flags: [], updatedAt: daysAgo(0, 8) },
+    { mchId: 8302, score: 57, chargebackRate: 1.1, refundRate: 2.6, disputeCount: 4, flags: ['退款率偏高'], updatedAt: daysAgo(0, 6) },
+    { mchId: 8303, score: 76, chargebackRate: 1.9, refundRate: 3.1, disputeCount: 9, flags: ['拒付率超阈值(≥1.5%)', '晚高峰支付失败率上升', '分账接收方变更待确认'], updatedAt: daysAgo(0, 2) },
+    { mchId: 8304, score: 24, chargebackRate: 0, refundRate: 0, disputeCount: 0, flags: ['新入网商户 · 待开户'], updatedAt: daysAgo(0, 5) },
+    { mchId: 8305, score: 31, chargebackRate: 0, refundRate: 0, disputeCount: 0, flags: ['新入网商户 · 待开户'], updatedAt: daysAgo(0, 4) },
+    { mchId: 8306, score: 88, chargebackRate: 2.4, refundRate: 4.2, disputeCount: 3, flags: ['KYB 已驳回', 'MCC 高风险类目'], updatedAt: daysAgo(1, 3) },
+  ];
+  // 企业主账户余额与账本对齐(全部种子分录完成后) + 快照重算(覆盖新增企业/商户账户)
+  entAccounts.forEach(e => {
+    const acc = ledgerAccounts.find(a => a.key === 'ent:' + e.id);
+    if (acc) e.balance = lgR2(acc.balance);
+  });
+  buildBalanceSnapshots(14);
+}
 
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
@@ -3160,6 +3628,396 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       }
       return J({ error: 'not found: ' + p }, 404);
     }
+
+    // ============ P5.3 企业服务(总监专属) ============
+    if (p.startsWith('/api/admin/ent/')) {
+      if (sid !== 1) return J({ error: '企业服务为运营总监专属功能' }, 403);
+      // -- 企业列表 + 演示流程指引
+      if (p === '/api/admin/ent/accounts' && method === 'GET') {
+        const list = entAccounts.map(pubEnt);
+        const cnt = (s) => entAccounts.filter(e => e.status === s).length;
+        return J({ list,
+          summary: { total: entAccounts.length, active: cnt('active'), frozen: cnt('frozen'), pending: cnt('pending'),
+            balanceTotal: lgR2(entAccounts.reduce((s, e) => s + e.balance, 0)), creditTotal: lgR2(entAccounts.reduce((s, e) => s + (e.creditLimit || 0), 0)),
+            cards: entCards.length, members: entMembers.length, depts: entDepts.length,
+            pendingApprovals: entTxApprovals.filter(a => a.status === 'pending').length, pendingBills: entBills.filter(x => x.status === 'pending').length },
+          flow: ['企业充值', '分配部门预算', '员工消费', '部门审批', '企业结算'] });
+      }
+      // -- 企业详情抽屉(成员 / 部门 / 卡 / 审批 / 账单 / 预算变更历史 / 账本余额)
+      const mEnt = p.match(/^\/api\/admin\/ent\/accounts\/(\d+)$/);
+      if (mEnt && method === 'GET') {
+        const e = entById(mEnt[1]); if (!e) return J({ error: '企业不存在' }, 404);
+        const acct = ledgerAccounts.find(a => a.key === 'ent:' + e.id);
+        return J({ ent: pubEnt(e),
+          members: entMembersOf(e.id).map(m => ({ ...m, roleLabel: ENT_MEMBER_ROLE_LABEL[m.role] || m.role, statusLabel: ENT_MEMBER_STATUS_LABEL[m.status] || m.status,
+            cards: entCards.filter(c => c.memberId === m.id).length })),
+          depts: entDeptsOf(e.id).map(d => ({ ...d, remaining: entDeptRemaining(d),
+            usage: d.monthlyBudget ? +(100 * (d.used || 0) / d.monthlyBudget).toFixed(1) : 0, cardCount: entCards.filter(c => c.deptId === d.id).length })),
+          cards: entCardsOf(e.id).map(pubEntCard),
+          approvals: entTxApprovals.filter(a => a.entId === e.id).slice(0, 30).map(pubEntApproval),
+          bills: entBills.filter(x => x.entId === e.id).map(pubEntBill),
+          budgetLogs: entDeptLogs.filter(l => entDeptsOf(e.id).some(d => d.id === l.deptId)),
+          ledger: acct ? { key: acct.key, balance: acct.balance, typeLabel: LEDGER_TYPE_LABEL[acct.type] || acct.type } : null });
+      }
+      // -- 企业充值: routeFor 选 Fiat/Crypto 适配器 → postLedgerTx 借渠道 / 贷企业主账户(负债)
+      if (p === '/api/admin/ent/topup' && method === 'POST') {
+        const ent = entById(b.entId); if (!ent) return J({ error: '企业不存在' }, 404);
+        if (ent.status !== 'active') return J({ error: '企业状态「' + (ENT_STATUS_LABEL[ent.status] || ent.status) + '」不可充值' }, 409);
+        const amount = lgR2(+b.amount); if (!(amount > 0)) return J({ error: '请填写正确的充值金额' }, 400);
+        const payWay = b.method === 'usdt' ? 'usdt' : 'fiat';
+        const scene = payWay === 'usdt' ? 'topup_crypto' : 'topup_fiat';
+        const route = routeFor(scene, 'USD');
+        if (!route.adapter) return J({ error: '渠道路由失败: ' + route.reason }, 409);
+        ensureEntLedgerAccount(ent);
+        const chKey = payWay === 'usdt' ? 'channel:usdt' : 'channel:fiat';
+        ensureLedgerAccount(chKey, 'channel', payWay === 'usdt' ? '渠道 · 加密网关' : '渠道 · 法币网关');
+        postLedgerTx('ENTT' + nid(), '企业充值 · ' + ent.name, now(), [
+          { key: chKey, dir: 'debit', amount, memo: '企业对公渠道收款 · 路由 ' + route.adapter.name },
+          { key: 'ent:' + ent.id, dir: 'credit', amount, memo: '充值入企业主账户(' + (payWay === 'usdt' ? 'USDT' : '法币') + ')' },
+        ]);
+        ent.balance = lgR2(ent.balance + amount);
+        entTimelineAdd(ent, '企业充值', '$' + amount.toFixed(2) + ' 经 ' + route.adapter.name + '(' + (payWay === 'usdt' ? '加密网关' : '法币网关') + ') 入企业主账户 · 路由决策: ' + route.reason, me && me.name);
+        return J({ ok: true, ent: pubEnt(ent), balance: ent.balance,
+          route: { adapter: route.adapter.name, scene: ORCH_SCENE_LABEL[scene] || scene, reason: route.reason, backup: route.backup ? route.backup.name : '无' },
+          note: '复式分录: 借 ' + chKey + ' / 贷 ent:' + ent.id });
+      }
+      // -- 部门预算调整(记录变更历史 entDeptLogs)
+      const mDept = p.match(/^\/api\/admin\/ent\/depts\/(\d+)\/budget$/);
+      if (mDept && method === 'POST') {
+        const d = entDeptById(mDept[1]); if (!d) return J({ error: '部门不存在' }, 404);
+        const delta = lgR2(+b.delta); if (!delta) return J({ error: '调整幅度不能为 0' }, 400);
+        const from = lgR2(d.monthlyBudget), to = lgR2(from + delta);
+        if (to < 0) return J({ error: '调整后预算不能为负(当前 $' + from.toFixed(2) + ', 已用 $' + (d.used || 0).toFixed(2) + ')' }, 400);
+        d.monthlyBudget = to;
+        const log = { id: nid(), deptId: d.id, from, to, delta, note: String(b.note || '').trim() || (delta > 0 ? '预算追加' : '预算削减'), by: (me && me.name) || '总监', at: now() };
+        entDeptLogs.unshift(log);
+        entTimelineAdd(entById(d.entId), '部门预算调整', d.name + '(' + d.ccNo + ') $' + from.toFixed(2) + ' → $' + to.toFixed(2) + (log.note ? ' · ' + log.note : ''), me && me.name);
+        return J({ ok: true, dept: { ...d, remaining: entDeptRemaining(d), usage: to ? +(100 * (d.used || 0) / to).toFixed(1) : 0 }, log,
+          note: '变更已记入预算调整历史(变更前 $' + from.toFixed(2) + ' → 变更后 $' + to.toFixed(2) + ')' });
+      }
+      // -- 批量发卡: 直接生成企业卡 + 审批中心 ent_card_issue 备案单(不阻塞)
+      if (p === '/api/admin/ent/cards/issue' && method === 'POST') {
+        const ent = entById(b.entId); if (!ent) return J({ error: '企业不存在' }, 404);
+        if (ent.status !== 'active') return J({ error: '企业状态「' + (ENT_STATUS_LABEL[ent.status] || ent.status) + '」不可发卡' }, 409);
+        const dept = entDeptById(b.deptId); if (!dept || dept.entId !== ent.id) return J({ error: '部门不存在或不属于该企业' }, 404);
+        const count = Math.min(20, Math.max(1, +b.count || 1));
+        const level = ENT_CARD_PRESET[b.level] ? b.level : 'standard';
+        const members = entMembersOf(ent.id).filter(m => m.status === 'active');
+        if (!members.length) return J({ error: '该企业没有在职成员可持卡' }, 409);
+        const newCards = [];
+        for (let i = 0; i < count; i++) {
+          const m = members[(entCardsOf(ent.id).length + i) % members.length];
+          const card = { id: nid(), entId: ent.id, memberId: m.id, holderName: m.name, deptId: dept.id,
+            cardNo: genEntCardNo(), level, limits: { ...ENT_CARD_PRESET[level] }, status: 'active', issuedAt: now() };
+          entCards.push(card); newCards.push(card);
+        }
+        const admin = members.find(m => m.role === 'admin') || members[0];
+        const apNo = nid();
+        approvals.unshift({ id: apNo, type: 'ent_card_issue', typeLabel: '企业批量发卡',
+          title: ent.name + ' 批量发卡 ×' + count + '(' + ((CARD_LEVELS[level] || {}).label || level) + ')',
+          bizRef: '企业服务模块已直接发 ' + count + ' 张企业卡(部门: ' + dept.name + ' · 成本中心 ' + dept.ccNo + '), 本单为审批中心备案归档, 不阻塞发卡',
+          amount: null, payload: { entId: ent.id, deptId: dept.id, count, level, cardIds: newCards.map(c => c.id) },
+          applicant: (me && me.name) || '总监', applicantId: sid, applyNote: '批量发卡备案: 卡段 5311* · 成本中心 ' + dept.ccNo,
+          status: 'pending', nodes: [{ key: '企业管理员确认', name: '企业管理员确认', mode: '或签', approvers: [admin.name], state: 'active', acts: [] }],
+          createdAt: now(), updatedAt: now(), finishedAt: null, resultNote: '' });
+        entTimelineAdd(ent, '批量发卡', dept.name + '(' + dept.ccNo + ')新发 ' + count + ' 张企业卡(' + level + '), 已生成审批中心备案单 #' + apNo, me && me.name);
+        return J({ ok: true, cards: newCards.map(pubEntCard), count: newCards.length, approvalNo: apNo,
+          note: '已发 ' + count + ' 张企业卡(卡段 5311*), 并生成审批中心「企业批量发卡」备案单(不阻塞, 可在审批中心归档)' });
+      }
+      // -- 员工卡限额设置(单笔/日/月)
+      if (p === '/api/admin/ent/cards/limits' && method === 'POST') {
+        const card = entCardById(b.cardId); if (!card) return J({ error: '企业卡不存在' }, 404);
+        const single = lgR2(+b.single), daily = lgR2(+b.daily), monthly = lgR2(+b.monthly);
+        if (!(single > 0 && daily > 0 && monthly > 0)) return J({ error: '单笔 / 日 / 月限额必须大于 0' }, 400);
+        if (single > daily || daily > monthly) return J({ error: '限额需满足: 单笔 ≤ 日 ≤ 月' }, 400);
+        const from = { ...card.limits };
+        card.limits = { single, daily, monthly };
+        entTimelineAdd(entById(card.entId), '卡限额调整', (card.holderName || '员工卡') + ' ' + maskCardNo(card.cardNo) + ' 单笔 $' + from.single.toFixed(2) + '→$' + single.toFixed(2) + ' / 日 $' + from.daily.toFixed(2) + '→$' + daily.toFixed(2) + ' / 月 $' + from.monthly.toFixed(2) + '→$' + monthly.toFixed(2), me && me.name);
+        return J({ ok: true, card: pubEntCard(card), from, note: '限额已更新(次日生效口径, 演示即时生效)' });
+      }
+      // -- 员工消费模拟: 超部门剩余预算 或 超卡单笔限额 → 生成待审批单; 额度内免审直接入账
+      if (p === '/api/admin/ent/consume' && method === 'POST') {
+        const ent = entById(b.entId); if (!ent) return J({ error: '企业不存在' }, 404);
+        const card = entCardById(b.cardId); if (!card || card.entId !== ent.id) return J({ error: '企业卡不存在或不属于该企业' }, 404);
+        if (ent.status !== 'active') return J({ error: '企业状态「' + (ENT_STATUS_LABEL[ent.status] || ent.status) + '」不可消费' }, 409);
+        if (card.status !== 'active') return J({ error: '该卡已冻结/停用, 不可消费' }, 409);
+        const amount = lgR2(+b.amount); if (!(amount > 0)) return J({ error: '请填写正确的消费金额' }, 400);
+        if (amount > ent.balance) return J({ error: '企业主账户余额不足($' + ent.balance.toFixed(2) + '), 请先充值' }, 409);
+        const merchant = String(b.merchant || '').trim() || '企业采购';
+        const dept = entDeptById(card.deptId);
+        const reasons = [];
+        if (amount > (card.limits || {}).single) reasons.push('超卡单笔限额 $' + lgR2(card.limits.single).toFixed(2));
+        if (dept && amount > entDeptRemaining(dept)) reasons.push('超部门剩余预算 $' + entDeptRemaining(dept).toFixed(2));
+        const rec = { id: nid(), entId: ent.id, cardId: card.id, memberId: card.memberId, memberName: card.holderName || '—',
+          deptId: card.deptId, merchant, amount, note: String(b.note || '员工企业卡消费').slice(0, 200),
+          trigger: reasons.join(' 且 '), status: reasons.length ? 'pending' : 'auto',
+          createdAt: now(), actedAt: reasons.length ? null : now(), actedBy: '', actNote: reasons.length ? '' : '额度与预算内, 免审直接入账' };
+        entTxApprovals.unshift(rec);
+        if (reasons.length) return J({ needApproval: true, approval: pubEntApproval(rec),
+          note: '触发审批(' + rec.trigger + '), 已生成待审批单 → 企业服务 · 消费审批 处理' });
+        entConsumePost(rec);
+        return J({ ok: true, auto: true, approval: pubEntApproval(rec), balance: ent.balance, deptUsed: dept ? dept.used : null,
+          note: '额度与预算内免审入账: 借企业主账户 / 贷商户净额 / 贷手续费(1.5%), 并已扣减部门预算' });
+      }
+      // -- 消费审批列表
+      if (p === '/api/admin/ent/approvals' && method === 'GET') {
+        let list = entTxApprovals.map(pubEntApproval);
+        if (q.status) list = list.filter(a => a.status === q.status);
+        const cnt = (s) => entTxApprovals.filter(a => a.status === s).length;
+        return J({ list: list.sort((x, y) => y.createdAt - x.createdAt),
+          summary: { total: entTxApprovals.length, pending: cnt('pending'), approved: cnt('approved') + cnt('auto'), rejected: cnt('rejected'),
+            pendingAmount: lgR2(entTxApprovals.filter(a => a.status === 'pending').reduce((s, a) => s + a.amount, 0)) },
+          rule: '超部门剩余预算 或 超卡单笔限额的消费需审批人批准; 通过 → 复式记账+扣部门预算, 驳回 → 不记账不动预算' });
+      }
+      // -- 消费审批动作: approve → entConsumePost 记账+扣预算 / reject → 只留痕
+      const mAp = p.match(/^\/api\/admin\/ent\/approvals\/(\d+)\/action$/);
+      if (mAp && method === 'POST') {
+        const a = entTxApprovals.find(x => x.id === +mAp[1]); if (!a) return J({ error: '审批单不存在' }, 404);
+        if (a.status !== 'pending') return J({ error: '仅待审批单可操作, 当前状态: ' + (ENT_AP_STATUS_LABEL[a.status] || a.status) }, 409);
+        const action = String(b.action || '');
+        const note = String(b.note || '').trim();
+        const ent = entById(a.entId);
+        const approver = (entMembersOf(a.entId).find(m => m.role === 'approver') || {}).name || (me && me.name) || '审批人';
+        if (action === 'approve') {
+          if (a.amount > ent.balance) return J({ error: '企业主账户余额不足($' + ent.balance.toFixed(2) + '), 无法入账' }, 409);
+          const fee = entConsumePost(a);
+          a.status = 'approved'; a.actedAt = now(); a.actedBy = approver; a.actNote = note || '审批人批准, 已入账';
+          entTimelineAdd(ent, '消费审批通过', a.memberName + ' @ ' + a.merchant + ' $' + lgR2(a.amount).toFixed(2) + ' 已入账(手续费 $' + fee.toFixed(2) + '), 部门预算已扣减', approver);
+          return J({ ok: true, approval: pubEntApproval(a), entBalance: ent.balance, ledgerTxId: 'ENTX' + a.id, fee,
+            note: '已复式记账(借 ent:' + ent.id + ' / 贷 merchant:' + a.merchant + ' / 贷 fee)并扣减部门预算' });
+        }
+        if (action === 'reject') {
+          if (!note) return J({ error: '驳回必须填写原因' }, 400);
+          a.status = 'rejected'; a.actedAt = now(); a.actedBy = approver; a.actNote = note;
+          entTimelineAdd(ent, '消费审批驳回', a.memberName + ' @ ' + a.merchant + ' $' + lgR2(a.amount).toFixed(2) + ' · ' + note + '(未记账, 未扣预算)', approver);
+          return J({ ok: true, approval: pubEntApproval(a), note: '已驳回: 未记账、未扣部门预算' });
+        }
+        return J({ error: '未知 action: ' + action }, 400);
+      }
+      // -- 企业账单列表
+      if (p === '/api/admin/ent/bills' && method === 'GET') {
+        let list = entBills.map(pubEntBill);
+        if (q.status) list = list.filter(x => x.status === q.status);
+        const cnt = (s) => entBills.filter(x => x.status === s).length;
+        return J({ list: list.sort((a, b) => b.period < a.period ? -1 : 1),
+          summary: { total: entBills.length, pending: cnt('pending'), paid: cnt('paid'),
+            pendingTotal: lgR2(entBills.filter(x => x.status === 'pending').reduce((s, x) => s + (x.total != null ? x.total : x.serviceFee), 0)) },
+          rule: '月度账单 = 当月已入账消费汇总 + ' + (ENT_BILL_FEE_RATE * 100).toFixed(1) + '% 账单服务费; 开票生成发票号, 支付从企业主账户扣服务费(借 ent / 贷 fee)' });
+      }
+      // -- 开票
+      const mInv = p.match(/^\/api\/admin\/ent\/bills\/(\d+)\/invoice$/);
+      if (mInv && method === 'POST') {
+        const bl = entBills.find(x => x.id === +mInv[1]); if (!bl) return J({ error: '账单不存在' }, 404);
+        if (bl.invoiceNo) return J({ error: '该账单已开票: ' + bl.invoiceNo }, 409);
+        bl.invoiceNo = 'INV-' + bl.period.replace('-', '') + '-' + String(ri(10000, 99999));
+        bl.invoicedAt = now();
+        entTimelineAdd(entById(bl.entId), '账单开票', bl.period + ' 月度账单 $' + lgR2(bl.total != null ? bl.total : bl.serviceFee).toFixed(2) + ' → 发票号 ' + bl.invoiceNo, me && me.name);
+        return J({ ok: true, bill: pubEntBill(bl), note: '发票号已生成(电子发票, 演示)' });
+      }
+      // -- 支付账单: 从企业主账户扣 0.5% 服务费(消费已在发生时实时入账, 不重复扣款)
+      const mPay = p.match(/^\/api\/admin\/ent\/bills\/(\d+)\/pay$/);
+      if (mPay && method === 'POST') {
+        const bl = entBills.find(x => x.id === +mPay[1]); if (!bl) return J({ error: '账单不存在' }, 404);
+        if (bl.status === 'paid') return J({ error: '该账单已支付(' + isoDay(bl.paidAt) + ')' }, 409);
+        const ent = entById(bl.entId);
+        const payable = lgR2(bl.total != null ? bl.total : bl.serviceFee);
+        if (payable > ent.balance) return J({ error: '企业主账户余额不足($' + ent.balance.toFixed(2) + '), 需 $' + payable.toFixed(2) + ', 请先充值' }, 409);
+        ensureEntLedgerAccount(ent);
+        postLedgerTx('ENTB' + bl.id + '-' + nid(), '企业账单支付 · ' + ent.name + ' · ' + bl.period, now(), [
+          { key: 'ent:' + ent.id, dir: 'debit', amount: payable, memo: bl.period + ' 账单服务费 0.5%(消费款已在发生时实时入账)' },
+          { key: 'fee', dir: 'credit', amount: payable, memo: '账单服务费收入 · 账单 #' + bl.id },
+        ]);
+        ent.balance = lgR2(ent.balance - payable);
+        bl.status = 'paid'; bl.paidAt = now(); bl.paidBy = (me && me.name) || '总监';
+        if (!bl.invoiceNo) { bl.invoiceNo = 'INV-' + bl.period.replace('-', '') + '-' + String(ri(10000, 99999)); bl.invoicedAt = now(); }
+        entTimelineAdd(ent, '账单支付', bl.period + ' 账单已支付 $' + payable.toFixed(2) + '(服务费) · 发票 ' + bl.invoiceNo, me && me.name);
+        return J({ ok: true, bill: pubEntBill(bl), entBalance: ent.balance,
+          note: '已支付并记账(借 ent:' + ent.id + ' / 贷 fee), 消费本金已在发生时实时入账不重复扣款' });
+      }
+      // -- 部门报表(预算使用率排行)
+      if (p === '/api/admin/ent/report' && method === 'GET') {
+        const rows = entDepts.map(d => {
+          const ent = entById(d.entId);
+          const dCards = entCards.filter(c => c.deptId === d.id);
+          const apv = entTxApprovals.filter(a => a.deptId === d.id);
+          const used = lgR2(d.used || 0);
+          return { deptId: d.id, entId: d.entId, entName: ent ? ent.name : '—', deptName: d.name, ccNo: d.ccNo, owner: d.owner,
+            budget: lgR2(d.monthlyBudget), used, remaining: entDeptRemaining(d),
+            usage: d.monthlyBudget ? +(100 * used / d.monthlyBudget).toFixed(1) : 0,
+            cardCount: dCards.length, avgPerCard: dCards.length ? lgR2(used / dCards.length) : 0,
+            approvedCount: apv.filter(a => a.status === 'approved' || a.status === 'auto').length,
+            pendingCount: apv.filter(a => a.status === 'pending').length, rejectedCount: apv.filter(a => a.status === 'rejected').length };
+        }).sort((a, b) => b.usage - a.usage);
+        return J({ list: rows,
+          summary: { depts: rows.length, budgetTotal: lgR2(rows.reduce((s, r) => s + r.budget, 0)), usedTotal: lgR2(rows.reduce((s, r) => s + r.used, 0)),
+            cards: entCards.length, avgUsage: rows.length ? +(rows.reduce((s, r) => s + r.usage, 0) / rows.length).toFixed(1) : 0 },
+          note: '按部门月度预算使用率排行, 可定位超支风险部门' });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+
+    // ============ P5.4 商户平台·后台侧(总监专属) ============
+    if (p.startsWith('/api/admin/mch/')) {
+      if (sid !== 1) return J({ error: '商户平台为运营总监专属功能' }, 403);
+      // -- 商户入驻列表(联动 KYB)
+      if (p === '/api/admin/mch/accounts' && method === 'GET') {
+        const list = mchAccounts.map(pubMchAccount);
+        const cnt = (s) => mchAccounts.filter(m => m.status === s).length;
+        return J({ list,
+          summary: { total: mchAccounts.length, pending: cnt('pending'), active: cnt('active'), rejected: cnt('rejected'),
+            orders: mchOrders.length, paidVolume: lgR2(mchOrders.filter(o => o.status !== 'disputed').reduce((s, o) => s + o.amount, 0)) },
+          flow: ['商户入驻审核', '费率配置', '收款交易', '退款/风控', '结算打款'] });
+      }
+      // -- 入驻审核: approve → active + 生成商户号/API Key / reject → 驳回(必填原因)
+      const mMchA = p.match(/^\/api\/admin\/mch\/accounts\/(\d+)\/action$/);
+      if (mMchA && method === 'POST') {
+        const m = mchById(mMchA[1]); if (!m) return J({ error: '商户不存在' }, 404);
+        if (m.status !== 'pending') return J({ error: '仅待审核商户可操作, 当前状态: ' + (MCH_STATUS_LABEL[m.status] || m.status) }, 409);
+        const action = String(b.action || '');
+        const reason = String(b.reason || '').trim();
+        const kyb = kybOf(m);
+        if (action === 'approve') {
+          if (kyb && kyb.status === 'rejected') return J({ error: '关联 KYB 案例 #' + kyb.id + ' 已被驳回, 不可开通(需商户重新提交入驻与尽调材料)' }, 409);
+          m.status = 'active'; m.mchNo = genMchNo(); m.reviewedAt = now(); m.apiKey = genMchApiKey();
+          mchTimelineAdd(m, '入驻审核通过', '商户号 ' + m.mchNo + ' 已生成 · 结算周期 T+' + m.settleDays + ' · 费率 ' + pubMchAccount(m).rateLabel
+            + (kyb && kyb.status !== 'approved' ? ' · 合规提示: 关联 KYB #' + kyb.id + ' ' + (KYB_STATUS_LABEL[kyb.status] || kyb.status) + ', 请补审' : ''), me && me.name);
+          if (kyb && kyb.status === 'pending') kyb.status = 'approved', kyb.decidedAt = now(), (kyb.timeline || (kyb.timeline = [])).unshift({ ts: now(), node: '审核通过', note: '商户入驻审核联动: 收单开通, 商户号 ' + m.mchNo, operator: (me && me.name) || '总监' });
+          return J({ ok: true, mch: pubMchAccount(m), note: '已开通收单并生成商户号 ' + m.mchNo + '(API Key 已下发, 商户端可登录)' });
+        }
+        if (action === 'reject') {
+          if (!reason) return J({ error: '驳回必须填写原因' }, 400);
+          m.status = 'rejected'; m.rejectReason = reason; m.reviewedAt = now();
+          mchTimelineAdd(m, '入驻驳回', reason, me && me.name);
+          if (kyb && kyb.status === 'pending') kyb.status = 'rejected', kyb.decidedAt = now(), (kyb.timeline || (kyb.timeline = [])).unshift({ ts: now(), node: '审核驳回', note: '商户入驻驳回联动: ' + reason, operator: (me && me.name) || '总监' });
+          return J({ ok: true, mch: pubMchAccount(m), note: '已驳回(' + reason + ')' });
+        }
+        return J({ error: '未知 action: ' + action }, 400);
+      }
+      // -- 费率配置: 借记/贷记/换汇 + 借记封顶 + T+0/1/2/3
+      const mMchR = p.match(/^\/api\/admin\/mch\/accounts\/(\d+)\/rate$/);
+      if (mMchR && method === 'POST') {
+        const m = mchById(mMchR[1]); if (!m) return J({ error: '商户不存在' }, 404);
+        const credit = +b.credit, debit = +b.debit, fx = +b.fx, debitCap = +b.debitCap, settleDays = +b.settleDays;
+        if (!(credit > 0 && credit <= 0.1) || !(debit > 0 && debit <= 0.1) || !(fx > 0 && fx <= 0.1)) return J({ error: '费率需在 (0%, 10%] 区间' }, 400);
+        if (!(debitCap >= 0.5 && debitCap <= 50)) return J({ error: '借记封顶需在 $0.5 - $50' }, 400);
+        if (![0, 1, 2, 3].includes(settleDays)) return J({ error: '结算周期仅支持 T+0 / T+1 / T+2 / T+3' }, 400);
+        const from = { rate: { ...m.rate }, settleDays: m.settleDays };
+        m.rate = { credit: Math.round(credit * 10000) / 10000, debit: Math.round(debit * 10000) / 10000, fx: Math.round(fx * 10000) / 10000, debitCap: lgR2(debitCap) };
+        m.settleDays = settleDays;
+        mchTimelineAdd(m, '费率/结算周期调整', '贷记 ' + (credit * 100).toFixed(2) + '% / 借记 ' + (debit * 100).toFixed(2) + '%(封顶 $' + debitCap.toFixed(2) + ') / 换汇 ' + (fx * 100).toFixed(2) + '% · 结算 T+' + settleDays, me && me.name);
+        return J({ ok: true, mch: pubMchAccount(m), from,
+          note: '费率已生效(新交易按新费率计费, 历史订单不追溯)' });
+      }
+      // -- 收款订单
+      if (p === '/api/admin/mch/orders' && method === 'GET') {
+        let list = mchOrders.map(pubMchOrder);
+        if (q.status) list = list.filter(o => o.status === q.status);
+        if (q.mchId) list = list.filter(o => o.mchId === +q.mchId);
+        const cnt = (s) => mchOrders.filter(o => o.status === s).length;
+        return J({ list: list.sort((a, b2) => b2.createdAt - a.createdAt),
+          summary: { total: mchOrders.length, paid: cnt('paid'), refunded: cnt('refunded'), disputed: cnt('disputed'),
+            amount: lgR2(mchOrders.reduce((s, o) => s + o.amount, 0)), fee: lgR2(mchOrders.reduce((s, o) => s + o.fee, 0)), net: lgR2(mchOrders.reduce((s, o) => s + o.net, 0)) },
+          note: '收单订单实时入账: 借 channel:fiat / 贷 merchant:名(净额) / 贷 fee' });
+      }
+      // -- 退款管理
+      if (p === '/api/admin/mch/refunds' && method === 'GET') {
+        let list = mchRefunds.map(pubMchRefund);
+        if (q.status) list = list.filter(r => r.status === q.status);
+        const cnt = (s) => mchRefunds.filter(r => r.status === s).length;
+        return J({ list: list.sort((a, b2) => b2.appliedAt - a.appliedAt),
+          summary: { total: mchRefunds.length, pending: cnt('pending'), approved: cnt('approved'), rejected: cnt('rejected'),
+            pendingAmount: lgR2(mchRefunds.filter(r => r.status === 'pending').reduce((s, r) => s + (pubMchRefund(r).amount || 0), 0)) },
+          note: '退款通过 → 反向分录(借商户净额+借手续费 / 贷渠道原路退回) + 订单转 refunded + 联动待结算批次重算' });
+      }
+      const mRf = p.match(/^\/api\/admin\/mch\/refunds\/(\d+)\/action$/);
+      if (mRf && method === 'POST') {
+        const rf = mchRefunds.find(x => x.id === +mRf[1]); if (!rf) return J({ error: '退款单不存在' }, 404);
+        if (rf.status !== 'pending') return J({ error: '仅待审核退款可操作, 当前状态: ' + (MCH_REFUND_STATUS_LABEL[rf.status] || rf.status) }, 409);
+        const action = String(b.action || '');
+        const note = String(b.note || '').trim();
+        if (action === 'approve') {
+          const o = mchOrderById(rf.orderId); if (!o) return J({ error: '退款单关联订单不存在' }, 404);
+          if (o.status !== 'paid') return J({ error: '订单当前状态「' + (MCH_ORDER_STATUS_LABEL[o.status] || o.status) + '」不可退款' }, 409);
+          mchRefundLedgerPost(rf, now());
+          o.status = 'refunded'; o.refundedAt = now();
+          rf.status = 'approved'; rf.approvedAt = now(); rf.approvedBy = (me && me.name) || '总监'; rf.actNote = note || '同意全额退款(原路退回)';
+          let batchTouched = null;
+          mchSettles.filter(bt => bt.status === 'pending' && (bt.orderIds || []).includes(o.id)).forEach(bt => {
+            bt.orderIds = bt.orderIds.filter(x => x !== o.id); mchBatchRecompute(bt); batchTouched = bt.id;
+          });
+          const m = mchById(o.mchId);
+          mchTimelineAdd(m, '订单退款', '订单 ' + o.orderNo + ' $' + lgR2(o.amount).toFixed(2) + ' 已原路退回(反向分录 MRFD' + rf.id + ')' + (batchTouched ? ' · 待结算批次 #' + batchTouched + ' 已联动重算' : ''), me && me.name);
+          return J({ ok: true, refund: pubMchRefund(rf), order: pubMchOrder(o), batchTouched,
+            note: '反向分录已入账(MRFD' + rf.id + ': 借 merchant:' + o.merchant + ' 净额+借 fee / 贷 channel:fiat)' });
+        }
+        if (action === 'reject') {
+          if (!note) return J({ error: '驳回必须填写原因' }, 400);
+          rf.status = 'rejected'; rf.approvedAt = now(); rf.approvedBy = (me && me.name) || '总监'; rf.actNote = note;
+          return J({ ok: true, refund: pubMchRefund(rf), note: '已驳回(' + note + '), 订单与账本不变' });
+        }
+        return J({ error: '未知 action: ' + action }, 400);
+      }
+      // -- 结算管理(与 P4.4 商户结算页共存, 不改旧端点)
+      if (p === '/api/admin/mch/settles' && method === 'GET') {
+        let list = mchSettles.map(pubMchSettle);
+        if (q.status) list = list.filter(x => x.status === q.status);
+        if (q.mchId) list = list.filter(x => x.mchId === +q.mchId);
+        const pend = mchSettles.filter(x => x.status === 'pending'), done = mchSettles.filter(x => x.status === 'settled');
+        return J({ list: list.sort((a, b2) => (a.status === b2.status ? (b2.day < a.day ? -1 : 1) : a.status === 'pending' ? -1 : 1)),
+          summary: { total: mchSettles.length, pending: pend.length, settled: done.length,
+            pendingNet: lgR2(pend.reduce((s, x) => s + x.net, 0)), settledNet: lgR2(done.reduce((s, x) => s + x.net, 0)) },
+          note: '「结算」按 T+N 打款: STL- 复式分录 借 merchant:名 / [分账拆付 贷接收方×N] / 贷 channel:fiat' });
+      }
+      const mSt = p.match(/^\/api\/admin\/mch\/settles\/(\d+)\/settle$/);
+      if (mSt && method === 'POST') {
+        const bt = mchSettles.find(x => x.id === +mSt[1]); if (!bt) return J({ error: '结算批次不存在' }, 404);
+        if (bt.status !== 'pending') return J({ error: '仅待结算批次可打款, 当前: ' + (MCH_SETTLE_STATUS_LABEL[bt.status] || bt.status) }, 409);
+        if (!(bt.orderIds || []).length) return J({ error: '该批次订单已全部退款冲回, 无可结算金额(可忽略该批次)' }, 409);
+        const r = mchSettleLedgerPost(bt, now());
+        const m = mchById(bt.mchId);
+        mchTimelineAdd(m, '结算打款', '批次 #' + bt.id + '(' + bt.day + ') $' + lgR2(bt.net).toFixed(2) + ' 已打款 · 凭证 ' + r.voucher + (r.splitCount ? ' · 分账拆付 ' + r.splitCount + ' 笔 $' + r.splitSum.toFixed(2) : ''), me && me.name);
+        return J({ ok: true, batch: pubMchSettle(bt), voucher: r.voucher, paidOut: r.payout, splitSum: r.splitSum, splitCount: r.splitCount,
+          note: 'STL 复式分录已入账: 借 merchant:' + m.name + ' $' + lgR2(bt.net).toFixed(2) + (r.splitCount ? ' / 分账 ' + r.splitCount + ' 笔 $' + r.splitSum.toFixed(2) : '') + ' / 渠道出金 $' + r.payout.toFixed(2) });
+      }
+      // -- 分账规则(订单级, 结算时拆付)
+      if (p === '/api/admin/mch/splits' && method === 'GET') {
+        let list = mchSplits.map(s => { const o = mchOrderById(s.orderId) || {}; const m = mchById(s.mchId) || {};
+          return { ...s, receiverTypeLabel: SPLIT_TYPE_LABEL[s.receiverType] || s.receiverType, orderNo: o.orderNo || '—', orderAmount: o.amount, merchant: m.name || '—', pctLabel: Math.round((s.pct || 0) * 10000) / 100 + '%' }; });
+        if (q.mchId) list = list.filter(s => s.mchId === +q.mchId);
+        return J({ list, summary: { total: mchSplits.length, amount: lgR2(mchSplits.reduce((s, x) => s + x.amount, 0)) },
+          note: '订单级分账规则在结算打款时拆付(不改变商户总净额, 只改变收款方构成)' });
+      }
+      // -- 商户风控(风险分 / 拒付率 / 预警)
+      if (p === '/api/admin/mch/risk' && method === 'GET') {
+        const list = mchAccounts.map(m => {
+          const r = mchRisk.find(x => x.mchId === m.id) || { score: 0, chargebackRate: 0, refundRate: 0, flags: [] };
+          const orders = mchOrdersOf(m.id), n = orders.length;
+          const refunded = orders.filter(o => o.status === 'refunded').length, disputed = orders.filter(o => o.status === 'disputed').length;
+          const live = { refundRate: n ? +(100 * refunded / n).toFixed(1) : 0, disputeRate: n ? +(100 * disputed / n).toFixed(1) : 0 };
+          const red = r.score >= MCH_RISK_THRESHOLD.score || live.disputeRate >= MCH_RISK_THRESHOLD.chargeback || (r.flags || []).some(f => /拒付/.test(f));
+          const amber = !red && (r.score >= 50 || live.refundRate >= MCH_RISK_THRESHOLD.refundRate);
+          return { mchId: m.id, name: m.name, mccLabel: MCC_LABEL[m.mcc] || m.mcc, status: m.status, statusLabel: MCH_STATUS_LABEL[m.status] || m.status,
+            score: r.score, scoreBand: red ? 'red' : amber ? 'amber' : 'green',
+            chargebackRate: r.chargebackRate, refundSeed: r.refundRate, ...live,
+            flags: r.flags || [], orderCount: n, updatedAt: r.updatedAt || null,
+            scoreLabel: red ? '高危' : amber ? '关注' : '正常' };
+        }).sort((a, b2) => b2.score - a.score);
+        return J({ list, thresholds: MCH_RISK_THRESHOLD,
+          summary: { total: list.length, red: list.filter(x => x.scoreBand === 'red').length, amber: list.filter(x => x.scoreBand === 'amber').length, green: list.filter(x => x.scoreBand === 'green').length },
+          note: '风险分 ≥ ' + MCH_RISK_THRESHOLD.score + ' 或 拒付率 ≥ ' + MCH_RISK_THRESHOLD.chargeback + '% 标红预警' });
+      }
+      // -- 对账单 / 经营报表(日 / 月)
+      if (p === '/api/admin/mch/report' && method === 'GET') {
+        const dim = q.dim === 'month' ? 'month' : 'day';
+        const rows = mchReportRows(dim);
+        return J({ list: rows, dim,
+          summary: { amount: lgR2(rows.reduce((s, r) => s + r.amount, 0)), count: rows.reduce((s, r) => s + r.count, 0),
+            avgOrder: rows.length ? lgR2(rows.reduce((s, r) => s + r.amount, 0) / rows.reduce((s, r) => s + r.count, 0)) : 0,
+            refundRate: rows.reduce((s, r) => s + r.count, 0) ? +(100 * rows.reduce((s, r) => s + r.count * r.refundRate / 100, 0) / rows.reduce((s, r) => s + r.count, 0)).toFixed(1) : 0 },
+          note: '按' + (dim === 'month' ? '月' : '日') + '聚合: 交易量 / 笔数 / 成功率 / 平均客单 / 退款率(仅已开通商户)' });
+      }
+      return J({ error: 'not found: ' + p }, 404);
+    }
     return J({ error: 'not found: ' + p }, 404);
   }
 
@@ -3246,6 +4104,72 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       else if (b.id) read[b.id] = true;
       const after = appNotificationsFor(uid);
       return J({ ok: true, unread: after.unread });
+    }
+    return J({ error: 'not found' }, 404);
+  }
+
+  // ============ P5.4 商户端门户(merchant.html, x-mch 头标识商户) ============
+  if (p.startsWith('/api/mch/')) {
+    // 登录页商户下拉(已开通商户, 免密)
+    if (p === '/api/mch/merchants' && method === 'GET') {
+      return J({ list: mchAccounts.filter(m => m.status === 'active').map(m => ({ id: m.id, name: m.name, mchNo: m.mchNo, mcc: m.mcc, mccLabel: MCC_LABEL[m.mcc] || m.mcc, country: m.country, settleDays: m.settleDays })) });
+    }
+    const mid = parseInt(h['x-mch'] || h['X-Mch'] || '0', 10);
+    const mch = mchAccounts.find(m => m.id === mid && m.status === 'active');
+    if (!mch) return J({ error: '未登录或商户无效(需 x-mch 请求头 + 已开通商户)' }, 401);
+    const myOrders = () => mchOrdersOf(mch.id);
+    // -- 首页看板
+    if (p === '/api/mch/me' && method === 'GET') {
+      const orders = myOrders();
+      const tKey = dayKey(now());
+      const todays = orders.filter(o => dayKey(o.createdAt) === tKey);
+      const pend = mchSettles.filter(x => x.mchId === mch.id && x.status === 'pending');
+      const pendRefunds = mchRefunds.filter(r => r.mchId === mch.id && r.status === 'pending');
+      return J({ me: { id: mch.id, name: mch.name, mchNo: mch.mchNo, mccLabel: MCC_LABEL[mch.mcc] || mch.mcc, settleDays: mch.settleDays, settleLabel: 'T+' + mch.settleDays },
+        today: { amount: lgR2(todays.reduce((s, o) => s + o.amount, 0)), count: todays.length,
+          successRate: todays.length ? +(100 * todays.filter(o => o.status !== 'disputed').length / todays.length).toFixed(1) : 100 },
+        month: { amount: lgR2(orders.filter(o => isoDay(o.createdAt).slice(0, 7) === isoDay(now()).slice(0, 7)).reduce((s, o) => s + o.amount, 0)), count: orders.length },
+        pendingSettle: { batches: pend.length, net: lgR2(pend.reduce((s, x) => s + x.net, 0)) },
+        pendingRefunds: pendRefunds.length,
+        recent: orders.slice().sort((a, b2) => b2.createdAt - a.createdAt).slice(0, 6).map(pubMchOrder) });
+    }
+    // -- 商户资料 + 费率(只读) + API Key + 分账规则
+    if (p === '/api/mch/profile' && method === 'GET') {
+      const r = mchRisk.find(x => x.mchId === mch.id) || {};
+      const prof = pubMchAccount(mch);
+      return J({ profile: { id: prof.id, name: prof.name, mchNo: prof.mchNo, mccLabel: prof.mccLabel, country: prof.country,
+          contact: prof.contact, settleAccount: prof.settleAccount, settleDays: prof.settleDays, settleLabel: prof.settleLabel,
+          rate: prof.rate, rateLabel: prof.rateLabel, createdAt: prof.createdAt },
+        apiKey: prof.apiKey || '(入驻时未生成, 请联系平台)',
+        risk: { score: r.score || 0, flags: r.flags || [] },
+        splits: mchSplits.filter(s => s.mchId === mch.id).map(s => ({ ...s, receiverTypeLabel: SPLIT_TYPE_LABEL[s.receiverType] || s.receiverType, orderNo: (mchOrderById(s.orderId) || {}).orderNo || '—', pctLabel: Math.round((s.pct || 0) * 10000) / 100 + '%' })),
+        note: '费率与结算账户由平台配置, 商户端只读' });
+    }
+    // -- 收款订单
+    if (p === '/api/mch/orders' && method === 'GET') {
+      let list = myOrders().map(pubMchOrder);
+      if (q.status) list = list.filter(o => o.status === q.status);
+      return J({ list: list.sort((a, b2) => b2.createdAt - a.createdAt).slice(0, 200),
+        summary: { total: myOrders().length, amount: lgR2(myOrders().reduce((s, o) => s + o.amount, 0)), refunded: myOrders().filter(o => o.status === 'refunded').length } });
+    }
+    // -- 退款管理: 查询 + 发起申请(后台审核)
+    if (p === '/api/mch/refunds' && method === 'GET') {
+      return J({ list: mchRefunds.filter(r => r.mchId === mch.id).map(pubMchRefund).sort((a, b2) => b2.appliedAt - a.appliedAt) });
+    }
+    if (p === '/api/mch/refunds' && method === 'POST') {
+      const reason = String(b.reason || '').trim();
+      if (!reason) return J({ error: '请填写退款原因' }, 400);
+      const o = mchOrderById(b.orderId);
+      if (!o || o.mchId !== mch.id) return J({ error: '订单不存在' }, 404);
+      if (o.status !== 'paid') return J({ error: '订单当前状态「' + (MCH_ORDER_STATUS_LABEL[o.status] || o.status) + '」不可申请退款' }, 409);
+      if (mchRefunds.some(r => r.orderId === o.id && r.status !== 'rejected')) return J({ error: '该订单已有处理中/已完成的退款单' }, 409);
+      const rf = { id: nid(), orderId: o.id, mchId: mch.id, reason, status: 'pending', appliedAt: now(), appliedBy: '商户门户', approvedAt: null, approvedBy: '', actNote: '' };
+      mchRefunds.unshift(rf);
+      return J({ ok: true, refund: pubMchRefund(rf), note: '退款申请已提交, 待平台审核(后台 商户平台 → 退款管理)' });
+    }
+    // -- 结算记录
+    if (p === '/api/mch/settles' && method === 'GET') {
+      return J({ list: mchSettles.filter(x => x.mchId === mch.id).map(pubMchSettle).sort((a, b2) => (a.status === b2.status ? (b2.day < a.day ? -1 : 1) : a.status === 'pending' ? -1 : 1)) });
     }
     return J({ error: 'not found' }, 404);
   }

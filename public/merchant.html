@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>U-Card 商户平台</title>
+<style>
+:root{--pri:#4f46e5;--pri2:#7c3aed;--ok:#16a34a;--warn:#f59e0b;--bad:#dc2626;--ink:#0f172a;--mut:#64748b;--bg:#eef1f7;--line:#e5e9f2;}
+*{margin:0;padding:0;box-sizing:border-box}
+body{min-height:100vh;background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--ink)}
+.num{font-variant-numeric:tabular-nums;font-family:"SF Mono",Consolas,Menlo,monospace}
+/* ---------- 登录页 ---------- */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{width:100%;max-width:400px;background:#fff;border-radius:20px;padding:34px 30px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+.login-logo{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--pri),var(--pri2));display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;margin:0 auto 14px}
+.login-card h1{font-size:20px;text-align:center;margin-bottom:4px}
+.login-card .sub{text-align:center;color:var(--mut);font-size:13px;margin-bottom:24px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12.5px;color:var(--mut);font-weight:600;margin-bottom:6px}
+.inp,.sel{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px;font-size:15px;outline:none;background:#f8fafc;font-family:inherit}
+.inp:focus,.sel:focus{border-color:var(--pri);background:#fff}
+.btn{display:block;width:100%;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;cursor:pointer;font-family:inherit}
+.btn:active{transform:scale(.985)}
+.login-note{margin-top:18px;font-size:12px;color:var(--mut);line-height:1.8;background:#f8fafc;border-radius:12px;padding:12px 14px}
+/* ---------- 门户框架 ---------- */
+.shell{max-width:1060px;margin:0 auto;padding:22px 18px 60px}
+.topbar{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:14px 18px;margin-bottom:16px;color:#fff}
+.topbar .logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--pri),var(--pri2));display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+.topbar .t1{font-size:16px;font-weight:700}
+.topbar .t2{font-size:12px;opacity:.75;margin-top:2px}
+.topbar .sp{flex:1}
+.tbtn{border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;border-radius:10px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600}
+.tbtn:hover{background:rgba(255,255,255,.12)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:6px;margin-bottom:16px}
+.tab{flex:1;min-width:86px;text-align:center;padding:9px 6px;border-radius:10px;font-size:13.5px;color:rgba(255,255,255,.75);cursor:pointer;font-weight:600}
+.tab.on{background:#fff;color:var(--pri);box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.card{background:#fff;border-radius:16px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.18);margin-bottom:14px}
+.card h3{font-size:14.5px;margin-bottom:12px}
+.page{display:none}
+.page.on{display:block}
+/* 看板 */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px}
+.stat{background:#fff;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.stat .k{font-size:12px;color:var(--mut);font-weight:600}
+.stat .v{font-size:22px;font-weight:800;margin-top:6px}
+.stat .s{font-size:11.5px;color:var(--mut);margin-top:3px}
+.stat .ic{float:right;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px}
+/* 表格 */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;color:var(--mut);font-weight:600;font-size:12px;padding:8px 10px;border-bottom:1.5px solid var(--line);white-space:nowrap}
+.tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tblwrap{overflow-x:auto}
+.pill{display:inline-block;border-radius:99px;padding:2.5px 10px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.p-green{background:#dcfce7;color:#15803d}.p-amber{background:#fef3c7;color:#b45309}.p-red{background:#fee2e2;color:#b91c1c}.p-gray{background:#f1f5f9;color:#475569}.p-blue{background:#e0e7ff;color:#4338ca}.p-indigo{background:#e0e7ff;color:#5b21b6}
+.dim{color:var(--mut)}
+.sub{font-size:11.5px;color:var(--mut);margin-top:2px}
+.empty{text-align:center;color:var(--mut);padding:28px 10px;font-size:13px}
+.load{text-align:center;color:var(--mut);padding:28px 10px;font-size:13px}
+/* 工具条 */
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.bar .sel{width:auto;min-width:130px;padding:9px 12px;font-size:13.5px;border-radius:10px}
+.bar .sp{flex:1}
+.mbtn{border:none;border-radius:10px;padding:10px 18px;font-size:13.5px;font-weight:700;background:linear-gradient(135deg,var(--pri),var(--pri2));color:#fff;cursor:pointer;font-family:inherit}
+.mbtn:active{transform:scale(.98)}
+.obtn{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:9px 16px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;font-family:inherit}
+.obtn:hover{border-color:var(--pri);color:var(--pri)}
+.rowbtn{border:none;border-radius:8px;padding:5px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.rb-ok{background:#dcfce7;color:#15803d}
+.rb-no{background:#f1f5f9;color:#475569}
+.rb-bad{background:#fee2e2;color:#b91c1c}
+/* 资料页 */
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.kv .item{background:#f8fafc;border-radius:12px;padding:12px 14px}
+.kv .item .k{font-size:11.5px;color:var(--mut);font-weight:600}
+.kv .item .v{font-size:13.5px;font-weight:600;margin-top:4px;word-break:break-all}
+.keybox{display:flex;align-items:center;gap:10px;background:#0f172a;color:#a5b4fc;border-radius:12px;padding:13px 16px;font-family:"SF Mono",Consolas,monospace;font-size:13px;word-break:break-all}
+.keybox .cp{margin-left:auto;flex:none;background:#334155;color:#e0e7ff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600}
+/* 弹窗 */
+.mask{position:fixed;inset:0;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:18px}
+.modal{width:100%;max-width:430px;background:#fff;border-radius:18px;padding:22px;max-height:86vh;overflow-y:auto}
+.modal h3{font-size:16px;margin-bottom:14px}
+.mfoot{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+.note{background:#eef2ff;border-radius:12px;padding:11px 14px;font-size:12.5px;color:#3730a3;line-height:1.7;margin-bottom:14px}
+textarea.ta{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px;font-size:14px;outline:none;background:#f8fafc;font-family:inherit;resize:vertical}
+.toastbox{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{background:#0f172a;color:#fff;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.3);max-width:88vw}
+.toast.err{background:var(--bad)}
+@media (max-width:560px){.tbl{font-size:12px}.stat .v{font-size:19px}}
+</style>
+</head>
+<body>
+<div class="toastbox" id="toasts"></div>
+<div id="modalRoot"></div>
+
+<!-- ============ 登录页 ============ -->
+<div id="loginView">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">🏪</div>
+      <h1>U-Card 商户平台</h1>
+      <div class="sub">收单商户自助门户 · Demo 免密登录</div>
+      <div class="field">
+        <label>选择商户(仅显示已开通)</label>
+        <select class="sel" id="mchSel"><option value="">⏳ 加载商户列表…</option></select>
+      </div>
+      <button class="btn" onclick="doLogin()">进入商户平台</button>
+      <div class="login-note">
+        · 演示环境免密: 下拉选择平台已开通的收单商户<br>
+        · 运营后台: <a href="./" style="color:var(--pri)">admin.html</a>(商户平台 → 入驻/费率/退款/结算)<br>
+        · 鉴权方式: <span class="num">x-mch</span> 请求头(商户号身份)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 门户 ============ -->
+<div id="appView" style="display:none">
+  <div class="shell">
+    <div class="topbar">
+      <div class="logo">🏪</div>
+      <div><div class="t1" id="tbName">—</div><div class="t2 num" id="tbMeta">—</div></div>
+      <div class="sp"></div>
+      <button class="tbtn" onclick="doLogout()">切换商户</button>
+    </div>
+    <div class="tabs" id="tabs"></div>
+
+    <!-- 首页看板 -->
+    <div class="page" id="pg-home">
+      <div class="stats">
+        <div class="stat"><div class="ic" style="background:#dcfce7">💵</div><div class="k">今日交易额</div><div class="v num" id="stTodayAmt">—</div><div class="s" id="stTodayCnt">—</div></div>
+        <div class="stat"><div class="ic" style="background:#e0e7ff">✅</div><div class="k">今日成功率</div><div class="v num" id="stTodayRate">—</div><div class="s">支付+退款 / 总笔数</div></div>
+        <div class="stat"><div class="ic" style="background:#fef3c7">⏳</div><div class="k">待结算净额</div><div class="v num" id="stPendNet">—</div><div class="s" id="stPendBatch">—</div></div>
+        <div class="stat"><div class="ic" style="background:#fee2e2">↩️</div><div class="k">待审退款</div><div class="v num" id="stPendRf">—</div><div class="s">平台审核中</div></div>
+        <div class="stat"><div class="ic" style="background:#f3e8ff">📈</div><div class="k">本月交易额</div><div class="v num" id="stMonthAmt">—</div><div class="s" id="stMonthCnt">累计订单</div></div>
+      </div>
+      <div class="card"><h3>🧾 最近收款</h3><div id="recentBox" class="load">⏳ 加载中…</div></div>
+    </div>
+
+    <!-- 收款订单 -->
+    <div class="page" id="pg-orders">
+      <div class="card">
+        <div class="bar">
+          <select class="sel" id="ordStatus" onchange="loadOrders()">
+            <option value="">全部状态</option><option value="paid">已支付</option><option value="refunded">已退款</option><option value="disputed">拒付处理中</option>
+          </select>
+          <div class="sp"></div>
+          <button class="obtn" onclick="loadOrders()">🔄 刷新</button>
+        </div>
+        <div id="ordersBox" class="load">⏳ 加载中…</div>
+      </div>
+    </div>
+
+    <!-- 退款管理 -->
+    <div class="page" id="pg-refunds">
+      <div class="card">
+        <div class="bar">
+          <button class="mbtn" onclick="openRefundApply()">➕ 发起退款</button>
+          <div class="sp"></div>
+          <button class="obtn" onclick="loadRefunds()">🔄 刷新</button>
+        </div>
+        <div class="note" style="margin-top:0">退款申请提交后由平台审核(运营后台 → 商户平台 → 退款管理); 通过后资金原路退回付款人。</div>
+        <div id="refundsBox" class="load">⏳ 加载中…</div>
+      </div>
+    </div>
+
+    <!-- 结算记录 -->
+    <div class="page" id="pg-settles">
+      <div class="card">
+        <div class="bar"><div class="dim" style="font-size:13px" id="settleHint">—</div><div class="sp"></div><button class="obtn" onclick="loadSettles()">🔄 刷新</button></div>
+        <div id="settlesBox" class="load">⏳ 加载中…</div>
+      </div>
+    </div>
+
+    <!-- 商户资料 -->
+    <div class="page" id="pg-profile">
+      <div class="card">
+        <h3>🏪 商户资料</h3>
+        <div id="profileBox" class="load">⏳ 加载中…</div>
+      </div>
+      <div class="card">
+        <h3>🔑 API Key(集成用)</h3>
+        <div class="keybox" id="keyBox">—<button class="cp" onclick="copyKey()">复制</button></div>
+        <div class="sub" style="margin-top:8px">调用开放接口时置于请求头; 演示环境密钥仅作展示。</div>
+      </div>
+      <div class="card">
+        <h3>✂️ 分账规则</h3>
+        <div id="splitsBox" class="load">⏳ 加载中…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 基础 ================= */
+var API = location.protocol.indexOf('http') === 0 ? '' : 'http://localhost:5177';
+function $(s){ return document.querySelector(s); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function fmtMoney(n){ return '$' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+function fmtMoney0(n){ return '$' + Math.round(Number(n || 0)).toLocaleString('en-US'); }
+function nz(n){ return Number(n) || 0; }
+function pad2(n){ return String(n).padStart(2, '0'); }
+function fmtTime(ts){ if (!ts) return '—'; var d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+function toast(msg, isErr){
+  var b = document.createElement('div');
+  b.className = 'toast' + (isErr ? ' err' : '');
+  b.textContent = (isErr ? '❌ ' : '✅ ') + msg;
+  $('#toasts').appendChild(b);
+  setTimeout(function(){ b.remove(); }, 3200);
+}
+function mreq(path, opts){
+  opts = opts || {};
+  opts.headers = {'Content-Type': 'application/json', 'x-mch': String(ME ? ME.id : 0)};
+  if (opts.body) opts.body = JSON.stringify(opts.body);
+  return fetch(API + path, opts).then(function(res){
+    return res.json().catch(function(){ return {}; }).then(function(data){
+      if (!res.ok){ var e = new Error(data.error || ('HTTP ' + res.status)); e.status = res.status; throw e; }
+      return data;
+    });
+  });
+}
+function mget(path){ return mreq(path); }
+function mpost(path, body){ return mreq(path, {method: 'POST', body: body}); }
+var ORDER_ST = {paid: '<span class="pill p-green">已支付</span>', refunded: '<span class="pill p-gray">已退款</span>', disputed: '<span class="pill p-red">拒付处理中</span>'};
+var RF_ST = {pending: '<span class="pill p-amber">待审核</span>', approved: '<span class="pill p-green">已退款</span>', rejected: '<span class="pill p-red">已驳回</span>'};
+var ST_ST = {pending: '<span class="pill p-amber">待结算</span>', settled: '<span class="pill p-green">已结算</span>'};
+
+/* ================= 登录 ================= */
+var ME = null; // { id, name, mchNo, ... }
+function loadMerchantList(){
+  fetch(API + '/api/mch/merchants').then(function(r){ return r.json(); }).then(function(d){
+    var list = d.list || [];
+    $('#mchSel').innerHTML = list.length
+      ? list.map(function(m){ return '<option value="' + m.id + '">' + esc(m.name) + ' · ' + esc(m.mchNo) + ' · ' + esc(m.mccLabel) + '</option>'; }).join('')
+      : '<option value="">暂无已开通商户</option>';
+  }).catch(function(){ $('#mchSel').innerHTML = '<option value="">加载失败, 请刷新</option>'; });
+}
+function doLogin(){
+  var id = +$('#mchSel').value;
+  if (!id){ toast('请选择商户', true); return; }
+  localStorage.setItem('mchId', String(id));
+  enterPortal();
+}
+function doLogout(){
+  localStorage.removeItem('mchId');
+  location.reload();
+}
+function enterPortal(){
+  var id = parseInt(localStorage.getItem('mchId') || '0', 10);
+  if (!id) return;
+  $('#appView').style.display = '';
+  $('#loginView').style.display = 'none';
+  buildTabs();
+  mget('/api/mch/me').then(function(d){
+    ME = d.me;
+    $('#tbName').textContent = d.me.name;
+    $('#tbMeta').textContent = '商户号 ' + d.me.mchNo + ' · ' + d.me.mccLabel + ' · 结算 ' + d.me.settleLabel;
+    renderHome(d);
+    go('home');
+  }).catch(function(e){
+    toast(e.message, true);
+    localStorage.removeItem('mchId');
+    $('#appView').style.display = 'none';
+    $('#loginView').style.display = '';
+  });
+}
+
+/* ================= Tab 路由 ================= */
+var TABS = [['home', '🏠 首页'], ['orders', '🧾 收款订单'], ['refunds', '↩️ 退款管理'], ['settles', '💰 结算记录'], ['profile', '🏪 商户资料']];
+function buildTabs(){
+  $('#tabs').innerHTML = TABS.map(function(t, i){
+    return '<div class="tab' + (i === 0 ? ' on' : '') + '" id="tab-' + t[0] + '" onclick="go(\'' + t[0] + '\')">' + t[1] + '</div>';
+  }).join('');
+}
+var LOADED = {};
+function go(key){
+  TABS.forEach(function(t){ var el = $('#tab-' + t[0]); if (el) el.classList.toggle('on', t[0] === key); });
+  TABS.forEach(function(t){ var el = $('#pg-' + t[0]); if (el) el.classList.toggle('on', t[0] === key); });
+  if (key === 'orders' && !LOADED.orders){ LOADED.orders = 1; loadOrders(); }
+  if (key === 'refunds' && !LOADED.refunds){ LOADED.refunds = 1; loadRefunds(); }
+  if (key === 'settles' && !LOADED.settles){ LOADED.settles = 1; loadSettles(); }
+  if (key === 'profile' && !LOADED.profile){ LOADED.profile = 1; loadProfile(); }
+}
+
+/* ================= 首页看板 ================= */
+function renderHome(d){
+  $('#stTodayAmt').textContent = fmtMoney(d.today.amount);
+  $('#stTodayCnt').textContent = nz(d.today.count) + ' 笔今日交易';
+  $('#stTodayRate').textContent = nz(d.today.successRate) + '%';
+  $('#stPendNet').textContent = fmtMoney(d.pendingSettle.net);
+  $('#stPendBatch').textContent = nz(d.pendingSettle.batches) + ' 个待结算批次(T+' + (ME ? ME.settleDays : 'N') + ')';
+  $('#stPendRf').textContent = String(nz(d.pendingRefunds));
+  $('#stMonthAmt').textContent = fmtMoney(d.month.amount);
+  $('#stMonthCnt').textContent = nz(d.month.count) + ' 累计订单';
+  var rec = d.recent || [];
+  $('#recentBox').innerHTML = rec.length
+    ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>订单号</th><th>付款人</th><th>金额</th><th>状态</th><th>时间</th></tr></thead><tbody>' +
+      rec.map(function(o){
+        return '<tr><td class="num">' + esc(o.orderNo) + '</td><td>' + esc(o.payer) + '<div class="sub num">' + esc(o.cardMask) + '</div></td>' +
+          '<td class="num" style="font-weight:700">' + fmtMoney(o.amount) + '</td><td>' + (ORDER_ST[o.status] || esc(o.status)) + '</td><td class="dim num">' + fmtTime(o.createdAt) + '</td></tr>';
+      }).join('') + '</tbody></table></div>'
+    : '<div class="empty">📭 暂无收款订单</div>';
+}
+
+/* ================= 收款订单 ================= */
+function loadOrders(){
+  var box = $('#ordersBox'); box.innerHTML = '<div class="load">⏳ 加载中…</div>';
+  var st = $('#ordStatus').value;
+  mget('/api/mch/orders' + (st ? '?status=' + st : '')).then(function(d){
+    var list = d.list || [], s = d.summary || {};
+    var head = '<div class="bar" style="margin:0 0 10px"><span class="pill p-blue num">共 ' + nz(s.total) + ' 单 · ' + fmtMoney(s.amount) + '</span> <span class="pill p-gray num">已退款 ' + nz(s.refunded) + '</span></div>';
+    box.innerHTML = head + (list.length
+      ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>订单号</th><th>金额</th><th>手续费</th><th>净额</th><th>付款人 / 卡</th><th>方式</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
+        list.slice(0, 80).map(function(o){
+          return '<tr><td class="num">' + esc(o.orderNo) + '<div class="sub dim">' + esc(o.channel) + '</div></td>' +
+            '<td class="num" style="font-weight:700">' + fmtMoney(o.amount) + '</td>' +
+            '<td class="num dim">' + fmtMoney(o.fee) + '</td><td class="num">' + fmtMoney(o.net) + '</td>' +
+            '<td>' + esc(o.payer) + '<div class="sub num">' + esc(o.cardMask) + '</div></td>' +
+            '<td class="dim">' + esc(o.methodLabel || o.method) + '</td>' +
+            '<td>' + (ORDER_ST[o.status] || esc(o.status)) + '</td>' +
+            '<td class="dim num">' + fmtTime(o.createdAt) + '</td>' +
+            '<td>' + (o.status === 'paid' ? '<button class="rowbtn rb-bad" onclick="openRefundApply(' + o.id + ')">退款</button>' : '—') + '</td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<div class="empty">📭 暂无订单</div>');
+  }).catch(function(e){ box.innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+
+/* ================= 退款管理 ================= */
+function loadRefunds(){
+  var box = $('#refundsBox'); box.innerHTML = '<div class="load">⏳ 加载中…</div>';
+  mget('/api/mch/refunds').then(function(d){
+    var list = d.list || [];
+    box.innerHTML = list.length
+      ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>订单号</th><th>金额</th><th>退款原因</th><th>状态</th><th>申请时间</th><th>审核</th></tr></thead><tbody>' +
+        list.map(function(r){
+          return '<tr><td class="num">' + esc(r.orderNo) + '</td><td class="num" style="font-weight:700">' + fmtMoney(r.amount) + '</td>' +
+            '<td style="white-space:normal;max-width:230px">' + esc(r.reason) + '</td>' +
+            '<td>' + (RF_ST[r.status] || esc(r.status)) + '</td>' +
+            '<td class="dim num">' + fmtTime(r.appliedAt) + '</td>' +
+            '<td class="dim" style="font-size:12px">' + (r.approvedAt ? fmtTime(r.approvedAt) + (r.approvedBy ? ' · ' + esc(r.approvedBy) : '') : '—') + (r.actNote ? '<div class="sub">' + esc(r.actNote) + '</div>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<div class="empty">📭 暂无退款记录</div>';
+  }).catch(function(e){ box.innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+function openRefundApply(orderId){
+  var apply = function(list){
+    var paid = list.filter(function(o){ return o.status === 'paid'; });
+    if (!paid.length){ toast('没有可退款的「已支付」订单', true); return; }
+    $('#modalRoot').innerHTML =
+      '<div class="mask" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>↩️ 发起退款</h3>' +
+      '<div class="note">仅「已支付」订单可申请; 提交后由平台审核, 通过后原路退回付款人。</div>' +
+      '<div class="field"><label>选择订单</label><select class="sel" id="rfOrder">' +
+      paid.map(function(o){ return '<option value="' + o.id + '">' + esc(o.orderNo) + ' · ' + fmtMoney(o.amount) + ' · ' + esc(o.payer) + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="field"><label>退款原因(必填)</label><textarea class="ta" id="rfReason" rows="2" placeholder="如: 客户投诉商品破损 / 重复扣款"></textarea></div>' +
+      '<div class="mfoot"><button class="obtn" onclick="closeModal()">取消</button><button class="mbtn" onclick="refundApplyDo()">提交申请</button></div>' +
+      '</div></div>';
+  };
+  if (orderId != null){
+    mget('/api/mch/orders').then(function(d){
+      var o = null; (d.list || []).forEach(function(x){ if (x.id === orderId) o = x; });
+      apply(o ? [o] : []);
+      if (o){ var sel = $('#rfOrder'); if (sel) sel.value = String(orderId); }
+    });
+  } else {
+    mget('/api/mch/orders?status=paid').then(function(d){ apply(d.list || []); });
+  }
+}
+function refundApplyDo(){
+  var reason = $('#rfReason').value.trim();
+  if (!reason){ toast('请填写退款原因', true); return; }
+  mpost('/api/mch/refunds', {orderId: +$('#rfOrder').value, reason: reason}).then(function(r){
+    closeModal();
+    toast('退款申请已提交, 待平台审核');
+    LOADED.refunds = 1; loadRefunds(); loadOrders();
+  }).catch(function(e){ toast(e.message, true); });
+}
+function closeModal(){ $('#modalRoot').innerHTML = ''; }
+
+/* ================= 结算记录 ================= */
+function loadSettles(){
+  var box = $('#settlesBox'); box.innerHTML = '<div class="load">⏳ 加载中…</div>';
+  mget('/api/mch/settles').then(function(d){
+    var list = d.list || [];
+    $('#settleHint').textContent = '结算周期 ' + (ME ? ME.settleLabel : '') + ' · 打款走 STL- 复式分录, 分账订单按规则拆付';
+    box.innerHTML = list.length
+      ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>结算日</th><th>单量</th><th>交易额</th><th>手续费</th><th>结算净额</th><th>分账</th><th>商户实收</th><th>状态 / 凭证</th></tr></thead><tbody>' +
+        list.map(function(b){
+          var sp = b.splitDetail || [];
+          return '<tr><td class="num">' + esc(b.day) + '</td><td class="num">' + nz(b.orderCount) + '</td>' +
+            '<td class="num">' + fmtMoney(b.gross) + '</td><td class="num dim">' + fmtMoney(b.fee) + '</td>' +
+            '<td class="num" style="font-weight:700">' + fmtMoney(b.net) + '</td>' +
+            '<td>' + (sp.length ? sp.map(function(x){ return '<span class="pill p-indigo">' + esc(x.receiver) + ' ' + fmtMoney0(x.amount) + '</span>'; }).join(' ') : '<span class="dim">—</span>') + '</td>' +
+            '<td class="num" style="color:var(--ok);font-weight:700">' + fmtMoney(b.status === 'settled' ? nz(b.paidOut) : nz(b.net) - nz(b.splitSum || 0)) + '</td>' +
+            '<td>' + ST_ST[b.status] + (b.voucherNo ? '<div class="sub num">' + esc(b.voucherNo) + '</div>' : (b.status === 'settled' ? '' : '<div class="sub">预计 T+' + (ME ? ME.settleDays : 'N') + ' 打款</div>')) + '</td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<div class="empty">📭 暂无结算批次</div>';
+  }).catch(function(e){ box.innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+
+/* ================= 商户资料 ================= */
+var MY_KEY = '';
+function loadProfile(){
+  mget('/api/mch/profile').then(function(d){
+    var p = d.profile || {};
+    MY_KEY = d.apiKey || '';
+    var kv = [
+      ['商户名称', esc(p.name)], ['商户号', '<span class="num">' + esc(p.mchNo) + '</span>'],
+      ['MCC 类目', esc(p.mccLabel)], ['国家', esc(p.country)],
+      ['结算周期', '<b>' + esc(p.settleLabel) + '</b>'], ['费率(只读)', '<span class="num">' + esc(p.rateLabel) + '</span>'],
+      ['借记封顶', '<span class="num">' + fmtMoney(p.rate ? p.rate.debitCap : 0) + '</span>'], ['结算账户', '<span class="num">' + esc(p.settleAccount ? p.settleAccount.bank + ' · ' + p.settleAccount.iban : '—') + '</span>'],
+      ['联系', esc(p.contact || '—')], ['入驻时间', '<span class="num">' + fmtTime(p.createdAt) + '</span>'],
+      ['风险分', nz(d.risk && d.risk.score) + ' 分' + ((d.risk && d.risk.flags || []).length ? ' · ' + d.risk.flags.join(' / ') : ' · 无预警')]
+    ].map(function(x){ return '<div class="item"><div class="k">' + x[0] + '</div><div class="v">' + x[1] + '</div></div>'; }).join('');
+    $('#profileBox').innerHTML = '<div class="kv">' + kv + '</div><div class="sub" style="margin-top:10px">费率与结算账户由平台配置, 如需调整请联系平台运营。</div>';
+    $('#keyBox').innerHTML = esc(MY_KEY) + '<button class="cp" onclick="copyKey()">复制</button>';
+    var sp = d.splits || [];
+    $('#splitsBox').innerHTML = sp.length
+      ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>关联订单</th><th>接收方</th><th>类型</th><th>比例</th><th>金额</th></tr></thead><tbody>' +
+        sp.map(function(x){
+          return '<tr><td class="num">' + esc(x.orderNo) + '</td><td><b>' + esc(x.receiver) + '</b></td>' +
+            '<td><span class="pill ' + (x.receiverType === 'sub' ? 'p-blue' : x.receiverType === 'platform' ? 'p-indigo' : 'p-gray') + '">' + esc(x.receiverTypeLabel) + '</span></td>' +
+            '<td class="num">' + esc(x.pctLabel) + '</td><td class="num" style="font-weight:700">' + fmtMoney(x.amount) + '</td></tr>';
+        }).join('') + '</tbody></table></div>'
+      : '<div class="empty">该商户暂无分账规则</div>';
+  }).catch(function(e){ $('#profileBox').innerHTML = '<div class="empty">⚠️ ' + esc(e.message) + '</div>'; });
+}
+function copyKey(){
+  if (navigator.clipboard && MY_KEY){ navigator.clipboard.writeText(MY_KEY).then(function(){ toast('API Key 已复制'); }); }
+  else toast('复制不可用, 请手动选择', true);
+}
+
+/* ================= 启动 ================= */
+loadMerchantList();
+if (localStorage.getItem('mchId')) enterPortal();
+</script>
+</body>
+</html>

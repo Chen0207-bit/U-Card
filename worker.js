@@ -11,7 +11,7 @@ export default {
     try {
       const url = new URL(req.url);
       if (url.pathname.startsWith('/api/')) {
-        const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type,x-user,x-sales', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' };
+        const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type,x-user,x-sales,x-mch', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS' };
         if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
         const id = env.APP_STATE.idFromName('global');
         const resp = await env.APP_STATE.get(id).fetch(req);
