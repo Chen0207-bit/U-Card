@@ -39,6 +39,7 @@ const TARGET_DEFAULTS = {
 // ---------------- 种子数据(懒初始化: Workers 全局作用域 Date.now()=0, 必须等首个请求再生成真实时间) ----------------
 let salesReps, users, cards, transactions, pointsLogs, commissions, customers, followups, products, orders, tasks;
 let riskEvents, riskRules, riskLists, riskTags, financeMeta; // P1: 风控中心 + 财务对账
+let sysAccounts, sysRoles, sysPerms, sysLogs, opLogs, sysParams, sysDicts; // P3: 系统管理(账号/角色/权限/登录日志/操作日志/参数/字典)
 let inited = false;
 function initSeed() {
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
@@ -255,6 +256,69 @@ const injectDiffs = (type, specs) => { // specs: [距今天数序号(从最近�
 injectDiffs('topup', [[2, 61.40, '渠道延迟'], [6, 12.70, '手续费口径']]);
 injectDiffs('consume', [[1, 28.36, '手续费口径'], [5, 45.00, '渠道延迟']]);
 injectDiffs('refund', [[0, 45.00, '退款冲正'], [2, 19.50, '渠道延迟']]);
+
+// ---------------- P3 系统管理种子: 角色 / 权限 / 账号 / 参数 / 字典 / 日志 ----------------
+sysRoles = [
+  { id: 1, code: 'super', name: '超级管理员', desc: '内置角色 · 后台全部权限, 含系统管理', builtin: true },
+  { id: 2, code: 'director', name: '销售总监', desc: '销售组织负责人 · 全部业务模块与系统管理', builtin: true },
+  { id: 3, code: 'sales_l1', name: '一级销售', desc: '管理二级销售团队 · CRM 客户跟进与团队业绩', builtin: true },
+  { id: 4, code: 'sales_l2', name: '二级销售', desc: '管理三级销售团队 · CRM 客户跟进与团队业绩', builtin: true },
+  { id: 5, code: 'sales_l3', name: '三级销售', desc: '一线销售 · CRM 客户跟进与个人业绩', builtin: true },
+  { id: 6, code: 'ops', name: '运营专员', desc: 'U卡 / KYC / 积分商城 / 订单日常运营', builtin: false },
+  { id: 7, code: 'finance', name: '财务专员', desc: '对账 / 差异 / 商户结算 / 财务报表', builtin: false },
+  { id: 8, code: 'risk', name: '风控专员', desc: '风险事件处置 / 规则启停 / 黑白名单管理', builtin: false },
+];
+sysPerms = {}; // 角色 → 已勾选权限 key(副本, PATCH 只改内存副本, 重置演示数据后恢复默认)
+sysRoles.forEach(r => { sysPerms[r.code] = [...(ROLE_PERM_DEFAULTS[r.code] || [])]; });
+// 账号 = 销售账号(映射自 salesReps 19 人) + 平台账号(运营/财务/风控等, 1 个禁用态)
+const ROLE_BY_LEVEL = { 0: 'director', 1: 'sales_l1', 2: 'sales_l2', 3: 'sales_l3' };
+const unameOf = (name) => name.toLowerCase().replace(/[^a-z]+/g, '.').replace(/^\.+|\.+$/g, '');
+sysAccounts = [
+  ...salesReps.map(s => {
+    const role = sysRoles.find(r => r.code === ROLE_BY_LEVEL[s.level]);
+    const uname = unameOf(s.name);
+    return { id: s.id, username: uname, name: s.name, type: 'sales', roleCode: role.code, roleName: role.name,
+      org: s.level === 0 ? '全局销售体系' : ((repById(s.parentId) || {}).name || '—') + ' 团队',
+      phone: '+966 5' + ri(10000000, 99999999), email: uname + '@ucard.io',
+      enabled: true, lastLoginAt: daysAgo(ri(0, 2), 23), createdAt: daysAgo(ri(60, 200)) };
+  }),
+  ...[
+    ['admin', 'Nasser Al-Kaabi', 'super', '平台管理组', true],
+    ['ops.lina', 'Lina Haddad', 'ops', '运营中心', true],
+    ['fin.yousef', 'Yousef Barakat', 'finance', '财务结算组', true],
+    ['risk.muna', 'Muna Al-Ali', 'risk', '风控中心', true],
+    ['ops.faris', 'Faris Al-Otaibi', 'ops', '运营中心', false], // 禁用态种子
+  ].map(([username, name, code, org, enabled], i) => {
+    const role = sysRoles.find(r => r.code === code);
+    return { id: 900001 + i, username, name, type: 'platform', roleCode: code, roleName: role.name, org,
+      phone: '+971 5' + ri(10000000, 99999999), email: username + '@ucard.io',
+      enabled, lastLoginAt: enabled ? daysAgo(ri(0, 3), 23) : daysAgo(21, 5), createdAt: daysAgo(ri(120, 260)) };
+  }),
+];
+sysParams = [
+  { key: 'commission.withdraw.min', value: '50', label: '佣金提现最低金额', desc: '销售佣金单笔提现最低金额 (USD)', updatedAt: daysAgo(9, 3) },
+  { key: 'kyc.auto_review.enabled', value: 'on', label: 'KYC 自动审核开关', desc: 'on=简单件自动审核, off=全部转人工', updatedAt: daysAgo(15, 6) },
+  { key: 'points.expire_days', value: '90', label: '积分过期天数', desc: '积分获得后有效天数, 到期自动清零', updatedAt: daysAgo(7, 2) },
+  { key: 'topup.daily_limit', value: '10000', label: '单日充值上限', desc: '单用户单日累计充值上限 (USD)', updatedAt: daysAgo(4, 8) },
+  { key: 'commission.tiers.max', value: '3', label: '分佣层级上限', desc: '多级分佣最大层级数(直属/上级/上上级)', updatedAt: daysAgo(20, 4) },
+  { key: 'risk.single_tx_threshold', value: '400', label: '风控单笔阈值', desc: '单笔交易超过该金额 (USD) 触发风控规则', updatedAt: daysAgo(11, 5) },
+];
+let dictSeq = 0;
+const dItem = (key, value, label, sort, enabled = true) => ({ id: ++dictSeq, key, value, label, sort, enabled });
+sysDicts = [
+  { type: 'tx_type', typeLabel: '交易类型', remark: '交易流水与对账的类型口径', items: [
+    dItem('topup', '充值', '充值入账', 1), dItem('consume', '消费', '商户消费', 2), dItem('refund', '退款', '退款冲正', 3), dItem('adjust', '调账', '运营调账', 4)] },
+  { type: 'card_level', typeLabel: '卡等级', remark: 'U卡产品等级定义', items: [
+    dItem('standard', 'Standard', '标准卡', 1), dItem('gold', 'Gold', '金卡', 2), dItem('platinum', 'Platinum', '白金卡', 3)] },
+  { type: 'risk_level', typeLabel: '风险等级', remark: '风控事件与规则等级', items: [
+    dItem('high', '高', '高风险', 1), dItem('mid', '中', '中风险', 2), dItem('low', '低', '低风险', 3)] },
+  { type: 'order_status', typeLabel: '订单状态', remark: '积分商城兑换订单状态机', items: [
+    dItem('pending', '待发货', '实物待发货', 1), dItem('shipped', '已发货', '物流配送中', 2), dItem('redeemed', '已核销', '虚拟/权益核销', 3), dItem('aftersale', '售后中', '售后处理中', 4), dItem('cancelled', '已取消', '用户取消退分', 5)] },
+  { type: 'notify_type', typeLabel: '通知类型', remark: '站内消息通知分类', items: [
+    dItem('tx', '交易', '交易动账提醒', 1), dItem('sys', '系统', '系统安全通知', 2), dItem('mkt', '营销', '活动营销推送', 3), dItem('sms', '短信', '短信渠道(演示停用)', 4, false)] },
+];
+sysLogs = buildSysLoginLogs();
+opLogs = buildSysOpLogs();
   inited = true;
 }
 
@@ -544,6 +608,118 @@ function merchantRows() {
       voucher: 'MC-' + String(i + 1).padStart(2, '0') + (lastTxAt ? '-' + dayKey(lastTxAt).replace('-', '') : ''),
       lastTxAt };
   }).sort((a, b) => b.consumeAmt - a.consumeAmt);
+}
+
+// ---------------- P3 系统管理工具(模块级, 依赖 initSeed 填充的冷数据) ----------------
+// 权限树: 两级 模块 → 页面/操作, 覆盖后台全部模块; key 全局唯一
+const PERM_TREE = [
+  { key: 'dashboard', label: '驾驶舱', actions: [['dashboard.view', '查看'], ['dashboard.edit', '编辑']] },
+  { key: 'goals', label: '目标管理', actions: [['goals.view', '查看'], ['goals.edit', '编辑目标']] },
+  { key: 'cards', label: 'U卡管理', actions: [['cards.view', '查看'], ['cards.issue', '发卡'], ['cards.freeze', '冻结/解冻'], ['cards.adjust', '调额']] },
+  { key: 'kyc', label: 'KYC 审核', actions: [['kyc.view', '查看'], ['kyc.review', '审核']] },
+  { key: 'crm', label: '客户管理', actions: [['crm.view', '查看'], ['crm.edit', '编辑'], ['crm.create', '新增客户']] },
+  { key: 'tx', label: '客户交易', actions: [['tx.view', '查看'], ['tx.refund', '退款']] },
+  { key: 'perf', label: '业绩排行', actions: [['perf.view', '查看']] },
+  { key: 'commission', label: '佣金管理', actions: [['commission.view', '查看'], ['commission.settle', '结算']] },
+  { key: 'chain', label: '分销链路', actions: [['chain.view', '查看'], ['chain.sales', '新增销售账号']] },
+  { key: 'points', label: '积分管理', actions: [['points.view', '查看'], ['points.grant', '积分发放']] },
+  { key: 'shop', label: '商城管理', actions: [['shop.view', '查看'], ['shop.toggle', '上下架']] },
+  { key: 'orders', label: '兑换订单', actions: [['orders.view', '查看'], ['orders.ship', '发货']] },
+  { key: 'risk', label: '风险事件', actions: [['risk.view', '查看'], ['risk.handle', '处置']] },
+  { key: 'riskRules', label: '风险规则', actions: [['riskRules.view', '查看'], ['riskRules.toggle', '启停']] },
+  { key: 'riskLists', label: '黑白名单', actions: [['riskLists.view', '查看'], ['riskLists.remove', '移除']] },
+  { key: 'riskTags', label: '风险标签', actions: [['riskTags.view', '查看']] },
+  { key: 'recon', label: '对账中心', actions: [['recon.view', '查看'], ['recon.export', '导出']] },
+  { key: 'financeDiff', label: '差异清单', actions: [['financeDiff.view', '查看']] },
+  { key: 'merchant', label: '商户结算', actions: [['merchant.view', '查看'], ['merchant.settle', '结算']] },
+  { key: 'financeReport', label: '财务报表', actions: [['financeReport.view', '查看'], ['financeReport.export', '导出']] },
+  { key: 'sysAccounts', label: '账号管理', actions: [['sysAccounts.view', '查看'], ['sysAccounts.enable', '启禁用'], ['sysAccounts.resetPwd', '重置密码']] },
+  { key: 'sysRoles', label: '角色管理', actions: [['sysRoles.view', '查看']] },
+  { key: 'sysPerms', label: '权限配置', actions: [['sysPerms.view', '查看'], ['sysPerms.edit', '保存']] },
+  { key: 'sysOrg', label: '组织架构', actions: [['sysOrg.view', '查看']] },
+  { key: 'sysParams', label: '系统参数', actions: [['sysParams.view', '查看'], ['sysParams.edit', '编辑']] },
+  { key: 'sysDicts', label: '字典管理', actions: [['sysDicts.view', '查看'], ['sysDicts.toggle', '启停字典项']] },
+  { key: 'loginlogs', label: '登录日志', actions: [['loginlogs.view', '查看']] },
+  { key: 'oplogs', label: '操作日志', actions: [['oplogs.view', '查看']] },
+];
+const ALL_PERM_KEYS = PERM_TREE.reduce((a, m) => a.concat(m.actions.map(x => x[0])), []);
+// 各角色默认权限: 总监全勾; 销售角色仅 CRM 工作台相关页面(与前端 SALES_PAGES 口径一致)
+const SALES_PERM_BASE = ['dashboard.view', 'crm.view', 'crm.edit', 'crm.create', 'tx.view', 'perf.view', 'commission.view', 'chain.view'];
+const ROLE_PERM_DEFAULTS = {
+  super: ALL_PERM_KEYS,
+  director: ALL_PERM_KEYS,
+  sales_l1: [...SALES_PERM_BASE, 'goals.view', 'goals.edit'],
+  sales_l2: [...SALES_PERM_BASE, 'goals.view'],
+  sales_l3: [...SALES_PERM_BASE, 'goals.view'],
+  ops: ['dashboard.view', 'dashboard.edit', 'cards.view', 'cards.issue', 'cards.freeze', 'cards.adjust', 'kyc.view', 'kyc.review', 'points.view', 'points.grant', 'shop.view', 'shop.toggle', 'orders.view', 'orders.ship', 'crm.view'],
+  finance: ['dashboard.view', 'recon.view', 'recon.export', 'financeDiff.view', 'merchant.view', 'merchant.settle', 'financeReport.view', 'financeReport.export', 'commission.view'],
+  risk: ['dashboard.view', 'risk.view', 'risk.handle', 'riskRules.view', 'riskRules.toggle', 'riskLists.view', 'riskLists.remove', 'riskTags.view'],
+};
+// 组织架构树: 总监→一级→二级→三级, 每节点带名下客户数/卡量/团队人数
+function sysOrgTree() {
+  const node = (s) => {
+    const kids = salesReps.filter(x => x.parentId === s.id).map(node);
+    return { id: s.id, name: s.name, role: s.role, level: s.level, region: s.region,
+      customers: customers.filter(c => c.ownerSalesId === s.id).length,
+      cards: cards.filter(c => c.salesRepId === s.id).length,
+      teamSize: kids.length ? subtreeIds(s.id).length - 1 : 0, children: kids };
+  };
+  return salesReps.filter(s => !s.parentId || !repById(s.parentId)).map(node);
+}
+// 登录日志种子: 近 50 条, 时间倒推分布, IP 段与 UA 摘要为演示模拟
+function buildSysLoginLogs() {
+  const IPS = ['37.106.', '94.56.', '185.93.', '5.42.', '45.12.', '78.95.'];
+  const UAS = ['Chrome 131 · Windows 11', 'Safari 17 · iPhone 15 Pro', 'Chrome 130 · macOS Sonoma', 'Edge 129 · Windows 10', 'U-Card App 3.2 · Android 14', 'Chrome Mobile · Xiaomi 14'];
+  const out = [];
+  let ts = now();
+  for (let i = 0; i < 50; i++) {
+    ts -= ri(1, 4) * 36e5 + ri(0, 59) * 6e4; // 每条再往前推 1-4 小时
+    const a = pick(sysAccounts);
+    const ok = rnd() > 0.14;
+    out.push({ id: 900001 + i, createdAt: ts, username: a.username, name: a.name, role: a.roleName,
+      ip: pick(IPS) + ri(10, 240) + '.' + ri(1, 254), ua: pick(UAS),
+      result: ok ? '成功' : pick(['失败 · 密码错误', '失败 · 验证码过期', '失败 · 账号已禁用']) });
+  }
+  return out;
+}
+// 操作日志种子: 近 100 条, 覆盖既有业务动作(KYC/退款/结算/发货/积分/风控/重置演示数据等)
+function buildSysOpLogs() {
+  const N = 'Noura Al-Faisal', L = 'Lina Haddad', Y = 'Yousef Barakat', M = 'Muna Al-Ali', A = 'Nasser Al-Kaabi';
+  const consumes = transactions.filter(t => t.type === 'consume' && t.status === 'success');
+  const pendU = users.filter(u => u.kycStatus !== 'approved');
+  const kycU = () => pick(pendU.length ? pendU : users);
+  const uName = (id) => (users.find(u => u.id === id) || {}).name || '—';
+  const saleNames = salesReps.filter(s => s.level > 0).map(s => s.name);
+  const shipped = orders.filter(o => o.status === 'shipped');
+  const tpl = [ // [条数, 操作人(null=随机销售), 模块, 动作, 对象摘要函数, 结果(缺省成功)]
+    [10, N, 'KYC 审核', '审核通过', () => { const u = kycU(); return u.name + ' · 升级 L' + Math.min(2, u.kycLevel + 1) + ' · 奖励 200 积分'; }],
+    [2, N, 'KYC 审核', '驳回', () => kycU().name + ' · 证件信息不清晰'],
+    [6, N, '交易管理', '退款', () => { const t = pick(consumes); return '#' + t.id + ' · ' + uName(t.userId) + ' · $' + t.amount.toFixed(2); }],
+    [2, N, '交易管理', '退款', () => '#' + pick(consumes).id + ' · 已过退款时效', '失败'],
+    [8, Y, '财务结算', '佣金结算', () => { const c = pick(commissions); return '佣金单 #' + c.id + ' · ' + ((repById(c.salesId) || {}).name || '—') + ' · $' + c.amount.toFixed(2); }],
+    [4, Y, '财务结算', '商户结算', () => '商户 ' + pick(['Amazon', 'Apple Store', 'Noon', 'Careem', 'Starbucks', 'Talabat']) + ' · T+2 批次打款'],
+    [5, Y, '财务结算', '对账导出', () => pick(['充值对账', '消费对账', '退款对账']) + ' CSV · 近 30 天'],
+    [8, L, '兑换订单', '发货', () => { const o = pick(shipped.length ? shipped : orders); return '订单 #' + o.id + ' · ' + ((products.find(p => p.id === o.productId) || {}).name || '') + ' · ' + (o.trackingNo || '—'); }],
+    [5, L, '积分管理', '积分发放', () => pick(users).name + ' · +500 分 · 活动奖励'],
+    [4, L, '商城管理', '商品下架', () => { const p = pick(products); return p.name + ' · 库存 ' + p.stock; }],
+    [4, L, '商城管理', '商品上架', () => pick(products).name],
+    [6, M, '风控中心', '解除风控', () => { const e = pick(riskEvents); return '事件 #' + e.id + ' · ' + uName(e.userId) + ' · 复核通过'; }],
+    [3, M, '风控中心', '人工复核', () => '事件 #' + pick(riskEvents).id + ' · 调取交易与设备信息'],
+    [4, M, '风控中心', '规则启停', () => '规则 · ' + pick(riskRules).name],
+    [3, M, '风控中心', '名单移除', () => pick(riskLists).target],
+    [4, L, 'U卡管理', '冻结/解冻', () => { const c = pick(cards); return maskCardNo(c.cardNo) + ' · ' + uName(c.userId); }],
+    [3, L, 'U卡管理', '调账', () => maskCardNo(pick(cards).cardNo) + ' · +' + pick([50, 100, 200]) + ' USD'],
+    [5, null, '客户管理', '新增客户', () => pick(customers).name + ' · ' + pick(['自主注册', '销售开发', '推荐引流'])],
+    [4, null, '客户管理', '阶段推进', () => { const c = pick(customers); return c.name + ' · ' + pick(['线索', '意向', '方案']) + ' → ' + pick(['方案', '开卡', '充值']); }],
+    [3, N, '系统管理', '新增销售', () => pick(saleNames) + ' · 挂靠组织节点'],
+    [2, N, '系统管理', '重置演示数据', () => '全部种子数据重建 · 清空现场操作'],
+    [3, A, '系统管理', '参数修改', () => { const p = pick(sysParams); return p.label + ': ' + p.value + ' → ' + p.value; }],
+    [2, A, '系统管理', '禁用账号', () => 'ops.faris · Faris Al-Otaibi'],
+  ];
+  const out = [];
+  tpl.forEach(t => { for (let i = 0; i < t[0]; i++) out.push({ createdAt: daysAgo(ri(0, 13), 23), operator: t[1] || pick(saleNames), module: t[2], action: t[3], target: t[4](), result: t[5] || '成功' }); });
+  out.sort((a, b) => b.createdAt - a.createdAt);
+  return out.map((o, i) => ({ id: 910001 + i, ...o }));
 }
 
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
@@ -891,6 +1067,91 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
           recon: reconSummary,
           merchant: { total: mrs.length, pending: pend.length, pendingNet: +pend.reduce((s, r) => s + r.net, 0).toFixed(2) } });
       }
+    }
+    // ============ P3 系统管理(总监专属, 其他角色一律 403) ============
+    if (p.startsWith('/api/admin/sys/')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问系统管理' }, 403);
+      const sysOp = (module, action, target, result = '成功') => { // 系统管理自身操作也写入操作日志
+        opLogs.unshift({ id: opLogs.length ? Math.max(...opLogs.map(o => o.id)) + 1 : 910100, createdAt: now(), operator: me.name, module, action, target, result });
+        if (opLogs.length > 150) opLogs.length = 150;
+      };
+      if (p === '/api/admin/sys/accounts' && method === 'GET') {
+        return J(sysAccounts.map(a => ({ ...a })));
+      }
+      const mAcct = p.match(/^\/api\/admin\/sys\/accounts\/(\d+)$/);
+      if (mAcct && method === 'PATCH') { // 启用/禁用 或 重置密码(演示)
+        const a = sysAccounts.find(x => x.id === +mAcct[1]);
+        if (!a) return J({ error: '账号不存在' }, 404);
+        if (b.resetPwd) {
+          sysOp('系统管理', '重置密码', a.username + ' · ' + a.name);
+          return J({ ok: true, account: { ...a }, initPwd: 'Ucard@' + String(1000 + a.id).slice(-4) });
+        }
+        if (typeof b.enabled === 'boolean') {
+          a.enabled = b.enabled;
+          sysOp('系统管理', b.enabled ? '启用账号' : '禁用账号', a.username + ' · ' + a.name);
+          return J({ ok: true, account: { ...a } });
+        }
+        return J({ error: '无效的修改字段, 支持 enabled / resetPwd' }, 400);
+      }
+      if (p === '/api/admin/sys/roles' && method === 'GET') {
+        return J({ list: sysRoles.map(r => ({ ...r, memberCount: sysAccounts.filter(a => a.roleCode === r.code).length, permCount: (sysPerms[r.code] || []).length })) });
+      }
+      if (p === '/api/admin/sys/perms' && method === 'GET') { // ?role=角色编码 → 该角色权限树
+        const role = sysRoles.find(r => r.code === q.role);
+        if (!role) return J({ error: '角色不存在: ' + (q.role || '(未指定)') }, 400);
+        return J({ role: { code: role.code, name: role.name, desc: role.desc }, tree: PERM_TREE, checked: sysPerms[role.code] || [], totalKeys: ALL_PERM_KEYS.length });
+      }
+      if (p === '/api/admin/sys/perms' && method === 'PATCH') { // 保存勾选(内存生效)
+        const role = sysRoles.find(r => r.code === b.role);
+        if (!role) return J({ error: '角色不存在: ' + (b.role || '(未指定)') }, 400);
+        const valid = new Set(ALL_PERM_KEYS);
+        const checked = Array.isArray(b.checked) ? b.checked.filter(k => valid.has(k)) : [];
+        sysPerms[role.code] = checked;
+        sysOp('系统管理', '保存权限', role.name + ' · ' + checked.length + ' 项权限');
+        return J({ ok: true, role: role.code, checked, total: ALL_PERM_KEYS.length });
+      }
+      if (p === '/api/admin/sys/org' && method === 'GET') { // 组织树(含每节点客户数/卡量)
+        const lv = (l) => salesReps.filter(s => s.level === l).length;
+        return J({ summary: { total: salesReps.length, l1: lv(1), l2: lv(2), l3: lv(3), customers: customers.length, cards: cards.length }, tree: sysOrgTree() });
+      }
+      if (p === '/api/admin/sys/params' && method === 'GET') {
+        return J({ list: sysParams.map(x => ({ ...x })) });
+      }
+      const mParam = p.match(/^\/api\/admin\/sys\/params\/(.+)$/);
+      if (mParam && method === 'PATCH') { // 行内编辑保存
+        const key = decodeURIComponent(mParam[1]);
+        const prm = sysParams.find(x => x.key === key);
+        if (!prm) return J({ error: '参数不存在: ' + key }, 404);
+        const v = String(b.value == null ? '' : b.value).trim();
+        if (!v) return J({ error: '参数值不能为空' }, 400);
+        const oldV = String(prm.value);
+        prm.value = v; prm.updatedAt = now();
+        sysOp('系统管理', '参数修改', prm.label + ': ' + oldV + ' → ' + v);
+        return J({ ok: true, param: { ...prm } });
+      }
+      if (p === '/api/admin/sys/dicts' && method === 'GET') {
+        return J({ list: sysDicts.map(d => ({ ...d, items: d.items.map(i => ({ ...i })) })) });
+      }
+      const mDict = p.match(/^\/api\/admin\/sys\/dicts\/(\d+)$/);
+      if (mDict && method === 'PATCH') { // 字典项启停
+        let item = null, owner = null;
+        sysDicts.forEach(d => d.items.forEach(i => { if (i.id === +mDict[1]) { item = i; owner = d; } }));
+        if (!item) return J({ error: '字典项不存在' }, 404);
+        if (typeof b.enabled === 'boolean') {
+          item.enabled = b.enabled;
+          sysOp('系统管理', b.enabled ? '启用字典项' : '停用字典项', owner.typeLabel + ' / ' + item.value);
+        }
+        return J({ ok: true, dictType: owner.type, item: { ...item } });
+      }
+      if (p === '/api/admin/sys/loginlogs' && method === 'GET') {
+        return J({ list: [...sysLogs].sort((a, b2) => b2.createdAt - a.createdAt),
+          summary: { total: sysLogs.length, ok: sysLogs.filter(l => l.result === '成功').length, fail: sysLogs.filter(l => l.result !== '成功').length, accounts: new Set(sysLogs.map(l => l.username)).size } });
+      }
+      if (p === '/api/admin/sys/oplogs' && method === 'GET') {
+        return J({ list: [...opLogs].sort((a, b2) => b2.createdAt - a.createdAt).slice(0, 100),
+          summary: { total: opLogs.length, ok: opLogs.filter(o => o.result === '成功').length, fail: opLogs.filter(o => o.result !== '成功').length } });
+      }
+      return J({ error: 'not found: ' + p }, 404);
     }
     return J({ error: 'not found: ' + p }, 404);
   }

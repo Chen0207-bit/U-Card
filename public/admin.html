@@ -273,6 +273,23 @@
 .chain-wrap .chain{border:none;border-radius:0;margin-bottom:0}
 .chain-detail{border-top:1px dashed #e2e8f0;background:#fbfcfe;padding:6px 4px 10px}
 .chain-wrap.new{border-color:#16a34a;animation:chainNew 3s ease-out}
+
+/* ---------- P3 系统管理 ---------- */
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(350px,1fr));gap:10px}
+.perm-mod{border:1px solid var(--line);border-radius:10px;background:#fff;overflow:hidden}
+.perm-mod-head{display:flex;align-items:center;gap:8px;background:#f8fafc;border-bottom:1px solid var(--line);padding:8px 12px;flex-wrap:wrap}
+.perm-mod-head b{font-size:13px}
+.perm-mod-acts{display:flex;flex-wrap:wrap;gap:7px 16px;padding:10px 12px}
+.perm-act{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.perm-act input{accent-color:var(--pri)}
+.perm-mod-head input{accent-color:var(--pri)}
+.org-toggle{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;background:#eef2ff;color:var(--pri);font-size:11px;cursor:pointer;user-select:none;flex:none}
+.org-toggle:hover{background:#e0e7ff}
+.dict-group{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.dict-head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;cursor:pointer;flex-wrap:wrap}
+.dict-head:hover{background:#eef2ff}
+.dict-group .tbl-wrap{border-top:1px solid var(--line)}
+@media (max-width:1080px){ .perm-grid{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -596,6 +613,98 @@
       </div>
     </section>
 
+    <!-- 21. 账号管理 (P3 系统管理) -->
+    <section class="page" id="page-accounts">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input class="input search" id="sysAcctSearch" placeholder="🔍 搜索账号 / 姓名 / 角色 / 组织" oninput="renderSysAccounts()">
+          <div class="tabs" id="sysAcctTabs">
+            <button class="tab active" data-t="all" onclick="switchSysAcctTab('all')">全部</button>
+            <button class="tab" data-t="sales" onclick="switchSysAcctTab('sales')">销售账号</button>
+            <button class="tab" data-t="platform" onclick="switchSysAcctTab('platform')">平台账号</button>
+          </div>
+        </div>
+        <span class="dim">禁用后该账号无法登录后台 · 重置密码为演示动作(不真改密码)</span>
+      </div>
+      <div id="sysAcctSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="sysAcctBody"></div></div>
+    </section>
+
+    <!-- 22. 角色管理 -->
+    <section class="page" id="page-roles">
+      <div id="sysRoleSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">角色列表</div>
+        <div class="card-sub">内置角色不可删除 · 点击「权限树」查看该角色在各模块的权限勾选情况</div>
+        <div class="tbl-wrap" id="sysRoleBody"></div>
+      </div>
+    </section>
+
+    <!-- 23. 权限配置 -->
+    <section class="page" id="page-perms">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:210px" id="permRoleSel" onchange="loadPermTree()"></select>
+          <button class="btn-outline btn-sm" onclick="permCheckAll(true)">全选</button>
+          <button class="btn-outline btn-sm" onclick="permCheckAll(false)">全不选</button>
+        </div>
+        <button class="btn" onclick="savePerms()">💾 保存权限</button>
+      </div>
+      <div class="notice">🔐 权限树为演示配置(内存生效, 不真正拦截路由): 勾选后保存即更新该角色权限 · 总监/超级管理员默认全勾, 销售角色仅 CRM 工作台页面, 运营/财务/风控各管一段。</div>
+      <div class="card" id="permTreeCard"></div>
+    </section>
+
+    <!-- 24. 组织架构 -->
+    <section class="page" id="page-org">
+      <div id="sysOrgSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">销售组织架构</div>
+        <div class="card-sub">总监 → 一级 → 二级 → 三级 · 节点显示名下客户数与卡量 · 点击 <span class="org-toggle" style="display:inline-flex">▾</span> 展开/折叠</div>
+        <div id="sysOrgTree"></div>
+      </div>
+    </section>
+
+    <!-- 25. 系统参数 -->
+    <section class="page" id="page-params">
+      <div class="card">
+        <div class="card-title">系统参数</div>
+        <div class="card-sub">行内编辑参数值后点击「保存」(PATCH 生效于内存, 重置演示数据后恢复种子值)</div>
+        <div class="tbl-wrap" id="sysParamBody"></div>
+      </div>
+    </section>
+
+    <!-- 26. 字典管理 -->
+    <section class="page" id="page-dicts">
+      <div class="card">
+        <div class="card-title">字典管理</div>
+        <div class="card-sub">点击字典类型行展开/收起字典项 · 字典项可启停(停用后相关口径按演示逻辑隐藏)</div>
+        <div id="sysDictBody"></div>
+      </div>
+    </section>
+
+    <!-- 27. 登录日志 -->
+    <section class="page" id="page-loginlogs">
+      <div id="sysLoginSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">登录日志</div>
+        <div class="card-sub">最近 50 条后台登录记录 · IP 段与设备 UA 为演示模拟数据</div>
+        <div class="tbl-wrap" id="sysLoginBody"></div>
+      </div>
+    </section>
+
+    <!-- 28. 操作日志 -->
+    <section class="page" id="page-oplogs">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <input class="input search" id="opLogSearch" placeholder="🔍 搜索操作人 / 动作 / 对象" oninput="renderOpLogs()">
+          <select class="select" style="width:150px" id="opLogModuleSel" onchange="renderOpLogs()"><option value="">全部模块</option></select>
+        </div>
+        <span class="dim">最近 100 条后台操作 · 系统管理页的启停/保存动作会实时写入</span>
+      </div>
+      <div id="opLogSum" class="sum-row"></div>
+      <div class="card"><div class="tbl-wrap" id="opLogBody"></div></div>
+    </section>
+
   </div>
 </div>
 
@@ -669,7 +778,8 @@ function closeDrawer(){ $('#drawerRoot').innerHTML = ''; }
 var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'交易流水', crm:'客户管理',
              perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路', goals:'目标管理',
              risk:'风险事件', riskRules:'风险规则', riskLists:'黑白名单', riskTags:'风险标签',
-             recon:'对账中心', financeDiff:'差异清单', merchant:'商户结算', financeReport:'财务报表'};
+             recon:'对账中心', financeDiff:'差异清单', merchant:'商户结算', financeReport:'财务报表',
+             accounts:'账号管理', roles:'角色管理', perms:'权限配置', org:'组织架构', params:'系统参数', dicts:'字典管理', loginlogs:'登录日志', oplogs:'操作日志'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
@@ -681,7 +791,8 @@ var MENU = [
   {cap:'CRM 销售', items:[['crm','👥','客户管理'],['tx','💸','客户交易'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
   {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]},
   {cap:'风控中心', lv0:true, items:[['risk','🚨','风险事件'],['riskRules','📐','风险规则'],['riskLists','⛔','黑白名单'],['riskTags','🏷️','风险标签']]},
-  {cap:'财务结算', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]}
+  {cap:'财务结算', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]},
+  {cap:'系统管理', lv0:true, items:[['accounts','👤','账号管理'],['roles','🧩','角色管理'],['perms','🔐','权限配置'],['org','🌳','组织架构'],['params','⚙️','系统参数'],['dicts','📚','字典管理'],['loginlogs','📝','登录日志'],['oplogs','🗒️','操作日志']]}
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -1978,6 +2089,382 @@ LOADERS.financeReport = function(){
       '<div style="margin-top:10px"><a class="btn-outline btn-sm" href="#merchant" style="display:inline-block" onclick="closeDrawer()">去商户结算页处理 ›</a></div>';
   }).catch(function(e){ $('#reportSum').innerHTML = ''; $('#reportRecon').innerHTML = errBox(e); $('#reportMerchant').innerHTML = ''; });
 };
+
+/* ================= 21-28. P3 系统管理 ================= */
+var SYS_ACCOUNTS = [], SYS_ROLES = [], SYS_PERM = null, SYS_ORG = null, SYS_PARAMS = [], SYS_DICTS = [], SYS_LOGIN = [], SYS_OPLOGS = [];
+var SYS_ACCT_TAB = 'all';
+var ORG_EXPANDED = {}; // 组织树展开状态: id -> bool(缺省: 总监/一级展开)
+var DICT_OPEN = {};    // 字典类型展开状态: type -> bool
+function switchSysAcctTab(t){
+  SYS_ACCT_TAB = t;
+  $$('#sysAcctTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.t === t); });
+  renderSysAccounts();
+}
+/* ---- 21. 账号管理 ---- */
+LOADERS.accounts = function(){
+  $('#sysAcctBody').innerHTML = loadingBox(); $('#sysAcctSum').innerHTML = '';
+  api('/api/admin/sys/accounts').then(function(list){
+    SYS_ACCOUNTS = list || [];
+    renderSysAcctSum(); renderSysAccounts();
+  }).catch(function(e){ $('#sysAcctSum').innerHTML = ''; $('#sysAcctBody').innerHTML = errBox(e); });
+};
+function renderSysAcctSum(){
+  var en = SYS_ACCOUNTS.filter(function(a){ return a.enabled; }).length;
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#sysAcctSum').innerHTML =
+    sc('👤', '#e0e7ff', String(SYS_ACCOUNTS.length), '后台账号总数') +
+    sc('💼', '#e0f2fe', String(SYS_ACCOUNTS.filter(function(a){ return a.type === 'sales'; }).length), '销售账号 · 映射自销售组织') +
+    sc('🛠️', '#fef3c7', String(SYS_ACCOUNTS.filter(function(a){ return a.type === 'platform'; }).length), '平台账号 · 运营/财务/风控') +
+    sc('✅', '#dcfce7', String(en), '启用中') +
+    sc('⛔', '#fee2e2', String(SYS_ACCOUNTS.length - en), '已禁用');
+}
+function renderSysAccounts(){
+  var kw = ($('#sysAcctSearch').value || '').trim().toLowerCase();
+  var list = SYS_ACCOUNTS.filter(function(a){
+    return (SYS_ACCT_TAB === 'all' || a.type === SYS_ACCT_TAB) &&
+      (!kw || (a.username + ' ' + a.name + ' ' + a.roleName + ' ' + a.org).toLowerCase().indexOf(kw) >= 0);
+  });
+  if (!list.length){ $('#sysAcctBody').innerHTML = emptyBox('没有匹配的账号'); return; }
+  var rows = list.map(function(a){
+    return '<tr>' +
+      '<td class="num" style="font-weight:600">' + esc(a.username) + '</td>' +
+      '<td><b>' + esc(a.name) + '</b><div class="sub-line">' + (a.type === 'sales' ? '销售账号' : '平台账号') + '</div></td>' +
+      '<td><span class="pill pill-indigo">' + esc(a.roleName) + '</span></td>' +
+      '<td class="dim">' + esc(a.org) + '</td>' +
+      '<td class="num dim">' + esc(a.phone) + '</td>' +
+      '<td class="dim">' + esc(a.email) + '</td>' +
+      '<td>' + (a.enabled ? '<span class="pill pill-green">启用</span>' : '<span class="pill pill-red">禁用</span>') + '</td>' +
+      '<td class="dim num">' + fmtTime(a.lastLoginAt) + '</td>' +
+      '<td class="dim num">' + fmtTime(a.createdAt) + '</td>' +
+      '<td style="white-space:nowrap"><button class="' + (a.enabled ? 'btn-danger' : 'btn-ok-sm') + '" onclick="toggleSysAccount(' + a.id + ',' + a.enabled + ')">' + (a.enabled ? '禁用' : '启用') + '</button> ' +
+        '<button class="btn-outline btn-sm" onclick="resetSysPwd(' + a.id + ')">重置密码</button></td></tr>';
+  }).join('');
+  $('#sysAcctBody').innerHTML = '<table><thead><tr><th>账号</th><th>姓名</th><th>角色</th><th>所属组织</th><th>手机</th><th>邮箱</th><th>状态</th><th>最后登录</th><th>创建时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function toggleSysAccount(id, wasEnabled){
+  patch('/api/admin/sys/accounts/' + id, { enabled: !wasEnabled }).then(function(r){
+    toast(wasEnabled ? '已禁用账号: ' + r.account.name + ', 该账号将无法登录后台' : '已启用账号: ' + r.account.name);
+    LOADERS.accounts();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+function resetSysPwd(id){
+  var a = null;
+  SYS_ACCOUNTS.forEach(function(x){ if (x.id === id) a = x; });
+  if (!a) return;
+  showModal('🔑 重置密码',
+    '<div class="notice" style="margin-bottom:14px">将把账号 <b>' + esc(a.username) + '</b>(' + esc(a.name) + ') 的密码重置为系统初始密码(演示动作, 不真改密码)。</div>' +
+    '<div class="form-foot"><button class="btn-outline" onclick="closeModal()">取消</button><button class="btn" onclick="doResetSysPwd(' + id + ')">确认重置</button></div>');
+}
+function doResetSysPwd(id){
+  patch('/api/admin/sys/accounts/' + id, { resetPwd: true }).then(function(r){
+    closeModal();
+    toast('已重置 ' + r.account.name + ' 的密码(演示), 初始密码 ' + r.initPwd);
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 22. 角色管理 ---- */
+LOADERS.roles = function(){
+  $('#sysRoleBody').innerHTML = loadingBox(); $('#sysRoleSum').innerHTML = '';
+  api('/api/admin/sys/roles').then(function(d){
+    SYS_ROLES = d.list || [];
+    renderSysRoles();
+  }).catch(function(e){ $('#sysRoleSum').innerHTML = ''; $('#sysRoleBody').innerHTML = errBox(e); });
+};
+function renderSysRoles(){
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  var builtin = SYS_ROLES.filter(function(r){ return r.builtin; }).length;
+  var members = SYS_ROLES.reduce(function(s, r){ return s + nz(r.memberCount); }, 0);
+  $('#sysRoleSum').innerHTML =
+    sc('🧩', '#e0e7ff', String(SYS_ROLES.length), '角色总数 · 内置 ' + builtin + ' 个') +
+    sc('👥', '#e0f2fe', String(members), '有成员角色的账号数合计') +
+    sc('🔐', '#fef3c7', String(SYS_ROLES.length ? SYS_ROLES[0].permCount : 0) + ' 项', (SYS_ROLES[0] ? SYS_ROLES[0].name : '') + ' · 权限最多');
+  if (!SYS_ROLES.length){ $('#sysRoleBody').innerHTML = emptyBox('暂无角色'); return; }
+  var rows = SYS_ROLES.map(function(r){
+    return '<tr>' +
+      '<td><b>' + esc(r.name) + '</b></td>' +
+      '<td class="num dim">' + esc(r.code) + '</td>' +
+      '<td style="max-width:280px;white-space:normal;font-size:12.5px;color:var(--ink2)">' + esc(r.desc) + '</td>' +
+      '<td class="num"><b>' + nz(r.memberCount) + '</b> 个账号</td>' +
+      '<td class="num">' + nz(r.permCount) + ' 项权限</td>' +
+      '<td>' + (r.builtin ? '<span class="pill pill-blue">内置</span>' : '<span class="pill pill-gray">自定义</span>') + '</td>' +
+      '<td>' + '<button class="btn-link" onclick="viewRolePerm(\'' + esc(r.code) + '\')">权限树 ›</button> ' +
+        '<a class="btn-link" href="#perms" onclick="gotoPermRole(\'' + esc(r.code) + '\')">去配置</a></td></tr>';
+  }).join('');
+  $('#sysRoleBody').innerHTML = '<table><thead><tr><th>角色名</th><th>编码</th><th>描述</th><th>成员数</th><th>权限数</th><th>类型</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function gotoPermRole(code){
+  PERM_PENDING = code; // perms 页加载后应用
+}
+/* 角色权限树抽屉: 每模块动作勾选概览 */
+function viewRolePerm(code){
+  showDrawer('🔐 权限树', loadingBox('正在加载权限树…'));
+  api('/api/admin/sys/perms?role=' + encodeURIComponent(code)).then(function(d){
+    var checked = {};
+    (d.checked || []).forEach(function(k){ checked[k] = true; });
+    var rows = (d.tree || []).map(function(m){
+      var cnt = 0;
+      var acts = m.actions.map(function(a){
+        if (checked[a[0]]) cnt++;
+        return '<span class="pill ' + (checked[a[0]] ? 'pill-green' : 'pill-gray') + '" style="margin:0 4px 4px 0">' + esc(a[1]) + (checked[a[0]] ? ' ✓' : '') + '</span>';
+      }).join('');
+      return '<tr><td style="min-width:96px"><b>' + esc(m.label) + '</b></td><td style="white-space:normal">' + acts + '</td><td class="num">' + cnt + '/' + m.actions.length + '</td></tr>';
+    }).join('');
+    showDrawer('🔐 ' + esc(d.role.name) + ' 权限树',
+      '<div class="kyc-meta" style="margin-bottom:12px">' + esc(d.role.desc || '') + '<br>已勾选 <b class="num">' + (d.checked || []).length + '</b> / ' + nz(d.totalKeys) + ' 项权限</div>' +
+      '<div class="tbl-wrap"><table><thead><tr><th>模块</th><th>页面 / 操作</th><th>已授权</th></tr></thead><tbody>' + rows + '</tbody></table></div>',
+      '<div style="display:flex;gap:10px;justify-content:flex-end"><a class="btn" href="#perms" onclick="gotoPermRole(\'' + esc(code) + '\');closeDrawer()">去权限配置</a><button class="btn-outline" onclick="closeDrawer()">关闭</button></div>');
+  }).catch(function(e){ showDrawer('⚠️ 加载失败', '<div class="empty">' + esc(e.message) + '</div>'); });
+}
+/* ---- 23. 权限配置 ---- */
+var PERM_PENDING = null;
+LOADERS.perms = function(){
+  var fill = function(){
+    var sel = $('#permRoleSel');
+    var cur = PERM_PENDING || sel.value;
+    sel.innerHTML = SYS_ROLES.map(function(r){ return '<option value="' + esc(r.code) + '">' + esc(r.name) + ' · ' + esc(r.code) + '</option>'; }).join('');
+    if (cur) sel.value = cur;
+    PERM_PENDING = null;
+    loadPermTree();
+  };
+  if (SYS_ROLES.length) fill();
+  else api('/api/admin/sys/roles').then(function(d){ SYS_ROLES = d.list || []; fill(); })
+    .catch(function(e){ $('#permTreeCard').innerHTML = errBox(e); });
+};
+function loadPermTree(){
+  var code = $('#permRoleSel').value;
+  if (!code) return;
+  $('#permTreeCard').innerHTML = loadingBox('正在加载权限树…');
+  api('/api/admin/sys/perms?role=' + encodeURIComponent(code)).then(function(d){
+    SYS_PERM = d;
+    renderPermTree();
+  }).catch(function(e){ $('#permTreeCard').innerHTML = errBox(e); });
+}
+function renderPermTree(){
+  var d = SYS_PERM; if (!d) return;
+  var checked = {};
+  (d.checked || []).forEach(function(k){ checked[k] = true; });
+  var totalActs = (d.tree || []).reduce(function(s, m){ return s + m.actions.length; }, 0);
+  var mods = d.tree.map(function(m){
+    var acts = m.actions.map(function(a){
+      return '<label class="perm-act"><input type="checkbox" data-k="' + esc(a[0]) + '" data-mod="' + esc(m.key) + '"' + (checked[a[0]] ? ' checked' : '') + ' onchange="permCountUpdate()"> ' + esc(a[1]) + '</label>';
+    }).join('');
+    var all = m.actions.every(function(a){ return checked[a[0]]; });
+    return '<div class="perm-mod"><div class="perm-mod-head">' +
+      '<input type="checkbox" id="pm-' + esc(m.key) + '"' + (all ? ' checked' : '') + ' onchange="permToggleModule(\'' + esc(m.key) + '\', this.checked)"> ' +
+      '<b>' + esc(m.label) + '</b><span class="dim num" id="pmc-' + esc(m.key) + '" style="margin-left:auto"></span></div>' +
+      '<div class="perm-mod-acts">' + acts + '</div></div>';
+  }).join('');
+  $('#permTreeCard').innerHTML = '<div class="card-title">' + esc(d.role.name) + ' · 权限树</div>' +
+    '<div class="card-sub">' + esc(d.role.desc || '') + ' · 勾选动作后点右上角「保存权限」生效(内存) · 全部权限共 ' + totalActs + ' 项</div>' +
+    '<div class="perm-grid">' + mods + '</div>';
+  permCountUpdate();
+}
+function permToggleModule(mkey, on){
+  $$('#permTreeCard input[data-mod="' + esc(mkey) + '"]').forEach(function(cb){ cb.checked = on; });
+  permCountUpdate();
+}
+function permCountUpdate(){ // 同步每模块 x/y 计数与模块级全选框
+  var agg = {};
+  $$('#permTreeCard input[data-k]').forEach(function(cb){
+    var mk = cb.dataset.mod;
+    agg[mk] = agg[mk] || { tot: 0, on: 0 };
+    agg[mk].tot++; if (cb.checked) agg[mk].on++;
+  });
+  Object.keys(agg).forEach(function(mk){
+    var head = $('#pm-' + mk); if (head) head.checked = agg[mk].on === agg[mk].tot && agg[mk].tot > 0;
+    var cnt = $('#pmc-' + mk); if (cnt) cnt.textContent = agg[mk].on + '/' + agg[mk].tot;
+  });
+}
+function permCheckAll(on){
+  $$('#permTreeCard input[data-k]').forEach(function(cb){ cb.checked = on; });
+  permCountUpdate();
+}
+function savePerms(){
+  var code = $('#permRoleSel').value;
+  var checked = $$('#permTreeCard input[data-k]').filter(function(cb){ return cb.checked; }).map(function(cb){ return cb.dataset.k; });
+  patch('/api/admin/sys/perms', { role: code, checked: checked }).then(function(r){
+    toast('已保存: ' + r.checked.length + ' / ' + r.total + ' 项权限(内存生效)');
+    SYS_ROLES = []; // 让角色页的权限数重新拉取
+    api('/api/admin/sys/roles').then(function(d){ SYS_ROLES = d.list || []; }).catch(function(){});
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 24. 组织架构 ---- */
+var ORG_BAR = ['var(--grad)', '#4f46e5', '#818cf8', '#c7d2fe'];
+LOADERS.org = function(){
+  $('#sysOrgTree').innerHTML = loadingBox(); $('#sysOrgSum').innerHTML = '';
+  api('/api/admin/sys/org').then(function(d){
+    SYS_ORG = d;
+    renderOrgSum(); renderOrgTree();
+  }).catch(function(e){ $('#sysOrgSum').innerHTML = ''; $('#sysOrgTree').innerHTML = errBox(e); });
+};
+function renderOrgSum(){
+  var s = (SYS_ORG && SYS_ORG.summary) || {};
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#sysOrgSum').innerHTML =
+    sc('🌳', '#e0e7ff', String(nz(s.total)), '组织总人数 · 总监+三级销售体系') +
+    sc('🪜', '#e0f2fe', nz(s.l1) + ' / ' + nz(s.l2) + ' / ' + nz(s.l3), '一级 / 二级 / 三级销售') +
+    sc('👥', '#fef3c7', String(nz(s.customers)), 'CRM 客户总数') +
+    sc('💳', '#dcfce7', String(nz(s.cards)), '在册卡量');
+}
+function sysOrgNodeHtml(n){
+  var kids = n.children || [];
+  var open = ORG_EXPANDED[n.id] !== undefined ? ORG_EXPANDED[n.id] : (n.level <= 1);
+  var html = '<div class="org-node"><div class="org-bar" style="background:' + (ORG_BAR[n.level] || '#c7d2fe') + '"></div><div class="org-body">' +
+    '<div class="org-main">' + (kids.length ? '<span class="org-toggle" title="展开/折叠" onclick="toggleOrgNode(' + n.id + ')">' + (open ? '▾' : '▸') + '</span> ' : '<span class="org-toggle" style="visibility:hidden">▾</span> ') +
+    '<b>' + esc(n.name) + '</b> <span class="role-pill role-' + n.level + '">' + esc(n.role) + '</span>' +
+    (nz(n.teamSize) > 0 ? ' <span class="pill pill-indigo">👥 ' + nz(n.teamSize) + '</span>' : '') +
+    '<div class="sub-line">🌍 ' + esc(n.region) + ' · 名下客户 <b>' + nz(n.customers) + '</b> · 名下卡量 <b>' + nz(n.cards) + '</b></div></div>' +
+    '<div class="org-num"><div class="num" style="font-weight:700">' + nz(n.customers) + ' 客户</div><div class="sub-line num">' + nz(n.cards) + ' 张卡</div></div></div></div>';
+  if (kids.length && open) html += '<div class="org-children">' + kids.map(sysOrgNodeHtml).join('') + '</div>';
+  return html;
+}
+function sysOrgFind(nodes, id){
+  for (var i = 0; i < nodes.length; i++){
+    var n = nodes[i];
+    if (n.id === id) return n;
+    var f = sysOrgFind(n.children || [], id);
+    if (f) return f;
+  }
+  return null;
+}
+function toggleOrgNode(id){
+  var n = sysOrgFind((SYS_ORG && SYS_ORG.tree) || [], id);
+  var open = ORG_EXPANDED[id] !== undefined ? ORG_EXPANDED[id] : (n ? n.level <= 1 : false);
+  ORG_EXPANDED[id] = !open;
+  renderOrgTree();
+}
+function renderOrgTree(){
+  var tree = (SYS_ORG && SYS_ORG.tree) || [];
+  $('#sysOrgTree').innerHTML = tree.length ? tree.map(sysOrgNodeHtml).join('') : emptyBox('暂无组织数据');
+}
+/* ---- 25. 系统参数 ---- */
+LOADERS.params = function(){
+  $('#sysParamBody').innerHTML = loadingBox();
+  api('/api/admin/sys/params').then(function(d){
+    SYS_PARAMS = d.list || [];
+    renderSysParams();
+  }).catch(function(e){ $('#sysParamBody').innerHTML = errBox(e); });
+};
+function renderSysParams(){
+  if (!SYS_PARAMS.length){ $('#sysParamBody').innerHTML = emptyBox('暂无系统参数'); return; }
+  var rows = SYS_PARAMS.map(function(pm, i){
+    return '<tr>' +
+      '<td class="num" style="font-weight:600">' + esc(pm.key) + '</td>' +
+      '<td><b>' + esc(pm.label) + '</b><div class="sub-line">' + esc(pm.desc) + '</div></td>' +
+      '<td><input class="input num" id="pv-' + i + '" style="width:140px" value="' + esc(pm.value) + '"></td>' +
+      '<td class="dim num">' + fmtTime(pm.updatedAt) + '</td>' +
+      '<td><button class="btn-outline btn-sm" onclick="saveSysParam(' + i + ')">保存</button></td></tr>';
+  }).join('');
+  $('#sysParamBody').innerHTML = '<table><thead><tr><th>参数键</th><th>说明</th><th>参数值</th><th>更新时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function saveSysParam(i){
+  var pm = SYS_PARAMS[i]; if (!pm) return;
+  var v = ($('#pv-' + i).value || '').trim();
+  if (!v){ toast('参数值不能为空', 'warn'); return; }
+  if (v === String(pm.value)){ toast('参数值未变化', 'warn'); return; }
+  patch('/api/admin/sys/params/' + encodeURIComponent(pm.key), { value: v }).then(function(r){
+    toast('参数已保存: ' + r.param.label + ' = ' + r.param.value);
+    LOADERS.params();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 26. 字典管理 ---- */
+LOADERS.dicts = function(){
+  $('#sysDictBody').innerHTML = loadingBox();
+  api('/api/admin/sys/dicts').then(function(d){
+    SYS_DICTS = d.list || [];
+    renderSysDicts();
+  }).catch(function(e){ $('#sysDictBody').innerHTML = errBox(e); });
+};
+function renderSysDicts(){
+  if (!SYS_DICTS.length){ $('#sysDictBody').innerHTML = emptyBox('暂无字典类型'); return; }
+  $('#sysDictBody').innerHTML = SYS_DICTS.map(function(dt){
+    var open = !!DICT_OPEN[dt.type];
+    var onCnt = dt.items.filter(function(i2){ return i2.enabled; }).length;
+    var items = open ? '<div class="tbl-wrap"><table><thead><tr><th>键</th><th>值</th><th>标签</th><th>排序</th><th>状态</th><th>操作</th></tr></thead><tbody>' +
+      dt.items.map(function(it){
+        return '<tr><td class="num">' + esc(it.key) + '</td><td><b>' + esc(it.value) + '</b></td><td class="dim">' + esc(it.label) + '</td>' +
+          '<td class="num dim">' + nz(it.sort) + '</td>' +
+          '<td>' + (it.enabled ? '<span class="pill pill-green">启用</span>' : '<span class="pill pill-gray">停用</span>') + '</td>' +
+          '<td><button class="' + (it.enabled ? 'btn-danger' : 'btn-ok-sm') + '" onclick="toggleDictItem(' + it.id + ',' + it.enabled + ')">' + (it.enabled ? '停用' : '启用') + '</button></td></tr>';
+      }).join('') + '</tbody></table></div>' : '';
+    return '<div class="dict-group"><div class="dict-head" onclick="toggleDictGroup(\'' + esc(dt.type) + '\')">' +
+      '<span class="org-toggle">' + (open ? '▾' : '▸') + '</span><b>' + esc(dt.typeLabel) + '</b>' +
+      '<span class="dim num">' + esc(dt.type) + '</span>' +
+      '<span class="pill pill-indigo">' + dt.items.length + ' 项</span>' +
+      '<span class="dim">' + onCnt + ' 启用</span>' +
+      (dt.remark ? '<span class="dim">· ' + esc(dt.remark) + '</span>' : '') + '</div>' + items + '</div>';
+  }).join('');
+}
+function toggleDictGroup(t){
+  DICT_OPEN[t] = !DICT_OPEN[t];
+  renderSysDicts();
+}
+function toggleDictItem(id, wasOn){
+  patch('/api/admin/sys/dicts/' + id, { enabled: !wasOn }).then(function(r){
+    toast((wasOn ? '已停用字典项: ' : '已启用字典项: ') + r.item.value);
+    LOADERS.dicts();
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+/* ---- 27. 登录日志 ---- */
+LOADERS.loginlogs = function(){
+  $('#sysLoginBody').innerHTML = loadingBox(); $('#sysLoginSum').innerHTML = '';
+  api('/api/admin/sys/loginlogs').then(function(d){
+    SYS_LOGIN = d.list || [];
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#sysLoginSum').innerHTML =
+      sc('📝', '#e0e7ff', String(nz(s.total)), '登录记录(近 50 条)') +
+      sc('✅', '#dcfce7', String(nz(s.ok)), '登录成功') +
+      sc('⚠️', '#fee2e2', String(nz(s.fail)), '登录失败') +
+      sc('👥', '#e0f2fe', String(nz(s.accounts)), '涉及账号数');
+    if (!SYS_LOGIN.length){ $('#sysLoginBody').innerHTML = emptyBox('暂无登录记录'); return; }
+    var rows = SYS_LOGIN.map(function(l){
+      return '<tr>' +
+        '<td class="dim num">' + fmtTime(l.createdAt) + '</td>' +
+        '<td><b class="num">' + esc(l.username) + '</b><div class="sub-line">' + esc(l.name) + '</div></td>' +
+        '<td class="dim">' + esc(l.role) + '</td>' +
+        '<td class="num dim">' + esc(l.ip) + '</td>' +
+        '<td class="dim">' + esc(l.ua) + '</td>' +
+        '<td>' + (l.result === '成功' ? '<span class="pill pill-green">成功</span>' : '<span class="pill pill-red">' + esc(l.result) + '</span>') + '</td></tr>';
+    }).join('');
+    $('#sysLoginBody').innerHTML = '<table><thead><tr><th>时间</th><th>账号</th><th>角色</th><th>IP(模拟)</th><th>设备 UA 摘要</th><th>结果</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }).catch(function(e){ $('#sysLoginSum').innerHTML = ''; $('#sysLoginBody').innerHTML = errBox(e); });
+};
+/* ---- 28. 操作日志 ---- */
+LOADERS.oplogs = function(){
+  $('#opLogBody').innerHTML = loadingBox(); $('#opLogSum').innerHTML = '';
+  api('/api/admin/sys/oplogs').then(function(d){
+    SYS_OPLOGS = d.list || [];
+    var s = d.summary || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#opLogSum').innerHTML =
+      sc('🗒️', '#e0e7ff', String(nz(s.total)), '后台操作记录') +
+      sc('✅', '#dcfce7', String(nz(s.ok)), '成功') +
+      sc('⚠️', '#fee2e2', String(nz(s.fail)), '失败');
+    var mods = [];
+    SYS_OPLOGS.forEach(function(o){ if (o.module && mods.indexOf(o.module) < 0) mods.push(o.module); });
+    var sel = $('#opLogModuleSel'); var cur = sel.value;
+    sel.innerHTML = '<option value="">全部模块</option>' + mods.map(function(m){ return '<option' + (m === cur ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('');
+    renderOpLogs();
+  }).catch(function(e){ $('#opLogSum').innerHTML = ''; $('#opLogBody').innerHTML = errBox(e); });
+};
+function renderOpLogs(){
+  var kw = ($('#opLogSearch').value || '').trim().toLowerCase();
+  var mod = $('#opLogModuleSel') ? $('#opLogModuleSel').value : '';
+  var list = SYS_OPLOGS.filter(function(o){
+    return (!mod || o.module === mod) && (!kw || (o.operator + ' ' + o.module + ' ' + o.action + ' ' + o.target).toLowerCase().indexOf(kw) >= 0);
+  });
+  if (!list.length){ $('#opLogBody').innerHTML = emptyBox('没有匹配的操作记录'); return; }
+  var rows = list.map(function(o){
+    return '<tr>' +
+      '<td class="dim num">' + fmtTime(o.createdAt) + '</td>' +
+      '<td><b>' + esc(o.operator) + '</b></td>' +
+      '<td><span class="pill pill-indigo">' + esc(o.module) + '</span></td>' +
+      '<td><b>' + esc(o.action) + '</b></td>' +
+      '<td style="max-width:320px;white-space:normal;font-size:12.5px;color:var(--ink2)">' + esc(o.target) + '</td>' +
+      '<td>' + (o.result === '成功' ? '<span class="pill pill-green">成功</span>' : '<span class="pill pill-red">失败</span>') + '</td></tr>';
+  }).join('');
+  $('#opLogBody').innerHTML = '<table><thead><tr><th>时间</th><th>操作人</th><th>模块</th><th>动作</th><th>对象摘要</th><th>结果</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
 
 /* ================= 登录 / 身份 ================= */
 function renderAccounts(list){
