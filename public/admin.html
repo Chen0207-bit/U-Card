@@ -613,6 +613,79 @@
       </div>
     </section>
 
+    <!-- 20.5 资金账本: 账户总览 (P4.4) -->
+    <section class="page" id="page-ledgerAccounts">
+      <div class="toolbar">
+        <div class="tabs" id="ledgerAcctTabs">
+          <button class="tab active" data-t="" onclick="switchLedgerAcctTab('')">📒 全部账户</button>
+          <button class="tab" data-t="channel" onclick="switchLedgerAcctTab('channel')">🏦 资金渠道</button>
+          <button class="tab" data-t="card" onclick="switchLedgerAcctTab('card')">💳 用户卡账户</button>
+          <button class="tab" data-t="merchant" onclick="switchLedgerAcctTab('merchant')">🏪 商户待结算</button>
+          <button class="tab" data-t="income" onclick="switchLedgerAcctTab('income')">📈 平台收入</button>
+          <button class="tab" data-t="expense" onclick="switchLedgerAcctTab('expense')">📉 平台支出</button>
+        </div>
+        <button class="btn-outline" onclick="verifyLedgerNow()">🔍 试算平衡校验</button>
+      </div>
+      <div id="ledgerAcctSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">账本账户</div>
+        <div class="card-sub">复式记账 · 借=资产/支出增加 · 贷=负债/收入增加 · 点击「流水明细」查看单账户 365 天动账</div>
+        <div class="tbl-wrap" id="ledgerAcctBody"></div>
+      </div>
+    </section>
+
+    <!-- 20.6 资金账本: 资金流水 -->
+    <section class="page" id="page-ledgerEntries">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select class="select" style="width:230px" id="ledgerEntryAcct" onchange="LOADERS.ledgerEntries()"></select>
+          <select class="select" style="width:140px" id="ledgerEntryType" onchange="LOADERS.ledgerEntries()">
+            <option value="">全部类型</option>
+            <option value="channel">资金渠道</option>
+            <option value="card">用户卡账户</option>
+            <option value="merchant">商户待结算</option>
+            <option value="income">平台收入</option>
+            <option value="expense">平台支出</option>
+          </select>
+          <select class="select" style="width:130px" id="ledgerEntryDays" onchange="LOADERS.ledgerEntries()">
+            <option value="7">近 7 天</option>
+            <option value="14">近 14 天</option>
+            <option value="30" selected>近 30 天</option>
+            <option value="365">近 1 年</option>
+            <option value="">全部</option>
+          </select>
+        </div>
+        <button class="btn-outline" onclick="LOADERS.ledgerEntries()">🔄 刷新</button>
+      </div>
+      <div id="ledgerEntrySum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">资金流水明细 <span class="dim" id="ledgerEntryCount"></span></div>
+        <div class="card-sub">按时间倒序 · 只追加、永不修改 · 同一业务单借贷合计必须相等</div>
+        <div class="tbl-wrap" id="ledgerEntryBody"></div>
+      </div>
+    </section>
+
+    <!-- 20.7 资金账本: 余额快照 -->
+    <section class="page" id="page-ledgerSnapshots">
+      <div id="ledgerSnapSum" class="sum-row"></div>
+      <div class="card">
+        <div class="card-title">每日账户总余额趋势(近 14 天)</div>
+        <div class="card-sub">总余额 = 资金渠道 + 用户卡负债 + 商户待结算 + 平台收入 - 平台支出 · 当日为实时重算值</div>
+        <div id="ledgerSnapChart"></div>
+      </div>
+      <div class="dash-grid">
+        <div class="card">
+          <div class="card-title">每日分类余额</div>
+          <div class="tbl-wrap" id="ledgerSnapBody"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">冻结余额</div>
+          <div class="card-sub">监管/风控冻结 · 不参与可用余额计算</div>
+          <div class="tbl-wrap" id="ledgerFrozenBody"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- 21. 账号管理 (P3 系统管理) -->
     <section class="page" id="page-accounts">
       <div class="toolbar">
@@ -779,7 +852,8 @@ var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'�
              perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路', goals:'目标管理',
              risk:'风险事件', riskRules:'风险规则', riskLists:'黑白名单', riskTags:'风险标签',
              recon:'对账中心', financeDiff:'差异清单', merchant:'商户结算', financeReport:'财务报表',
-             accounts:'账号管理', roles:'角色管理', perms:'权限配置', org:'组织架构', params:'系统参数', dicts:'字典管理', loginlogs:'登录日志', oplogs:'操作日志'};
+             ledgerAccounts:'账户总览', ledgerEntries:'资金流水', ledgerSnapshots:'余额快照',
+             accounts:'账号管理', roles:'角色管理', perms:'权限配置', org:'组织架构', params:'系统参数', dicts:'字典管理', loginlogs:'登录日志', oplogs:'操作日志',
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
@@ -792,7 +866,8 @@ var MENU = [
   {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]},
   {cap:'风控中心', lv0:true, items:[['risk','🚨','风险事件'],['riskRules','📐','风险规则'],['riskLists','⛔','黑白名单'],['riskTags','🏷️','风险标签']]},
   {cap:'财务结算', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]},
-  {cap:'系统管理', lv0:true, items:[['accounts','👤','账号管理'],['roles','🧩','角色管理'],['perms','🔐','权限配置'],['org','🌳','组织架构'],['params','⚙️','系统参数'],['dicts','📚','字典管理'],['loginlogs','📝','登录日志'],['oplogs','🗒️','操作日志']]}
+  {cap:'资金账本', lv0:true, items:[['ledgerAccounts','📒','账户总览'],['ledgerEntries','🧾','资金流水'],['ledgerSnapshots','📸','余额快照']]},
+  {cap:'系统管理', lv0:true, items:[['accounts','👤','账号管理'],['roles','🧩','角色管理'],['perms','🔐','权限配置'],['org','🌳','组织架构'],['params','⚙️','系统参数'],['dicts','📚','字典管理'],['loginlogs','📝','登录日志'],['oplogs','🗒️','操作日志']]},
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -2464,6 +2539,190 @@ function renderOpLogs(){
       '<td>' + (o.result === '成功' ? '<span class="pill pill-green">成功</span>' : '<span class="pill pill-red">失败</span>') + '</td></tr>';
   }).join('');
   $('#opLogBody').innerHTML = '<table><thead><tr><th>时间</th><th>操作人</th><th>模块</th><th>动作</th><th>对象摘要</th><th>结果</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+/* ================= 20.5-20.7 资金账本 (P4.4, 总监专属) ================= */
+var LEDGER_ACCOUNTS = [];      // 账户下拉缓存
+var LEDGER_ACCT_TAB = '';      // 账户总览类型筛选
+var LEDGER_ACCT_DATA = null;   // accounts 接口缓存(tab 切换时本地重渲染, 不重复请求)
+var LEDGER_TYPE_PILL = { channel: 'pill-blue', card: 'pill-indigo', merchant: 'pill-amber', income: 'pill-green', expense: 'pill-gray' };
+var LEDGER_TX_LABEL = { RF: '↩️ 退款冲正', ORD: '🎁 积分兑换', COMM: '💰 佣金打款', FEE: '💳 开卡月费', OPEN: '📐 期初余额', ADJ: '🔧 人工调账' };
+function ledgerTypePill(t, label){
+  return '<span class="pill ' + (LEDGER_TYPE_PILL[t] || 'pill-gray') + '">' + esc(label || t) + '</span>';
+}
+function ledgerTxLabel(txId){
+  var s = String(txId == null ? '' : txId);
+  var m = s.match(/^([A-Z]+)/);
+  var pre = m ? m[1] : '';
+  return (LEDGER_TX_LABEL[pre] || '#业务单 ') + esc(s);
+}
+function switchLedgerAcctTab(t){
+  LEDGER_ACCT_TAB = t;
+  var btns = document.querySelectorAll('#ledgerAcctTabs .tab');
+  for (var i = 0; i < btns.length; i++){ btns[i].className = 'tab' + (btns[i].getAttribute('data-t') === t ? ' active' : ''); }
+  renderLedgerAccounts();
+}
+function verifyLedgerNow(){
+  toast('试算平衡校验中…');
+  api('/api/admin/ledger/verify').then(function(v){
+    var st = v.stats || {};
+    if (v.balanced && v.accountsConsistent){
+      showModal('✅ 试算平衡校验通过',
+        '<div class="sum-row">' +
+        '<div class="sum-card"><div class="v num">' + nz(st.accounts) + '</div><div class="k">账本账户</div></div>' +
+        '<div class="sum-card"><div class="v num">' + nz(st.txCount) + '</div><div class="k">业务单(借贷平衡)</div></div>' +
+        '<div class="sum-card"><div class="v num">' + nz(st.entries) + '</div><div class="k">累计分录</div></div>' +
+        '<div class="sum-card"><div class="v num">' + nz(st.snapshots) + '</div><div class="k">余额快照</div></div>' +
+        '</div><div class="card-sub">任一业务单借贷合计相等 · 所有账户余额 = 末条流水 balanceAfter · 每张卡账本余额 = 卡余额</div>');
+    } else {
+      showModal('⚠️ 试算平衡校验未通过 · ' + (v.errors || []).length + ' 项问题',
+        '<div class="tbl-wrap"><table><thead><tr><th>#</th><th>问题描述</th></tr></thead><tbody>' +
+        (v.errors || []).map(function(e, i){ return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(e) + '</td></tr>'; }).join('') +
+        '</tbody></table></div>');
+    }
+  }).catch(function(e){ toast(e.message, 'err'); });
+}
+LOADERS.ledgerAccounts = function(){
+  $('#ledgerAcctBody').innerHTML = loadingBox(); $('#ledgerAcctSum').innerHTML = '';
+  api('/api/admin/ledger/accounts').then(function(d){
+    LEDGER_ACCT_DATA = d; LEDGER_ACCOUNTS = d.list || [];
+    renderLedgerAccounts();
+  }).catch(function(e){ $('#ledgerAcctBody').innerHTML = errBox(e); });
+};
+function renderLedgerAccounts(){
+  var d = LEDGER_ACCT_DATA; if (!d) return;
+  var s = d.summary || {}, by = s.byType || {};
+  var list = (d.list || []).filter(function(a){ return !LEDGER_ACCT_TAB || a.type === LEDGER_ACCT_TAB; });
+  var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+  $('#ledgerAcctSum').innerHTML =
+    sc('📒', '#e0e7ff', String(nz(s.accounts)), '账本账户') +
+    sc('🧾', '#fef3c7', String(nz(s.entries)), '累计分录(只追加)') +
+    sc('🏦', '#e0f2fe', fmtMoney0(nz(by.channel)), '资金渠道资产') +
+    sc('💳', '#fce7f3', fmtMoney0(nz(by.card)), '用户卡负债') +
+    sc('🏪', '#dcfce7', fmtMoney0(nz(by.merchant)), '商户待结算负债') +
+    sc('🧊', '#fee2e2', fmtMoney0(nz(s.frozenTotal)), '冻结余额合计');
+  if (!list.length){ $('#ledgerAcctBody').innerHTML = emptyBox('该类型暂无账户'); return; }
+  $('#ledgerAcctBody').innerHTML = '<table><thead><tr><th>账户</th><th>类型</th><th>余额</th><th>冻结</th><th>累计动账</th><th>近 7 天</th><th>最后动账</th><th></th></tr></thead><tbody>' +
+    list.map(function(a){
+      return '<tr>' +
+        '<td><b>' + esc(a.name) + '</b><div class="dim num" style="font-size:11px">' + esc(a.key) + '</div></td>' +
+        '<td>' + ledgerTypePill(a.type, a.typeLabel) + '</td>' +
+        '<td class="num" style="font-weight:600">' + fmtMoney(a.balance) + '</td>' +
+        '<td class="num">' + (nz(a.frozen) > 0 ? '<span class="pill pill-red">' + fmtMoney0(a.frozen) + '</span>' : '<span class="dim">—</span>') + '</td>' +
+        '<td class="num">' + nz(a.entryCount) + '</td>' +
+        '<td class="num">' + (nz(a.recentCount) > 0 ? '+' + nz(a.recentCount) : '<span class="dim">0</span>') + '</td>' +
+        '<td class="dim num">' + (a.lastEntryAt ? fmtTime(a.lastEntryAt) : '—') + '</td>' +
+        '<td><button class="btn btn-sm" onclick="openLedgerAcctDrawer(\'' + esc(a.key) + '\')">流水明细 ›</button></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function openLedgerAcctDrawer(key){
+  showDrawer('🧾 账户流水 · ' + esc(key), loadingBox());
+  api('/api/admin/ledger/entries?account=' + encodeURIComponent(key) + '&days=365').then(function(d){
+    var list = d.list || [], s = d.summary || {};
+    var a = null; LEDGER_ACCOUNTS.forEach(function(x){ if (x.key === key) a = x; });
+    var head =
+      (a ? '<div class="card-sub" style="padding:0 0 6px">' + ledgerTypePill(a.type, a.typeLabel) + ' 当前余额 <b class="num">' + fmtMoney(a.balance) + '</b>' + (nz(a.frozen) > 0 ? ' · 冻结 <b class="num" style="color:var(--bad)">' + fmtMoney(a.frozen) + '</b>' : '') + '</div>' : '') +
+      '<div class="dim num" style="padding:0 0 8px">近 365 天 ' + nz(s.count) + ' 条 · 借方合计 ' + fmtMoney(s.debitTotal) + ' · 贷方合计 ' + fmtMoney(s.creditTotal) + '</div>';
+    if (!list.length){ showDrawer('🧾 账户流水 · ' + esc(key), head + emptyBox('该账户近 1 年无动账')); return; }
+    showDrawer('🧾 账户流水 · ' + esc(key), head +
+      '<div class="tbl-wrap"><table><thead><tr><th>时间</th><th>业务单</th><th>借</th><th>贷</th><th>记账后余额</th><th>摘要</th></tr></thead><tbody>' +
+      list.map(function(e){ return ledgerEntryRow(e, false); }).join('') + '</tbody></table></div>');
+  }).catch(function(e){ showDrawer('🧾 账户流水 · ' + esc(key), errBox(e)); });
+}
+function ledgerEntryRow(e, withAccount){
+  return '<tr>' +
+    '<td class="dim num" style="white-space:nowrap">' + fmtTime(e.createdAt) + '</td>' +
+    (withAccount ? '<td><div style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(e.accountName) + '">' + esc(e.accountName) + '</div><div class="dim num" style="font-size:11px">' + esc(e.accountKey) + '</div></td>' : '') +
+    '<td class="num" style="white-space:nowrap"><span class="pill pill-gray">' + ledgerTxLabel(e.txId) + '</span></td>' +
+    '<td class="num">' + (e.dir === 'debit' ? '<b class="num" style="color:var(--bad)">' + fmtMoney(e.amount) + '</b>' : '<span class="dim">—</span>') + '</td>' +
+    '<td class="num">' + (e.dir === 'credit' ? '<b class="num" style="color:var(--ok)">' + fmtMoney(e.amount) + '</b>' : '<span class="dim">—</span>') + '</td>' +
+    '<td class="num">' + fmtMoney(e.balanceAfter) + '</td>' +
+    '<td class="dim">' + esc(e.memo) + '</td></tr>';
+}
+LOADERS.ledgerEntries = function(){
+  var fillAcctSel = function(){
+    var sel = $('#ledgerEntryAcct');
+    if (sel && !sel.options.length){
+      sel.innerHTML = '<option value="">全部账户</option>' + LEDGER_ACCOUNTS.map(function(a){
+        return '<option value="' + esc(a.key) + '">' + esc(a.typeLabel + ' · ' + a.name) + '</option>'; }).join('');
+    }
+  };
+  var go = function(){
+    fillAcctSel();
+    var qs = '?account=' + encodeURIComponent(($('#ledgerEntryAcct') || {}).value || '') +
+      '&type=' + encodeURIComponent(($('#ledgerEntryType') || {}).value || '') +
+      '&days=' + encodeURIComponent(($('#ledgerEntryDays') || {}).value || '');
+    $('#ledgerEntryBody').innerHTML = loadingBox(); $('#ledgerEntrySum').innerHTML = '';
+    api('/api/admin/ledger/entries' + qs).then(function(d){
+      var list = d.list || [], s = d.summary || {};
+      var txs = {}; list.forEach(function(e){ txs[e.txId] = 1; });
+      var txCount = Object.keys(txs).length;
+      var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+      $('#ledgerEntrySum').innerHTML =
+        sc('🧾', '#e0e7ff', String(nz(s.count)), '分录数(当前筛选)') +
+        sc('🔗', '#fef3c7', String(txCount), '涉及业务单数') +
+        sc('🔴', '#fee2e2', fmtMoney0(nz(s.debitTotal)), '借方合计(资产/支出增加)') +
+        sc('🟢', '#dcfce7', fmtMoney0(nz(s.creditTotal)), '贷方合计(负债/收入增加)');
+      $('#ledgerEntryCount').textContent = '(当前筛选 ' + nz(s.count) + ' 条 · 上限 500)';
+      if (!list.length){ $('#ledgerEntryBody').innerHTML = emptyBox('当前筛选条件下无流水'); return; }
+      $('#ledgerEntryBody').innerHTML = '<table><thead><tr><th>时间</th><th>账户</th><th>业务单</th><th>借</th><th>贷</th><th>记账后余额</th><th>摘要</th></tr></thead><tbody>' +
+        list.map(function(e){ return ledgerEntryRow(e, true); }).join('') + '</tbody></table>';
+    }).catch(function(e){ $('#ledgerEntryBody').innerHTML = errBox(e); });
+  };
+  if (!LEDGER_ACCOUNTS.length){
+    api('/api/admin/ledger/accounts').then(function(d){ LEDGER_ACCOUNTS = d.list || []; go(); })
+      .catch(function(e){ $('#ledgerEntryBody').innerHTML = errBox(e); });
+  } else go();
+};
+LOADERS.ledgerSnapshots = function(){
+  $('#ledgerSnapBody').innerHTML = loadingBox(); $('#ledgerFrozenBody').innerHTML = loadingBox();
+  $('#ledgerSnapSum').innerHTML = ''; $('#ledgerSnapChart').innerHTML = loadingBox();
+  api('/api/admin/ledger/snapshots').then(function(d){
+    var rows = d.rows || [], cur = d.current || {};
+    var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + v + '</div><div class="k">' + k + '</div></div></div>'; };
+    $('#ledgerSnapSum').innerHTML =
+      sc('⚖️', '#e0e7ff', fmtMoney0(nz(cur.total)), '当前账本总余额') +
+      sc('🏦', '#e0f2fe', fmtMoney0(nz(cur.channel)), '资金渠道资产') +
+      sc('💳', '#fce7f3', fmtMoney0(nz(cur.card)), '用户卡负债') +
+      sc('🏪', '#dcfce7', fmtMoney0(nz(cur.merchant)), '商户待结算负债') +
+      sc('🧊', '#fee2e2', fmtMoney0(nz(d.frozenTotal)), '冻结余额');
+    // 14 天总余额趋势条形图(纯 inline style flex, 不新增 CSS)
+    if (rows.length){
+      var max = 0; rows.forEach(function(r){ max = Math.max(max, nz(r.total)); });
+      max = max || 1;
+      $('#ledgerSnapChart').innerHTML = '<div style="display:flex;align-items:flex-end;gap:6px;height:170px;padding:10px 4px 0">' +
+        rows.map(function(r){
+          var h = Math.max(4, Math.round(nz(r.total) / max * 150));
+          var isToday = r.day === (cur.day || '');
+          return '<div style="flex:1;min-width:18px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%" title="' + esc(r.day) + ' · 总余额 ' + fmtMoney(r.total) + '">' +
+            '<div style="width:100%;border-radius:4px 4px 0 0;background:' + (isToday ? 'var(--pri2)' : 'var(--pri)') + ';height:' + h + 'px"></div>' +
+            '<div class="dim num" style="font-size:10px;margin-top:4px;white-space:nowrap">' + esc(String(r.day).slice(5)) + '</div></div>';
+        }).join('') + '</div>';
+    } else { $('#ledgerSnapChart').innerHTML = emptyBox('暂无快照数据'); }
+    // 每日分类余额(最新在前)
+    $('#ledgerSnapBody').innerHTML = '<table><thead><tr><th>日期</th><th>资金渠道</th><th>用户卡负债</th><th>商户待结算</th><th>平台收入</th><th>平台支出</th><th>总余额</th></tr></thead><tbody>' +
+      rows.slice().reverse().map(function(r){
+        var isToday = r.day === (cur.day || '');
+        return '<tr' + (isToday ? ' style="background:#eef2ff"' : '') + '>' +
+          '<td class="num"><b>' + esc(r.day) + '</b>' + (isToday ? ' <span class="pill pill-blue">今日实时</span>' : '') + '</td>' +
+          '<td class="num">' + fmtMoney(r.channel) + '</td>' +
+          '<td class="num">' + fmtMoney(r.card) + '</td>' +
+          '<td class="num">' + fmtMoney(r.merchant) + '</td>' +
+          '<td class="num">' + fmtMoney(r.income) + '</td>' +
+          '<td class="num">' + fmtMoney(r.expense) + '</td>' +
+          '<td class="num" style="font-weight:600">' + fmtMoney(r.total) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    // 冻结余额
+    var fz = d.frozen || [];
+    $('#ledgerFrozenBody').innerHTML = fz.length ? '<table><thead><tr><th>账户</th><th>金额</th><th>原因</th><th>时间</th><th>状态</th></tr></thead><tbody>' +
+      fz.map(function(f){
+        return '<tr><td><b>' + esc(f.accountName) + '</b><div class="dim num" style="font-size:11px">' + esc(f.accountKey) + '</div></td>' +
+          '<td class="num" style="font-weight:600;color:var(--bad)">' + fmtMoney(f.amount) + '</td>' +
+          '<td class="dim">' + esc(f.reason) + '</td>' +
+          '<td class="dim num" style="white-space:nowrap">' + fmtTime(f.createdAt) + '</td>' +
+          '<td><span class="pill pill-red">' + esc(f.status === 'frozen' ? '冻结中' : f.status) + '</span></td></tr>';
+      }).join('') + '</tbody></table>' : emptyBox('无冻结余额');
+  }).catch(function(e){ $('#ledgerSnapBody').innerHTML = errBox(e); $('#ledgerSnapChart').innerHTML = ''; });
 }
 
 /* ================= 登录 / 身份 ================= */

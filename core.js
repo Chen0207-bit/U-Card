@@ -319,6 +319,7 @@ sysDicts = [
 ];
 sysLogs = buildSysLoginLogs();
 opLogs = buildSysOpLogs();
+rebuildLedgerSeed(); // P4.4: 为种子交易回填复式账本(与卡余额自洽) + 14 天余额快照 + 演示冻结余额
   inited = true;
 }
 
@@ -350,6 +351,252 @@ function addCommissions(salesId, type, baseAmt, refId, ts) {
   }
 }
 
+// ---------------- P4.4 资金账本(复式记账): 模块级模型与工具 ----------------
+// 账户类型: channel=资金渠道(资产, 借增贷减) / card=用户卡账户(平台负债, 贷增借减) / merchant=商户待结算(负债, 贷增)
+//           income=平台收入(手续费/卡月费, 贷增) / expense=平台支出(佣金/积分成本, 借增)
+// 恒等式: ①任一业务单(txId) sum(借)===sum(贷) ②账户余额===流水重放===末条流水 balanceAfter ③卡账户余额===卡实际余额
+// 流水只追加、永不修改/删除; 退款走反向分录, 不冲销历史。
+let ledgerAccounts, ledgerEntries, balanceSnapshots, frozenBalances;
+const LEDGER_DEBIT_POSITIVE = { channel: true, expense: true, card: false, merchant: false, income: false };
+const LEDGER_TYPE_LABEL = { channel: '资金渠道', card: '用户卡账户', merchant: '商户待结算', income: '平台收入', expense: '平台支出' };
+const lgR2 = (x) => +(+x || 0).toFixed(2);
+const isoDay = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + d2(d.getMonth() + 1) + '-' + d2(d.getDate()); };
+function ensureLedgerAccount(key, type, name) {
+  let a = ledgerAccounts.find(x => x.key === key);
+  if (!a) { a = { key, type, name, balance: 0 }; ledgerAccounts.push(a); }
+  return a;
+}
+function ensureCardLedgerAccount(card) {
+  const u = users.find(x => x.id === card.userId);
+  return ensureLedgerAccount('card:' + card.id, 'card', '用户卡 · ' + (u ? u.name : 'UID ' + card.userId) + ' ' + maskCardNo(card.cardNo));
+}
+function ensureMerchantLedgerAccount(name) { return ensureLedgerAccount('merchant:' + name, 'merchant', '商户待结算 · ' + name); }
+// 追加一条流水(只增不改): 按账户类型×借贷方向确定余额增量, 记录 balanceAfter
+function postLedgerEntry(txId, accountKey, dir, amount, memo, ts) {
+  const acc = ledgerAccounts.find(a => a.key === accountKey);
+  if (!acc) { console.warn('[ledger] 未定义账户: ' + accountKey); return null; }
+  const amt = lgR2(amount);
+  if (!(amt > 0)) return null; // 零金额腿不入账
+  const sgn = ((dir === 'debit') === !!LEDGER_DEBIT_POSITIVE[acc.type]) ? 1 : -1;
+  acc.balance = lgR2(acc.balance + sgn * amt);
+  const e = { id: nid(), txId, accountKey, dir, amount: amt, balanceAfter: acc.balance, memo: memo || '', createdAt: ts };
+  ledgerEntries.push(e);
+  return e;
+}
+// 一组平衡分录: 借贷和必须相等(不等仅告警, 不阻断业务动作)
+function postLedgerTx(txId, memo, ts, legs) {
+  const d = lgR2(legs.filter(l => l.dir === 'debit').reduce((s, l) => s + l.amount, 0));
+  const c = lgR2(legs.filter(l => l.dir === 'credit').reduce((s, l) => s + l.amount, 0));
+  if (Math.abs(d - c) > 0.005) console.warn('[ledger] 借贷不平 tx=' + txId + ' 借 ' + d + ' / 贷 ' + c);
+  legs.forEach(l => postLedgerEntry(txId, l.key, l.dir, l.amount, l.memo || memo, ts));
+}
+// 消费拆腿: 现金部分(卡扣) 与 积分抵扣部分(计积分成本, 1 分=$0.01) —— 种子回填与运行时共用同一套算术, 保证卡账与卡余额严格一致
+function consumeLegSplit(amount, pointsUsed) {
+  const A = lgR2(amount);
+  const cash = lgR2(A - (pointsUsed || 0) / 100);
+  const pts = Math.max(0, lgR2(A - cash));
+  return { A, cash, pts, cardLeg: lgR2(A - pts) };
+}
+// ---- 业务动作记账(运行时与种子回填共用; 只追加分录, 不改既有业务行为) ----
+// 充值: 渠道 +amt / 用户卡 +(amt-fee) / 平台手续费 +fee
+function ledgerForTopup(tx, card) {
+  const ch = tx.method === 'usdt' ? 'channel:usdt' : 'channel:fiat';
+  ensureCardLedgerAccount(card);
+  postLedgerTx(tx.id, '充值入账 ' + (tx.method === 'usdt' ? 'USDT' : '法币'), tx.createdAt, [
+    { key: ch, dir: 'debit', amount: lgR2(tx.amount), memo: '渠道收款 · 用户充值 $' + lgR2(tx.amount).toFixed(2) + (tx.ref ? ' · ' + tx.ref : '') },
+    { key: 'card:' + card.id, dir: 'credit', amount: lgR2(lgR2(tx.amount) - lgR2(tx.fee)), memo: '充值入卡(扣手续费后净额)' },
+    { key: 'fee', dir: 'credit', amount: lgR2(tx.fee), memo: '充值手续费 $' + lgR2(tx.fee).toFixed(2) },
+  ]);
+}
+// 消费: 用户卡 -amt / 商户待结算 +(amt-fee) / 平台手续费 +fee; 积分抵扣部分计积分成本
+function ledgerForConsume(tx, card, payUsd) {
+  const { A, pts, cardLeg } = consumeLegSplit(tx.amount, tx.pointsUsed);
+  const cashLeg = payUsd != null ? lgR2(Math.min(payUsd, cardLeg)) : cardLeg; // 运行时传实测现金额(与拆腿口径一致)
+  ensureCardLedgerAccount(card);
+  ensureMerchantLedgerAccount(tx.merchant || '未知商户');
+  const legs = [
+    { key: 'card:' + card.id, dir: 'debit', amount: cashLeg, memo: '消费扣卡 · ' + (tx.merchant || '') + ' $' + A.toFixed(2) },
+    { key: 'merchant:' + (tx.merchant || '未知商户'), dir: 'credit', amount: lgR2(A - lgR2(tx.fee)), memo: '待结算净额(扣 2% 手续费)' },
+    { key: 'fee', dir: 'credit', amount: lgR2(tx.fee), memo: '消费手续费 $' + lgR2(tx.fee).toFixed(2) },
+  ];
+  if (pts > 0) legs.push({ key: 'pointscost', dir: 'debit', amount: pts, memo: '积分抵扣成本 · ' + (tx.pointsUsed || 0) + ' 分 × $0.01' });
+  postLedgerTx(tx.id, '消费 ' + (tx.merchant || '') + ' $' + A.toFixed(2), tx.createdAt, legs);
+}
+// 退款: 反向流水 卡 +amt / 商户待结算 -(amt-fee) / 手续费 -fee
+function ledgerForRefund(tx, ts) {
+  const A = lgR2(tx.amount), F = lgR2(tx.fee);
+  ensureMerchantLedgerAccount(tx.merchant || '未知商户');
+  postLedgerTx('RF' + tx.id, '退款冲正 · 消费 #' + tx.id + ' ' + (tx.merchant || ''), ts, [
+    { key: 'card:' + tx.cardId, dir: 'credit', amount: A, memo: '退款回卡 · 消费 #' + tx.id + ' 全额 $' + A.toFixed(2) },
+    { key: 'merchant:' + (tx.merchant || '未知商户'), dir: 'debit', amount: lgR2(A - F), memo: '冲回商户待结算净额' },
+    { key: 'fee', dir: 'debit', amount: F, memo: '冲回消费手续费 $' + F.toFixed(2) },
+  ]);
+}
+// 积分兑换: 积分成本 +pointsCost×$0.01, 由平台法币资金支付履约
+function ledgerForRedeem(order, product, ts) {
+  const pts = order.pointsCost || (product || {}).points || 0;
+  const cost = lgR2(pts * 0.01);
+  if (!(cost > 0)) return;
+  postLedgerTx('ORD' + order.id, '积分兑换 · ' + ((product || {}).name || '商品#' + order.productId), ts, [
+    { key: 'pointscost', dir: 'debit', amount: cost, memo: '兑换履约成本 · ' + pts + ' 分 × $0.01' },
+    { key: 'channel:fiat', dir: 'credit', amount: cost, memo: '平台资金支付兑换履约' },
+  ]);
+}
+// 卡月费: 开户/在册卡计提一笔月费收入(口径与财务报表 monthlyFeeIncome 一致, 不动卡余额)
+function ledgerForMonthlyFee(card, ts) {
+  const feeVal = lgR2((CARD_LEVELS[card.level] || {}).monthlyFee || 0);
+  if (!(feeVal > 0)) return;
+  postLedgerTx('FEE' + card.id, '卡月费计提 · ' + ((CARD_LEVELS[card.level] || {}).label || card.level), ts, [
+    { key: 'channel:fiat', dir: 'debit', amount: feeVal, memo: '月费从平台代管资金计提' },
+    { key: 'monthlyfee', dir: 'credit', amount: feeVal, memo: ((CARD_LEVELS[card.level] || {}).label || '') + ' $' + feeVal.toFixed(2) + '/月' },
+  ]);
+}
+// 佣金结算: 平台佣金支出累计, 法币渠道出金
+function ledgerForCommissionSettle(c, ts) {
+  if (!(c.amount > 0)) return;
+  const rep = repById(c.salesId);
+  postLedgerTx('COMM' + c.id, '佣金结算 · ' + (rep ? rep.name : '销售#' + c.salesId) + ' ' + c.typeLabel + (c.tierLabel ? '(' + c.tierLabel + ')' : ''), ts, [
+    { key: 'commission', dir: 'debit', amount: lgR2(c.amount), memo: '佣金打款 · ' + (c.rate || '') + ' · 基数 $' + lgR2(c.baseAmt).toFixed(2) },
+    { key: 'channel:fiat', dir: 'credit', amount: lgR2(c.amount), memo: '渠道出金支付佣金' },
+  ]);
+}
+// 运营调账: 卡账户与渠道账户对向调整(delta 为卡余额实际增量)
+function ledgerForAdjust(tx, card, delta) {
+  const amt = lgR2(delta != null ? delta : tx.amount);
+  if (Math.abs(amt) < 0.005) return;
+  postLedgerTx(tx.id, '运营调账 · ' + (tx.ref || ''), tx.createdAt, amt > 0 ? [
+    { key: 'card:' + card.id, dir: 'credit', amount: amt, memo: '调账入卡 +' + amt.toFixed(2) + ' · ' + (tx.ref || '') },
+    { key: 'channel:fiat', dir: 'debit', amount: amt, memo: '平台资金补入' },
+  ] : [
+    { key: 'card:' + card.id, dir: 'debit', amount: -amt, memo: '调账扣减 ' + amt.toFixed(2) + ' · ' + (tx.ref || '') },
+    { key: 'channel:fiat', dir: 'credit', amount: -amt, memo: '调账扣减回流平台资金' },
+  ]);
+}
+// 账本自测: 借贷平衡 + 账户余额一致 + 卡账与卡余额一致
+function verifyLedger() {
+  const errors = [];
+  const byTx = new Map();
+  ledgerEntries.forEach(e => {
+    const k = String(e.txId);
+    if (!byTx.has(k)) byTx.set(k, { d: 0, c: 0 });
+    const g = byTx.get(k);
+    if (e.dir === 'debit') g.d += e.amount; else g.c += e.amount;
+  });
+  let balanced = true;
+  byTx.forEach((g, k) => {
+    if (Math.abs(lgR2(g.d) - lgR2(g.c)) > 0.005) { balanced = false; errors.push('业务单 ' + k + ' 借贷不平: 借 $' + lgR2(g.d).toFixed(2) + ' / 贷 $' + lgR2(g.c).toFixed(2)); }
+  });
+  const accByKey = new Map(ledgerAccounts.map(a => [a.key, a]));
+  const run = new Map(), lastAfter = new Map();
+  ledgerEntries.forEach(e => {
+    const acc = accByKey.get(e.accountKey);
+    if (!acc) { errors.push('流水 #' + e.id + ' 引用不存在的账户 ' + e.accountKey); return; }
+    const delta = ((e.dir === 'debit') === !!LEDGER_DEBIT_POSITIVE[acc.type] ? 1 : -1) * e.amount;
+    run.set(e.accountKey, lgR2((run.get(e.accountKey) || 0) + delta));
+    lastAfter.set(e.accountKey, e.balanceAfter);
+  });
+  let consistent = true;
+  const fail = (msg) => { consistent = false; errors.push(msg); };
+  ledgerAccounts.forEach(a => {
+    const r = run.get(a.key) || 0;
+    if (Math.abs(r - a.balance) > 0.005) fail('账户 ' + a.name + '(' + a.key + ') 余额 $' + a.balance.toFixed(2) + ' 与流水重放 $' + r.toFixed(2) + ' 不一致');
+    const la = lastAfter.get(a.key);
+    if (la == null) { if (Math.abs(a.balance) > 0.005) fail('账户 ' + a.key + ' 无流水但余额 $' + a.balance.toFixed(2)); }
+    else if (Math.abs(la - a.balance) > 0.005) fail('账户 ' + a.key + ' 末条流水 balanceAfter $' + la.toFixed(2) + ' ≠ 当前余额 $' + a.balance.toFixed(2));
+  });
+  cards.forEach(c => {
+    const a = accByKey.get('card:' + c.id);
+    if (!a) fail('卡 #' + c.id + ' 缺少账本账户 card:' + c.id);
+    else if (Math.abs(a.balance - c.balance) > 0.005) fail('卡账户 card:' + c.id + ' 余额 $' + a.balance.toFixed(2) + ' ≠ 卡实际余额 $' + c.balance.toFixed(2));
+  });
+  return { balanced, accountsConsistent: balanced && consistent, errors,
+    stats: { accounts: ledgerAccounts.length, entries: ledgerEntries.length, txCount: byTx.size, snapshots: balanceSnapshots.length, frozen: frozenBalances.length } };
+}
+// 账户在 cutoff 时点的余额(按全部流水重放)
+function ledgerBalanceAsOf(accountKey, cutoff) {
+  const acc = ledgerAccounts.find(a => a.key === accountKey);
+  if (!acc) return 0;
+  const debitPos = !!LEDGER_DEBIT_POSITIVE[acc.type];
+  let bal = 0;
+  ledgerEntries.forEach(e => {
+    if (e.accountKey !== accountKey || e.createdAt >= cutoff) return;
+    bal += ((e.dir === 'debit') === debitPos ? 1 : -1) * e.amount;
+  });
+  return lgR2(bal);
+}
+// 生成最近 days 天的「每日每账户」余额快照(本地时区按天)
+function buildBalanceSnapshots(days) {
+  balanceSnapshots = [];
+  const t = new Date();
+  const today0 = new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+  for (let i = days - 1; i >= 0; i--) {
+    const dayStart = today0 - i * 864e5;
+    const day = isoDay(dayStart);
+    ledgerAccounts.forEach(a => balanceSnapshots.push({ day, accountKey: a.key, balance: ledgerBalanceAsOf(a.key, dayStart + 864e5) }));
+  }
+}
+// initSeed 末尾回填: 遍历种子交易重建账本(先数学模拟算期初, 再按时间序入账), 附快照与演示冻结余额
+function rebuildLedgerSeed() {
+  ledgerAccounts = []; ledgerEntries = []; balanceSnapshots = []; frozenBalances = [];
+  ensureLedgerAccount('channel:usdt', 'channel', '渠道账户 · USDT 链上');
+  ensureLedgerAccount('channel:fiat', 'channel', '渠道账户 · 法币银行');
+  ensureLedgerAccount('fee', 'income', '平台手续费');
+  ensureLedgerAccount('monthlyfee', 'income', '卡月费收入');
+  ensureLedgerAccount('commission', 'expense', '平台佣金支出');
+  ensureLedgerAccount('pointscost', 'expense', '积分成本');
+  cards.forEach(ensureCardLedgerAccount);
+  const txsAsc = [...transactions].sort((a, b) => a.createdAt - b.createdAt);
+  // ① 纯数学模拟各卡流水增量 → 期初 = 当前卡余额 - 增量(先算后记, 让期初分录排在流水最前)
+  const OPEN_TS = now() - 33 * 864e5; // 早于全部种子交易(30 天窗口)
+  const sim = {}; cards.forEach(c => { sim[c.id] = 0; });
+  txsAsc.forEach(t => {
+    if (t.type === 'topup') sim[t.cardId] = lgR2(sim[t.cardId] + lgR2(lgR2(t.amount) - lgR2(t.fee)));
+    else if (t.type === 'consume') sim[t.cardId] = lgR2(sim[t.cardId] - consumeLegSplit(t.amount, t.pointsUsed).cardLeg);
+    else if (t.type === 'adjust') sim[t.cardId] = lgR2(sim[t.cardId] + lgR2(t.amount));
+  });
+  const jobs = [];
+  cards.forEach(c => {
+    const op = lgR2(c.balance - (sim[c.id] || 0));
+    if (Math.abs(op) > 0.004) {
+      jobs.push(op > 0
+        ? { ts: OPEN_TS, run: () => postLedgerTx('OPEN' + c.id, '期初余额结转', OPEN_TS, [
+            { key: 'channel:fiat', dir: 'debit', amount: op, memo: '期初渠道在途资金' },
+            { key: 'card:' + c.id, dir: 'credit', amount: op, memo: '开卡以来累计结转(期初)' }]) }
+        : { ts: OPEN_TS, run: () => postLedgerTx('OPEN' + c.id, '期初余额结转(负)', OPEN_TS, [
+            { key: 'card:' + c.id, dir: 'debit', amount: -op, memo: '期初负余额结转' },
+            { key: 'channel:fiat', dir: 'credit', amount: -op }]) });
+    }
+  });
+  // ② 种子交易: 充值 / 消费(含标签 refunded 的历史消费, 当时已扣卡余额) / 调账
+  txsAsc.forEach(t => {
+    const card = cards.find(c => c.id === t.cardId);
+    if (!card) return;
+    if (t.type === 'topup') jobs.push({ ts: t.createdAt, run: () => ledgerForTopup(t, card) });
+    else if (t.type === 'consume') jobs.push({ ts: t.createdAt, run: () => ledgerForConsume(t, card) });
+    else if (t.type === 'adjust') jobs.push({ ts: t.createdAt, run: () => ledgerForAdjust(t, card) });
+  });
+  // ③ 在册卡月费计提(非挂失, 口径同财务报表) / 种子兑换订单履约成本 / 已结算佣金
+  cards.filter(c => c.status !== 'lost').forEach(c => jobs.push({ ts: c.createdAt, run: () => ledgerForMonthlyFee(c, c.createdAt) }));
+  orders.filter(o => o.status !== 'cancelled').forEach(o => {
+    const pr = products.find(p => p.id === o.productId);
+    if (pr) jobs.push({ ts: o.createdAt, run: () => ledgerForRedeem(o, pr, o.createdAt) });
+  });
+  commissions.filter(c => c.status === 'settled').forEach(c => {
+    const ts = Math.min(c.createdAt + 3 * 864e5, now());
+    jobs.push({ ts, run: () => ledgerForCommissionSettle(c, ts) });
+  });
+  jobs.sort((a, b) => a.ts - b.ts);
+  jobs.forEach(j => j.run());
+  // ④ 14 天每日余额快照
+  buildBalanceSnapshots(14);
+  // ⑤ 演示冻结余额: 一笔风控全额冻结 + 一笔部分冻结观察
+  const fz = (key, amt, reason, d, jh) => frozenBalances.push({ id: nid(), accountKey: key, amount: lgR2(Math.max(0, amt)), reason, createdAt: daysAgo(d, jh), status: 'frozen' });
+  const c11 = ledgerAccounts.find(a => a.key === 'card:11');
+  if (c11) fz('card:11', c11.balance, '风控全额冻结 · 2 小时内跨国消费命中规则, 待人工处置', 1, 6);
+  const c6 = ledgerAccounts.find(a => a.key === 'card:6');
+  if (c6) fz('card:6', Math.min(300, c6.balance), '风控部分冻结 · 新设备大额充值观察池', 3, 2);
+}
+
 // ---------------- 销售组织工具(模块级, 依赖 initSeed 填充的 salesReps) ----------------
 const repById = (id) => salesReps.find(s => s.id === id);
 function subtreeIds(salesId) { // 本人 + 全部后代
@@ -366,6 +613,7 @@ const scopeOf = (headers) => { // 数据范围: 未传=总监全量; 传销售 i
 
 // ---------------- 业务动作 ----------------
 function doTopup(userId, amount, method) {
+  amount = +(amount || 0).toFixed(2); // 金额量化到分, 保证账本分录与卡余额增量严格一致
   const card = cards.find(c => c.userId === userId);
   if (!card) return { error: '未找到卡' };
   if (card.status === 'lost') return { error: '卡已挂失, 无法充值, 请联系客服' };
@@ -376,9 +624,11 @@ function doTopup(userId, amount, method) {
   transactions.unshift(tx);
   addPointsLog(userId, Math.floor(amount * 5), '充值奖励', tx.id, now());
   addCommissions(card.salesRepId, 'topup', amount, tx.id, now());
+  ledgerForTopup(tx, card); // P4.4: 渠道+amt / 卡+(amt-fee) / 平台手续费+fee
   return { tx, balance: card.balance };
 }
 function doPay(userId, amount, merchant, usePoints) {
+  amount = +(amount || 0).toFixed(2); // 金额量化到分, 保证账本分录与卡余额增量严格一致
   const card = cards.find(c => c.userId === userId);
   const user = users.find(u => u.id === userId);
   if (!card) return { error: '未找到卡' };
@@ -398,6 +648,7 @@ function doPay(userId, amount, merchant, usePoints) {
   if (pointsUsed) addPointsLog(userId, -pointsUsed, '消费抵扣', tx.id, now());
   addPointsLog(userId, pts, '消费返积分', tx.id, now());
   addCommissions(card.salesRepId, 'consume', payUsd, tx.id, now());
+  ledgerForConsume(tx, card, payUsd); // P4.4: 卡-amt / 商户待结算+(amt-fee) / 手续费+fee, 积分抵扣计积分成本
   return { tx, balance: card.balance, pointsEarned: pts, pointsUsed };
 }
 function doRedeem(userId, productId) {
@@ -415,6 +666,7 @@ function doRedeem(userId, productId) {
   const order = { id: nid(), userId, productId, pointsCost: p.points, status: p.category === '实物' ? 'pending' : 'redeemed', redeemCode: p.category !== '实物' ? 'UC-' + ri(1000, 9999) + '-' + ri(1000, 9999) : '', trackingNo: '', createdAt: now() };
   orders.unshift(order);
   addPointsLog(userId, -p.points, '商城兑换', order.id, now());
+  ledgerForRedeem(order, p, now()); // P4.4: 积分成本 +pointsCost×$0.01
   return { order };
 }
 
@@ -783,6 +1035,8 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       const card = { id: nid(), userId: u.id, cardNo: genCardNo(ri(0, 2)), cvv: String(ri(100, 999)), expMonth: ri(1, 12), expYear: 30, level: b.level || 'standard', status: 'active', balance: 0, salesRepId: b.salesRepId || u.salesRepId, createdAt: now() };
       cards.push(card);
       addCommissions(card.salesRepId, 'card', 1, card.id, now());
+      ensureCardLedgerAccount(card); // P4.4: 新卡即建账本虚拟账户
+      ledgerForMonthlyFee(card, now()); // P4.4: 开户计提一笔卡月费收入
       const cust = customers.find(c => c.userId === u.id); if (cust && ['线索', '意向', '方案'].includes(cust.stage)) cust.stage = '开卡';
       return J({ card });
     }
@@ -790,7 +1044,13 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       if (sid !== 1) return J({ error: '仅运营总监可执行冻结/调账' }, 403);
       const card = cards.find(c => c.id === +p.split('/').pop()); if (!card) return J({ error: 'not found' }, 404);
       if (b.action === 'freeze') card.status = (card.status === 'frozen' || card.status === 'lost') ? 'active' : 'frozen'; // 冻结/解冻/解除挂失
-      if (b.action === 'adjust') { card.balance = +(card.balance + +b.amount).toFixed(2); transactions.unshift({ id: nid(), type: 'adjust', userId: card.userId, cardId: card.id, amount: +b.amount, fee: 0, method: 'adjust', ref: 'OP-' + ri(10000, 99999), pointsEarned: 0, status: 'success', createdAt: now() }); }
+      if (b.action === 'adjust') { // 调账: 卡余额与账本对向调整(delta 取卡余额实际增量, 保证账实一致)
+        const before = card.balance;
+        card.balance = +(card.balance + +b.amount).toFixed(2);
+        const adjTx = { id: nid(), type: 'adjust', userId: card.userId, cardId: card.id, amount: +b.amount, fee: 0, method: 'adjust', ref: 'OP-' + ri(10000, 99999), pointsEarned: 0, status: 'success', createdAt: now() };
+        transactions.unshift(adjTx);
+        ledgerForAdjust(adjTx, card, +(card.balance - before).toFixed(2));
+      }
       return J({ card });
     }
     if (p === '/api/admin/kyc') {
@@ -808,6 +1068,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
       if (sid !== 1) return J({ error: '仅运营总监可执行退款' }, 403);
       const t = transactions.find(x => x.id === +b.txId); if (!t || t.type !== 'consume') return J({ error: '交易不存在' }, 400);
       t.status = 'refunded'; const card = cards.find(c => c.id === t.cardId); card.balance = +(card.balance + t.amount).toFixed(2);
+      ledgerForRefund(t, now()); // P4.4: 退款反向流水(卡+amt / 商户待结算-(amt-fee) / 手续费-fee), 不冲销历史
       return J({ ok: true });
     }
     if (p === '/api/admin/customers' && method === 'GET') {
@@ -853,7 +1114,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     }
     if (p === '/api/admin/performance') return J(perfRows(ids).sort((a, b) => (b.topup + b.consume) - (a.topup + a.consume)));
     if (p === '/api/admin/commissions') return J([...commissions].filter(c => ids.includes(c.salesId) || ids.includes(c.fromSalesId)).sort((a, b) => b.createdAt - a.createdAt).slice(0, 300).map(pubCommission));
-    if (p === '/api/admin/commissions/settle' && method === 'POST') { if (sid !== 1) return J({ error: '仅运营总监可结算佣金' }, 403); commissions.forEach(c => { if (c.id === +b.id) c.status = 'settled'; }); return J({ ok: true }); }
+    if (p === '/api/admin/commissions/settle' && method === 'POST') { if (sid !== 1) return J({ error: '仅运营总监可结算佣金' }, 403); commissions.forEach(c => { if (c.id === +b.id) { if (c.status !== 'settled') ledgerForCommissionSettle(c, now()); c.status = 'settled'; } }); return J({ ok: true }); }
     // 分销链路: 组织树 + 各级佣金 + 最近分佣链
     if (p === '/api/admin/commissions/tree') {
       const rootIds = sid === 1 ? [1] : [sid];
@@ -899,6 +1160,8 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
           card = { id: Math.max(0, ...cards.map(c => c.id)) + 1, userId: uid, cardNo: genCardNo(), cvv: String(ri(100, 999)), expMonth: ri(1, 12), expYear: ri(28, 31), level: b.level || 'standard', status: 'active', balance: 0, salesRepId: repId, createdAt: now() };
           cards.push(card);
           addCommissions(repId, 'card', 1, card.id, now());
+          ensureCardLedgerAccount(card); // P4.4: 开户即建卡账本账户并计提月费
+          ledgerForMonthlyFee(card, now());
         }
         return J({ user: pubUser(users.find(u => u.id === uid)), card });
       }
@@ -1151,6 +1414,65 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
         return J({ list: [...opLogs].sort((a, b2) => b2.createdAt - a.createdAt).slice(0, 100),
           summary: { total: opLogs.length, ok: opLogs.filter(o => o.result === '成功').length, fail: opLogs.filter(o => o.result !== '成功').length } });
       }
+      return J({ error: 'not found: ' + p }, 404);
+    }
+    if (p.startsWith('/api/admin/ledger')) {
+      if (sid !== 1) return J({ error: '仅运营总监可访问资金账本' }, 403);
+      const frozenOf = (key) => lgR2(frozenBalances.filter(f => f.accountKey === key && f.status === 'frozen').reduce((s, f) => s + f.amount, 0));
+      if (p === '/api/admin/ledger/accounts') {
+        const TYPE_ORDER = ['channel', 'card', 'merchant', 'income', 'expense'];
+        const list = ledgerAccounts.map(a => {
+          const es = ledgerEntries.filter(e => e.accountKey === a.key);
+          return { key: a.key, type: a.type, typeLabel: LEDGER_TYPE_LABEL[a.type] || a.type, name: a.name, balance: a.balance,
+            frozen: frozenOf(a.key), entryCount: es.length, recentCount: es.filter(e => e.createdAt >= now() - 7 * 864e5).length,
+            lastEntryAt: es.length ? Math.max(...es.map(e => e.createdAt)) : null };
+        }).sort((a, b) => (TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)) || (b.balance - a.balance));
+        const byType = {};
+        ledgerAccounts.forEach(a => { byType[a.type] = lgR2((byType[a.type] || 0) + a.balance); });
+        return J({ list, summary: { accounts: ledgerAccounts.length, entries: ledgerEntries.length, byType,
+          frozenTotal: lgR2(frozenBalances.filter(f => f.status === 'frozen').reduce((s, f) => s + f.amount, 0)) } });
+      }
+      if (p === '/api/admin/ledger/entries') { // ?account=&type=&days=
+        const days = parseInt(q.days, 10) || 0;
+        const since = days > 0 ? now() - days * 864e5 : 0;
+        const accByKey = new Map(ledgerAccounts.map(a => [a.key, a]));
+        const list = ledgerEntries
+          .filter(e => {
+            const a = accByKey.get(e.accountKey);
+            return (!q.account || e.accountKey === q.account) && (!q.type || (a && a.type === q.type)) && e.createdAt >= since;
+          })
+          .sort((a, b) => b.createdAt - a.createdAt || b.id - a.id)
+          .slice(0, 500)
+          .map(e => { const a = accByKey.get(e.accountKey); return { ...e, accountName: a ? a.name : e.accountKey, accountType: a ? a.type : '', typeLabel: a ? (LEDGER_TYPE_LABEL[a.type] || a.type) : '' }; });
+        return J({ list, summary: { count: list.length,
+          debitTotal: lgR2(list.filter(e => e.dir === 'debit').reduce((s, e) => s + e.amount, 0)),
+          creditTotal: lgR2(list.filter(e => e.dir === 'credit').reduce((s, e) => s + e.amount, 0)),
+          filters: { account: q.account || '', type: q.type || '', days: days || 'all' } } });
+      }
+      if (p === '/api/admin/ledger/snapshots') { // 14 天每日每账户快照聚合 + 今日实时重算 + 冻结余额
+        const accByKey = new Map(ledgerAccounts.map(a => [a.key, a]));
+        const daysArr = [...new Set(balanceSnapshots.map(s => s.day))].sort();
+        const aggRow = (day, m) => {
+          const row = { day, channel: 0, card: 0, merchant: 0, income: 0, expense: 0 };
+          m.forEach((bal, key) => { const a = accByKey.get(key); if (a) row[a.type] = lgR2(row[a.type] + bal); });
+          row.total = lgR2(row.channel + row.card + row.merchant + row.income + row.expense);
+          return row;
+        };
+        const rows = daysArr.map(day => {
+          const m = new Map();
+          balanceSnapshots.filter(s => s.day === day).forEach(s => m.set(s.accountKey, s.balance));
+          return aggRow(day, m);
+        });
+        const curMap = new Map(ledgerAccounts.map(a => [a.key, a.balance]));
+        const cur = aggRow(isoDay(now()), curMap);
+        const ti = rows.findIndex(r => r.day === cur.day);
+        if (ti >= 0) rows[ti] = cur; else rows.push(cur);
+        return J({ rows, current: cur,
+          frozen: frozenBalances.map(f => ({ ...f, accountName: (accByKey.get(f.accountKey) || {}).name || f.accountKey })),
+          frozenTotal: lgR2(frozenBalances.filter(f => f.status === 'frozen').reduce((s, f) => s + f.amount, 0)),
+          detailToday: balanceSnapshots.filter(s => s.day === isoDay(now())) });
+      }
+      if (p === '/api/admin/ledger/verify') return J(verifyLedger());
       return J({ error: 'not found: ' + p }, 404);
     }
     return J({ error: 'not found: ' + p }, 404);
