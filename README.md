@@ -6,6 +6,7 @@
 
 - **线上**：后台 https://fc-ucard.feng85656.workers.dev/ ｜ 用户端 https://fc-ucard.feng85656.workers.dev/app
 - **本地**：`node server.js` → http://localhost:5177/ 和 /app（零依赖，Node ≥ 14）
+- **源码**：https://github.com/Chen0207-bit/U-Card（按功能拆分 commit）
 
 内存数据库 + 确定性种子数据（12 持卡人 / 12 卡 / 30 天交易 / 18 CRM 客户 / 10 商品 / 19 人销售组织），重启即还原。
 
@@ -33,7 +34,9 @@
   → 一级销售(上上级) +$0.50 (0.5%)
 ```
 
-后台「分销链路」页：分佣规则卡 + 销售组织树（各级直属/分润佣金）+ 最近 10 笔交易的实时分佣链路流向图。演示时在用户端发起一笔消费，回后台刷新即可看到新链路。
+后台「分销链路」页：分佣规则卡 + 销售组织树（各级直属/分润佣金）+ 最近 10 笔交易的实时分佣链路流向图。**此页与驾驶舱已开启自动监听（5 秒轮询）**——在用户端发起一笔消费，新链路数秒内自动出现、高亮并弹出 toast，无需手动刷新。
+
+安全（演示级）：总监专属操作（退款/KYC 审核/佣金结算/积分发放/发货/上下架/冻结调账）在服务端校验身份，销售身份调用返回 403。
 
 ## 覆盖的 PRD 模块
 
@@ -51,7 +54,7 @@
 core.js      业务核心（数据+种子+API 路由，node 与 Worker 共用, ESM）
 server.js    Node 本地壳（http + 静态）
 worker.js    Cloudflare Worker 壳（ASSETS + API）
-public/      admin.html 后台 SPA + app.html 用户端 H5（原生 JS 单文件，无框架/CDN）
+public/      admin.html 后台 SPA + app.html 用户端 H5 + app-pc.html 电脑版（原生 JS 单文件，无框架/CDN）
 ```
 
-部署：`npx wrangler deploy`（Cloudflare Workers + static assets，内存态随 isolate 保活，冷启动自动重建种子数据）
+部署：`npx wrangler deploy`（Cloudflare Workers + static assets + **Durable Object** 单实例内存态，多 isolate 强一致，冷启动自动重建种子数据）
