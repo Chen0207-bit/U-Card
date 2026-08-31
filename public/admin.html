@@ -257,6 +257,22 @@
 /* 新分佣链路高亮渐隐 */
 .chain.new { border-color:#16a34a; animation: chainNew 3s ease-out; }
 @keyframes chainNew { 0% { background:rgba(22,163,74,.16); } 100% { background:transparent; } }
+
+/* P1.1 驾驶舱: 指标卡可点击进入对应模块 */
+.stat-link{display:block;color:inherit;transition:box-shadow .15s,transform .15s}
+.stat-link:hover{box-shadow:0 6px 16px rgba(79,70,229,.18);transform:translateY(-2px)}
+.stat-go{position:absolute;top:12px;right:12px;color:#c7d2fe;font-size:17px;font-weight:700;line-height:1}
+.stat-link:hover .stat-go{color:var(--pri)}
+/* P1.4 分销链路: 固定演示流程说明 + 每链佣金明细表 */
+.demo-flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 14px}
+.flow-node{background:#fff;border:1.5px solid #c7d2fe;border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:600;white-space:nowrap;line-height:1.5}
+.flow-node .s{display:block;font-size:12px;color:var(--ink3);font-weight:500}
+.flow-node.hl{border-color:var(--pri);background:#eef2ff}
+.flow-arrow{color:#a5b4fc;font-weight:700;font-size:15px}
+.chain-wrap{border:1px solid var(--line);border-radius:12px;margin-bottom:12px;overflow:hidden}
+.chain-wrap .chain{border:none;border-radius:0;margin-bottom:0}
+.chain-detail{border-top:1px dashed #e2e8f0;background:#fbfcfe;padding:6px 4px 10px}
+.chain-wrap.new{border-color:#16a34a;animation:chainNew 3s ease-out}
 </style>
 </head>
 <body>
@@ -294,6 +310,15 @@
 
     <!-- 1. 驾驶舱 -->
     <section class="page" id="page-dashboard">
+      <div class="toolbar" style="margin-bottom:14px">
+        <div class="tabs" id="dashRangeTabs">
+          <button class="tab active" data-r="today" onclick="switchDashRange('today')">今日</button>
+          <button class="tab" data-r="week" onclick="switchDashRange('week')">本周</button>
+          <button class="tab" data-r="month" onclick="switchDashRange('month')">本月</button>
+          <button class="tab" data-r="quarter" onclick="switchDashRange('quarter')">本季</button>
+        </div>
+        <span class="dim">指标卡与趋势按所选范围统计 · 5 秒自动刷新</span>
+      </div>
       <div id="dashStats" class="stats"></div>
       <div class="dash-grid">
         <div class="card" id="dashTrend"></div>
@@ -414,6 +439,23 @@
     <!-- 11. 分销链路 -->
     <section class="page" id="page-chain">
       <div class="notice">📡 此页已开启<b>自动监听</b>(每 5 秒) — 在用户端 <b><a href="/app" target="_blank" style="color:inherit">发起一笔消费</a></b>, 新的分佣链路会自动出现、高亮并弹出提示<button class="btn-outline btn-sm" id="btnNewSales" style="display:none" onclick="openNewSales()">➕ 新增销售账号</button><button class="btn-outline btn-sm" style="margin-left:auto" onclick="LOADERS.chain(true)">🔄 立即刷新</button></div>
+      <div class="card" style="background:linear-gradient(135deg,#eef2ff 0%,#f5f3ff 100%);border:1px solid #c7d2fe">
+        <div class="card-title">🎬 固定演示流程 · 一笔消费的佣金之旅</div>
+        <div class="card-sub">以客户刷卡消费 $100 为例, 佣金沿销售组织链自动逐级入账, 无需人工干预</div>
+        <div class="demo-flow">
+          <div class="flow-node">客户消费<span class="s num">$100.00</span></div>
+          <span class="flow-arrow">➜</span>
+          <div class="flow-node">直属销售 1%<span class="s num">$1.00</span></div>
+          <span class="flow-arrow">➜</span>
+          <div class="flow-node">上级 2%<span class="s num">$2.00</span></div>
+          <span class="flow-arrow">➜</span>
+          <div class="flow-node">上上级 0.5%<span class="s num">$0.50</span></div>
+          <span class="flow-arrow">➜</span>
+          <div class="flow-node hl">佣金合计<span class="s num">$3.50</span></div>
+        </div>
+        <a class="btn" href="/app" target="_blank" style="display:inline-block">🛒 去用户端发起一笔消费试试</a>
+        <span class="dim" style="margin-left:10px">新链路会自动出现在下方并高亮</span>
+      </div>
       <div class="card" id="chainRules"></div>
       <div class="card">
         <div class="card-title">分销组织树</div>
@@ -422,7 +464,7 @@
       </div>
       <div class="card">
         <div class="card-title">实时分佣链路</div>
-        <div class="card-sub">最近 10 笔交易的佣金沿链路分配 · 高亮为该链路中金额最大的一级</div>
+        <div class="card-sub">最近 10 笔交易的佣金沿链路分配 · 高亮为该链路中金额最大的一级 · 卡片下方为逐级佣金明细与合计</div>
         <div id="chainList"></div>
       </div>
     </section>
@@ -577,47 +619,73 @@ function fetchSales(force){
 }
 
 /* ================= 1. 驾驶舱 ================= */
+var DASH_RANGE = 'today'; // 时间范围: today/week/month/quarter
+var DASH_RANGE_LABEL = {today: '今日', week: '本周', month: '本月', quarter: '本季'};
+var DASH_PERF = [];       // 业绩榜缓存(行点击详情 drawer 用)
+function nz(n){ return Number(n) || 0; } // NaN/undefined 兜底为 0
+function switchDashRange(r){
+  DASH_RANGE = r;
+  $$('#dashRangeTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.r === r); });
+  LAST_SIG['dashboard'] = null; // 范围切换: 强制重绘
+  LOADERS.dashboard();
+}
 LOADERS.dashboard = function(silent){
   var els = [$('#dashStats'), $('#dashTrend'), $('#dashPerf'), $('#dashRecent')];
   if (!silent) els.forEach(function(el){ el.innerHTML = loadingBox(); });
-  api('/api/admin/dashboard').then(function(d){
+  api('/api/admin/dashboard?range=' + DASH_RANGE).then(function(d){
     if (!sigChanged('dashboard', d)) return; // 数据无变化: 不重绘, 完全无感
     var t0 = d.recentTx && d.recentTx[0];
     var txKey = t0 ? (t0.id + '|' + t0.createdAt) : '';
     if (lastTxKey && txKey && txKey !== lastTxKey) toast('🔔 实时进账: ' + t0.user + ' ' + (t0.type === 'topup' ? '充值 ' : '消费 ') + fmtMoney(t0.amount));
     lastTxKey = txKey;
     renderDashStats(d.stats);
-    renderTrend(d.trend);
+    renderTrend(d.trend, d.stats && d.stats.range);
     renderDashPerf(d.perf);
     renderRecent(d.recentTx);
   }).catch(function(e){ if (!silent) els.forEach(function(el){ el.innerHTML = errBox(e); }); });
 };
 
 function renderDashStats(s){
+  s = s || {};
   var my = ME && ME.level > 0; // 销售登录: 卡片标题切换为「我的」口径
   var L = function(a, b){ return my ? a : b; };
   var ic = function(bg, emoji){ return '<div class="stat-ic" style="background:' + bg + '">' + emoji + '</div>'; };
+  var rlab = DASH_RANGE_LABEL[s.range || DASH_RANGE] || '';
+  var card = function(href, icon, lab, val, sub, extra, valStyle){
+    return '<a class="stat stat-link" href="' + href + '" title="点击进入对应模块">' + icon +
+      '<div class="lab">' + lab + '</div><div class="val num"' + (valStyle ? ' style="' + valStyle + '"' : '') + '>' + val + '</div>' +
+      '<div class="sub">' + sub + '</div>' + (extra || '') + '<span class="stat-go">›</span></a>';
+  };
+  var kycHref = ME && ME.level === 0 ? '#kyc' : '#crm';        // 销售无 KYC 页权限, 落到客户管理
+  var orderHref = ME && ME.level === 0 ? '#orders' : '#commission';
   $('#dashStats').innerHTML = [
-    '<div class="stat">' + ic('#e0e7ff','💳') + '<div class="lab">' + L('我的发卡','累计发卡') + '</div><div class="val num">' + s.totalCards + '</div><div class="sub">活跃卡 ' + s.activeCards + '/' + s.totalCards + '</div></div>',
-    '<div class="stat">' + ic('#dcfce7','⬆️') + '<div class="lab">' + L('我的今日充值','今日充值额') + '</div><div class="val num">' + fmtMoney(s.todayTopup) + '</div><div class="sub">USDT / 法币入金</div></div>',
-    '<div class="stat">' + ic('#e0f2fe','🛍️') + '<div class="lab">' + L('我的今日交易','今日交易额') + '</div><div class="val num">' + fmtMoney(s.todayConsume) + '</div><div class="sub">累计发放积分 ' + fmtPts(s.pointsIssued) + '</div></div>',
-    '<div class="stat">' + ic('#fef3c7','👛') + '<div class="lab">' + L('我的在途余额','在途余额总额') + '</div><div class="val num">' + fmtMoney(s.totalBalance) + '</div><div class="sub">活跃卡 ' + s.activeCards + '/' + s.totalCards + '</div></div>',
-    '<div class="stat">' + ic('#fee2e2','🛡️') + '<div class="lab">' + L('我的待审 KYC','待审 KYC') + '</div><div class="val num" style="color:var(--bad)">' + s.pendingKyc + '</div><div class="sub">请尽快处理</div>' + (s.pendingKyc > 0 ? '<span class="corner-badge">待处理</span>' : '') + '</div>',
-    '<div class="stat">' + ic('#f3e8ff','💰') + '<div class="lab">' + L('我的待结算佣金','待结算佣金') + '</div><div class="val num">' + fmtMoney(s.pendingCommission) + '</div><div class="sub">待发货订单 ' + s.pendingOrders + ' · 客户 ' + s.customers + '</div></div>'
+    card('#tx', ic('#e0e7ff','📊'), L('我的 GMV','总 GMV') + ' · ' + rlab, fmtMoney(nz(s.gmv)), '充值 ' + fmtMoney0(nz(s.topupTotal)) + ' + 消费 ' + fmtMoney0(nz(s.consumeTotal))),
+    card('#tx', ic('#dcfce7','⬆️'), L('我的充值额','充值总额') + ' · ' + rlab, fmtMoney(nz(s.topupTotal)), 'USDT / 法币入金'),
+    card('#tx', ic('#e0f2fe','🛍️'), L('我的消费额','消费总额') + ' · ' + rlab, fmtMoney(nz(s.consumeTotal)), '累计发放积分 ' + fmtPts(nz(s.pointsIssued))),
+    card('#cards', ic('#fef3c7','👥'), L('我的活跃用户','活跃用户') + ' · 近30天', String(nz(s.activeUsers)), '近 30 天有交易的用户'),
+    card('#cards', ic('#e0e7ff','💳'), L('我的发卡','累计发卡'), String(nz(s.totalCards)), '活跃卡 ' + nz(s.activeCards) + '/' + nz(s.totalCards) + ' · 在途余额 ' + fmtMoney0(nz(s.totalBalance))),
+    card(kycHref, ic('#fee2e2','🛡️'), L('我的待审 KYC','待审 KYC'), String(nz(s.pendingKyc)), '请尽快处理', (nz(s.pendingKyc) > 0 ? '<span class="corner-badge">待处理</span>' : ''), 'color:var(--bad)'),
+    card(orderHref, ic('#ffedd5','📦'), L('我的待发货','待发货订单'), String(nz(s.pendingOrders)), '实物兑换订单待发货'),
+    card('#commission', ic('#f3e8ff','💰'), L('我的待结算佣金','待结算佣金'), fmtMoney(nz(s.pendingCommission)), '客户 ' + String(nz(s.customers))),
+    card('#tx', ic('#fee2e2','🚨'), L('我的风险交易','风险交易'), String(nz(s.riskCount)), '已退款 或 单笔>$400 消费', (nz(s.riskCount) > 0 ? '<span class="corner-badge">' + nz(s.riskCount) + ' 笔</span>' : ''), nz(s.riskCount) > 0 ? 'color:var(--bad)' : '')
   ].join('');
 }
 
-// 14 天充值 vs 消费 · 双序列柱状图(内联 SVG)
+// 充值 vs 消费 · 双序列柱状图(内联 SVG), 标题与聚合粒度随所选时间范围切换
 // 序列色经校验: #4f46e5 与 #7c3aed 视觉不可分, 改用主色+信息蓝
-function renderTrend(trend){
+var TREND_META = { today: ['今日充值 vs 消费趋势', '按小时聚合'], week: ['本周充值 vs 消费趋势', '按天聚合'], month: ['本月充值 vs 消费趋势', '按天聚合'], quarter: ['本季充值 vs 消费趋势', '按周聚合'] };
+function renderTrend(trend, range){
+  var meta = TREND_META[range] || TREND_META.today;
+  if (!trend || !trend.length){ $('#dashTrend').innerHTML = '<div class="card-title">' + meta[0] + '</div>' + emptyBox(); return; }
   var W = 780, H = 252, padL = 48, padR = 10, padT = 18, padB = 28;
   var iw = W - padL - padR, ih = H - padT - padB;
   var maxV = 10;
-  trend.forEach(function(d){ maxV = Math.max(maxV, d.topup, d.consume); });
+  trend.forEach(function(d){ maxV = Math.max(maxV, nz(d.topup), nz(d.consume)); });
   var step = niceCeil(maxV);
   var y = function(v){ return padT + ih - (v / step) * ih; };
   var gw = iw / trend.length;
   var bw = Math.min(15, gw * 0.26);
+  var labelEvery = trend.length > 16 ? 3 : 2; // 月/季分桶较多时, 隔 3 个标一个刻度
   var C_TOPUP = '#4f46e5', C_CONSUME = '#0ea5e9';
 
   var grid = '', bars = '', labels = '';
@@ -632,14 +700,14 @@ function renderTrend(trend){
     var cx = padL + gw * i + gw / 2;
     bars += '<path class="bar" d="' + barPath(cx - bw - 1.5, y(d.topup), bw, padT + ih - y(d.topup)) + '" fill="' + C_TOPUP + '"><title>' + d.date + ' 充值 ' + fmtMoney0(d.topup) + '</title></path>';
     bars += '<path class="bar" d="' + barPath(cx + 1.5, y(d.consume), bw, padT + ih - y(d.consume)) + '" fill="' + C_CONSUME + '"><title>' + d.date + ' 消费 ' + fmtMoney0(d.consume) + '</title></path>';
-    if (i % 2 === 0) labels += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" class="ax">' + d.date + '</text>';
+    if (i % labelEvery === 0) labels += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle" class="ax">' + d.date + '</text>';
   });
   // 极值直接标注(选择性标注, 不逐点标数)
   if (trend[iTop].topup > 0)  labels += '<text x="' + (padL + gw * iTop + gw / 2 - bw / 2 - 1.5) + '" y="' + (y(trend[iTop].topup) - 5) + '" text-anchor="middle" style="fill:#334155;font-size:10px;font-weight:600">' + fmtMoney0(trend[iTop].topup) + '</text>';
   if (trend[iCon].consume > 0) labels += '<text x="' + (padL + gw * iCon + gw / 2 + bw / 2 + 1.5) + '" y="' + (y(trend[iCon].consume) - 5) + '" text-anchor="middle" style="fill:#334155;font-size:10px;font-weight:600">' + fmtMoney0(trend[iCon].consume) + '</text>';
 
   $('#dashTrend').innerHTML =
-    '<div class="chart-head"><div><div class="card-title">近 14 天充值 vs 消费趋势</div><div class="card-sub">单位: USD · 悬停柱体查看数值</div></div>' +
+    '<div class="chart-head"><div><div class="card-title">' + meta[0] + '</div><div class="card-sub">单位: USD · ' + meta[1] + ' · 悬停柱体查看数值</div></div>' +
     '<div class="legend"><span class="lg"><i style="background:' + C_TOPUP + '"></i>充值</span><span class="lg"><i style="background:' + C_CONSUME + '"></i>消费</span></div></div>' +
     '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block">' + grid + bars + labels + '</svg>';
 }
@@ -663,15 +731,42 @@ function progBar(pct){
   return '<div class="prog-wrap"><div class="prog"><div class="prog-fill" style="width:' + w + '%"></div></div><span class="prog-txt num">' + pct.toFixed(0) + '%</span></div>';
 }
 function renderDashPerf(perf){
+  DASH_PERF = perf || [];
+  if (!DASH_PERF.length){ $('#dashPerf').innerHTML = '<div class="card-title">销售业绩榜</div>' + emptyBox(); return; }
   var medals = ['🥇','🥈','🥉'];
-  var rows = perf.map(function(p, i){
-    var gmv = (+p.topup || 0) + (+p.consume || 0); // 后端字段为 topup/consume, 前端组装 GMV
-    var pct = p.target ? gmv / p.target * 100 : 0;
-    return '<tr><td>' + (medals[i] || '#' + (i + 1)) + '</td><td><b>' + esc(p.name) + '</b>' + (p.teamSize > 0 ? ' <span class="pill pill-indigo">👥 ' + p.teamSize + '</span>' : '') + '<div class="sub-line">' + esc(p.region) + ' · ' + p.cards + ' 卡</div></td>' +
+  var rows = DASH_PERF.map(function(p, i){
+    var gmv = nz(p.topup) + nz(p.consume); // 后端字段为 topup/consume, 前端组装 GMV
+    var pct = nz(p.target) ? gmv / nz(p.target) * 100 : 0;
+    return '<tr style="cursor:pointer" title="点击查看销售详情" onclick="openPerfDrawer(' + p.id + ')"><td>' + (medals[i] || '#' + (i + 1)) + '</td><td><b>' + esc(p.name) + '</b>' + (nz(p.teamSize) > 0 ? ' <span class="pill pill-indigo">👥 ' + nz(p.teamSize) + '</span>' : '') + '<div class="sub-line">' + esc(p.region) + ' · ' + nz(p.cards) + ' 卡</div></td>' +
       '<td class="num"><b>' + fmtMoney0(gmv) + '</b></td><td style="min-width:130px">' + progBar(pct) + '</td></tr>';
   }).join('');
-  $('#dashPerf').innerHTML = '<div class="card-title">销售业绩榜</div><div class="card-sub">按总 GMV 排序 · 完成度 = GMV / 目标</div>' +
+  $('#dashPerf').innerHTML = '<div class="card-title">销售业绩榜</div><div class="card-sub">按总 GMV 排序 · 完成度 = GMV / 目标 · 点击行查看详情</div>' +
     '<div class="tbl-wrap"><table><thead><tr><th>排名</th><th>销售</th><th>GMV</th><th>目标完成度</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+/* 业绩榜行点击 → 销售详情 drawer: 本人直接/团队合计/佣金/目标完成度/团队人数 */
+function openPerfDrawer(id){
+  var p = null; DASH_PERF.forEach(function(x){ if (x.id === id) p = x; });
+  if (!p) return;
+  var mine = nz(p.mineTopup) + nz(p.mineConsume), gmv = nz(p.topup) + nz(p.consume);
+  var pct = p.target ? gmv / nz(p.target) * 100 : 0;
+  var info = [
+    ['角色', p.role], ['区域', p.region], ['团队人数', nz(p.teamSize) + ' 人'],
+    ['名下客户', nz(p.customers)], ['名下发卡', nz(p.cards) + ' 张'], ['月度目标', p.target ? fmtMoney0(p.target) : '未设定']
+  ].map(function(x){ return '<div class="info-item"><div class="k">' + x[0] + '</div><div class="v">' + esc(x[1]) + '</div></div>'; }).join('');
+  var rows = [
+    ['本人直接', p.mineTopup, p.mineConsume, mine],
+    ['团队合计', p.topup, p.consume, gmv]
+  ].map(function(r){ return '<tr><td>' + r[0] + '</td><td class="num">' + fmtMoney0(nz(r[1])) + '</td><td class="num">' + fmtMoney0(nz(r[2])) + '</td><td class="num"><b>' + fmtMoney(r[3]) + '</b></td></tr>'; }).join('');
+  var body =
+    '<div class="info-grid">' + info + '</div>' +
+    '<div class="card-title" style="margin-bottom:8px">业绩口径 (充值 / 消费 / GMV)</div>' +
+    '<div class="tbl-wrap"><table><thead><tr><th>口径</th><th>充值</th><th>消费</th><th>GMV</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="card-title" style="margin:14px 0 8px">佣金与目标</div>' +
+    '<div class="kyc-meta">累计佣金 <b class="num" style="color:var(--ok)">' + fmtMoney(nz(p.commission)) + '</b>' + (nz(p.commissionFromTeam) > 0 ? ' · 含团队分润 <b class="num">' + fmtMoney(p.commissionFromTeam) + '</b>' : '') + '</div>' +
+    '<div style="margin-top:10px">' + progBar(pct) + (p.target ? '<div class="sub-line num">目标 ' + fmtMoney0(p.target) + ' · 已完成 ' + fmtMoney0(gmv) + '</div>' : '<div class="sub-line">未设定个人目标</div>') + '</div>';
+  showDrawer('👤 ' + esc(p.name) + ' <span class="role-pill role-' + p.level + '">' + esc(p.role) + '</span>',
+    body,
+    '<div style="display:flex;gap:10px;justify-content:flex-end"><a class="btn-outline" href="#perf" onclick="closeDrawer()">查看业绩排行</a><button class="btn" onclick="closeDrawer()">关闭</button></div>');
 }
 function txTypePill(t){
   if (t === 'topup') return '<span class="pill pill-green">⬆️ 充值</span>';
@@ -1110,18 +1205,30 @@ LOADERS.chain = function(silent){
     if (hasNew) toast('🔔 新的分佣链路: ' + chains[0].user + ' ' + (chains[0].type === 'topup' ? '充值 ' : '消费 ') + fmtMoney(chains[0].amount) + ', 佣金已沿链自动入账');
     lastChainKey = newKey;
     $('#chainList').innerHTML = chains.length ? chains.map(function(ch, ci){
-      var maxAmt = Math.max.apply(null, ch.path.map(function(p){ return p.amount; }));
+      var maxAmt = Math.max.apply(null, ch.path.map(function(p){ return nz(p.amount); }));
       var pathHtml = ch.path.map(function(p){
-        return '<div class="chain-node' + (maxAmt > 0 && p.amount === maxAmt ? ' max' : '') + '">' +
+        return '<div class="chain-node' + (maxAmt > 0 && nz(p.amount) === maxAmt ? ' max' : '') + '">' +
           '<div class="nm">' + esc(p.sales) + '</div>' +
           '<div style="margin:3px 0">' + tierPill(p.tier, p.tierLabel) + '</div>' +
-          '<div class="amt num">' + fmtMoney(p.amount) + '</div>' +
-          '<div class="sub-line num">' + esc(p.rate) + '</div></div>';
+          '<div class="amt num">' + fmtMoney(nz(p.amount)) + '</div>' +
+          '<div class="sub-line num">' + esc(p.rate || '—') + '</div></div>';
       }).join('<span class="chain-arrow">→</span>');
-      return '<div class="chain' + (hasNew && ci === 0 ? ' new' : '') + '"><div class="chain-tx">' + txTypePill(ch.type) + ' <b>' + esc(ch.user) + '</b>' +
-        '<div class="sub-line">' + esc(ch.merchant || '充值入金') + ' · <b class="num">' + fmtMoney(ch.amount) + '</b> · ' + fmtTime(ch.createdAt) + '</div>' +
-        '<div class="sub-line">直属销售: ' + esc(ch.directRep || '—') + '</div></div>' +
-        '<span class="chain-arrow">➜</span>' + pathHtml + '</div>';
+      // 每链佣金明细表: 层级/销售/比例/金额/结算状态/关联单号 + 合计行
+      var detailRows = ch.path.map(function(p){
+        return '<tr><td>' + tierPill(p.tier, p.tierLabel) + '</td><td><b>' + esc(p.sales) + '</b></td>' +
+          '<td class="dim num">' + esc(p.rate || '—') + '</td>' +
+          '<td class="num" style="font-weight:600;color:var(--ok)">' + fmtMoney(nz(p.amount)) + '</td>' +
+          '<td>' + (p.status === 'settled' ? '<span class="pill pill-green">已结算</span>' : '<span class="pill pill-amber">待结算</span>') + '</td>' +
+          '<td class="dim num">#' + nz(p.refId) + '</td></tr>';
+      }).join('');
+      var chainTotal = nz(ch.total) || ch.path.reduce(function(s, p){ return s + nz(p.amount); }, 0);
+      var totalRow = '<tr><td colspan="3"><b>佣金合计</b></td><td class="num" style="font-weight:700;color:var(--pri)">' + fmtMoney(chainTotal) + '</td><td colspan="2" class="dim">' + ch.path.length + ' 级分润 · 占交易额 ' + (nz(ch.amount) ? (chainTotal / nz(ch.amount) * 100).toFixed(1) : '0') + '%</td></tr>';
+      return '<div class="chain-wrap' + (hasNew && ci === 0 ? ' new' : '') + '">' +
+        '<div class="chain"><div class="chain-tx">' + txTypePill(ch.type) + ' <b>' + esc(ch.user) + '</b> <span class="dim">UID ' + nz(ch.userId) + '</span>' +
+        '<div class="sub-line">' + esc(ch.merchant || '充值入金') + ' · <b class="num">' + fmtMoney(nz(ch.amount)) + '</b> · ' + fmtTime(ch.createdAt) + '</div>' +
+        '<div class="sub-line">卡号 <span class="num">' + esc(ch.cardNoMask || '—') + '</span> · 直属销售: ' + esc(ch.directRep || '—') + '</div></div>' +
+        '<span class="chain-arrow">➜</span>' + pathHtml + '</div>' +
+        '<div class="chain-detail"><div class="tbl-wrap"><table><thead><tr><th>层级</th><th>销售</th><th>比例</th><th>金额</th><th>结算状态</th><th>关联单号</th></tr></thead><tbody>' + detailRows + totalRow + '</tbody></table></div></div></div>';
     }).join('') : emptyBox('暂无分佣链路, 去用户端发起一笔消费试试');
   }).catch(function(e){
     if (!silent){ $('#chainRules').innerHTML = errBox(e); $('#chainTree').innerHTML = ''; $('#chainList').innerHTML = ''; }
