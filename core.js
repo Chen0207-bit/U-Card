@@ -1081,6 +1081,8 @@ const scopeOf = (headers) => { // 数据范围: 未传=总监全量; 传销售 i
 // ---------------- 业务动作 ----------------
 function doTopup(userId, amount, method) {
   amount = +(amount || 0).toFixed(2); // 金额量化到分, 保证账本分录与卡余额增量严格一致
+  if (!(amount > 0)) return { error: '充值金额必须大于 $0' };
+  if (amount > 100000) return { error: '单笔充值不能超过 $100,000' };
   const rkGate = riskGateForTx(userId, 'topup', { amount, method }); // P4.3 规则引擎前置: 拦截类规则直接拒绝(保持原返回结构)
   if (!rkGate.ok) return { error: rkGate.error };
   const card = cards.find(c => c.userId === userId);
@@ -1099,6 +1101,7 @@ function doTopup(userId, amount, method) {
 }
 function doPay(userId, amount, merchant, usePoints) {
   amount = +(amount || 0).toFixed(2); // 金额量化到分, 保证账本分录与卡余额增量严格一致
+  if (!(amount > 0)) return { error: '消费金额必须大于 $0' };
   const rkGate = riskGateForTx(userId, 'pay', { amount, merchant, usePoints }); // P4.3 规则引擎前置: 拦截类规则直接拒绝(保持原返回结构)
   if (!rkGate.ok) return { error: rkGate.error };
   const card = cards.find(c => c.userId === userId);
@@ -4649,7 +4652,10 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
         claimed: pointsLogs.filter(l => l.userId === uid && String(l.refNo).startsWith('TASK')).map(l => +String(l.refNo).slice(4)) }); }
     if (p === '/api/app/sign' && method === 'POST') { const u = me(); const day = new Date().toDateString(); if (pointsLogs.some(l => l.userId === uid && l.source === '每日签到' && new Date(l.createdAt).toDateString() === day)) return J({ error: '今日已签到' }, 400); addPointsLog(uid, 20, '每日签到', 'SIGN', now()); return J({ ok: true }); }
     if (p === '/api/app/task/claim' && method === 'POST') { const t = tasks.find(x => x.id === +b.id);
-      if (t.type === 'once' && pointsLogs.some(l => l.userId === uid && l.refNo === 'TASK' + t.id)) return J({ error: '该任务奖励已领取过, 不能重复领取' }, 400);
+      if (!t) return J({ error: '任务不存在' }, 404);
+      const claimedLog = (ref) => pointsLogs.find(l => l.userId === uid && l.refNo === ref);
+      if (t.type === 'once' && claimedLog('TASK' + t.id)) return J({ error: '该任务奖励已领取过, 不能重复领取' }, 400);
+      if (t.type === 'daily' && pointsLogs.some(l => l.userId === uid && l.refNo === 'TASK' + t.id && new Date(l.createdAt).toDateString() === new Date().toDateString())) return J({ error: '今日已领取该任务奖励, 明天再来' }, 400);
       addPointsLog(uid, t.points, '任务奖励:' + t.title, 'TASK' + t.id, now()); return J({ ok: true }); }
     // 卡片自助管控: 冻结/解冻/挂失(挂失需后台解除)
     if ((p === '/api/app/card/freeze' || p === '/api/app/card/unfreeze' || p === '/api/app/card/lost') && method === 'POST') {
@@ -4807,5 +4813,5 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
     logOpenApi(app.appKey, p, method, 200, ms, h['x-forwarded-for']);
     return J({ ok: true, endpoint: mock, label: def.label, app: app.name, latencyHint: ms + 'ms', data });
   }
-  return null; // 非 API
+  return J({ error: 'not found: ' + p }, 404); // 未匹配的 /api/* 路径统一 404(防壳层读 null.status 崩 500)
 }

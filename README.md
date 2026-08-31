@@ -86,7 +86,9 @@
 core.js      业务核心（数据+种子+API 路由，node 与 Worker 共用, ESM）
 server.js    Node 本地壳（http + 静态）
 worker.js    Cloudflare Worker 壳（ASSETS + API）
+do.js        Durable Object（单实例内存态）
 public/      admin.html 后台 SPA + app.html 用户端 H5 + app-pc.html 电脑版 + merchant.html 商户端（原生 JS 单文件，无框架/CDN）
+test/regress.mjs  全量回归（192 项：全部后台/用户端/商户端/开放平台路径 + 冻结挂失/充值消费/审批/风控/企业卡/商户/BI/运维/合规全链路），node test/regress.mjs 一键验证
 ```
 
 部署：`npx wrangler deploy`（Cloudflare Workers + static assets + **Durable Object** 单实例内存态，多 isolate 强一致，冷启动自动重建种子数据）
