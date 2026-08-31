@@ -254,6 +254,9 @@
     .dash-grid,.points-grid{grid-template-columns:1fr}
     .tier-rules{grid-template-columns:1fr}
   }
+/* 新分佣链路高亮渐隐 */
+.chain.new { border-color:#16a34a; animation: chainNew 3s ease-out; }
+@keyframes chainNew { 0% { background:rgba(22,163,74,.16); } 100% { background:transparent; } }
 </style>
 </head>
 <body>
@@ -409,7 +412,7 @@
 
     <!-- 11. 分销链路 -->
     <section class="page" id="page-chain">
-      <div class="notice">💡 在用户端 <b><a href="/app" target="_blank" style="color:inherit">http://localhost:5177/app</a></b> 发起一笔消费, 回到此页刷新即可看到新的分佣链路<button class="btn-outline btn-sm" style="margin-left:auto" onclick="LOADERS.chain()">🔄 刷新</button></div>
+      <div class="notice">📡 此页已开启<b>自动监听</b>(每 5 秒) — 在用户端 <b><a href="/app" target="_blank" style="color:inherit">发起一笔消费</a></b>, 新的分佣链路会自动出现、高亮并弹出提示<button class="btn-outline btn-sm" style="margin-left:auto" onclick="LOADERS.chain()">🔄 立即刷新</button></div>
       <div class="card" id="chainRules"></div>
       <div class="card">
         <div class="card-title">分销组织树</div>
@@ -442,7 +445,7 @@ function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(
 function fmtMoney(n){ return '$' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
 function fmtMoney0(n){ return '$' + Math.round(Number(n || 0)).toLocaleString('en-US'); }
 function fmtPts(n){ return Number(n || 0).toLocaleString('en-US'); }
-function fmtTime(ts){ return ts ? new Date(ts).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—'; }
+function fmtTime(ts){ return ts ? new Date(ts).toLocaleString('zh-CN', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'}) : '—'; }
 function maskCard(no){ var d = String(no || '').replace(/\s/g, ''); return d.slice(0,4) + ' ' + d.slice(4,6) + '** **** ' + d.slice(-4); }
 function shortHash(h){ return String(h || '').slice(0,6) + '…' + String(h || '').slice(-4); }
 
@@ -496,12 +499,12 @@ var PAGES = {dashboard:'驾驶舱', cards:'U卡管理', kyc:'KYC 审核', tx:'�
              perf:'业绩排行', commission:'佣金管理', points:'积分管理', shop:'商城管理', orders:'兑换订单', chain:'分销链路'};
 var LOADERS = {};
 /* ================= 角色菜单 ================= */
-// 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台五页
-var SALES_PAGES = ['dashboard', 'crm', 'perf', 'commission', 'chain'];
+// 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
+var SALES_PAGES = ['dashboard', 'crm', 'perf', 'commission', 'chain', 'tx'];
 var MENU = [
   {cap:'概览', items:[['dashboard','📊','驾驶舱']]},
-  {cap:'U卡支付运营', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核'],['tx','💸','交易流水']]},
-  {cap:'CRM 销售', items:[['crm','👥','客户管理'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
+  {cap:'U卡支付运营', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核']]},
+  {cap:'CRM 销售', items:[['crm','👥','客户管理'],['tx','💸','客户交易'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
   {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]}
 ];
 function allowedPage(key){
@@ -518,8 +521,25 @@ function navigate(){
   $('#pageTitle').textContent = PAGES[key];
   closeDrawer(); closeModal();
   if (LOADERS[key]) LOADERS[key]();
+  syncPoll();
 }
 window.addEventListener('hashchange', navigate);
+
+/* ================= 实时自动监听(轮询) ================= */
+// 驾驶舱/分销链路/客户交易等展示型页面定时重拉, 用户端每笔操作数秒内自动出现, 无需手动刷新
+var AUTO_PAGES = {dashboard: 5000, chain: 5000, tx: 8000, commission: 10000};
+var pollTimer = null, lastChainKey = null, lastTxKey = null;
+function syncPoll(){
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  var key = (location.hash || '#dashboard').slice(1);
+  var iv = AUTO_PAGES[key];
+  if (!iv || !ME) return;
+  pollTimer = setInterval(function(){
+    if (document.hidden) return;                                        // 标签页在后台时不空转
+    if ($('#modalRoot').innerHTML || $('#drawerRoot').innerHTML) return; // 弹窗/抽屉操作中不打断
+    if (LOADERS[key]) LOADERS[key]();
+  }, iv);
+}
 
 /* ================= 页面级数据缓存 / 身份 ================= */
 var CARDS = [], USERS = [], SALES = [], CRM = [], TXL = [];
@@ -553,6 +573,10 @@ LOADERS.dashboard = function(){
   var els = [$('#dashStats'), $('#dashTrend'), $('#dashPerf'), $('#dashRecent')];
   els.forEach(function(el){ el.innerHTML = loadingBox(); });
   api('/api/admin/dashboard').then(function(d){
+    var t0 = d.recentTx && d.recentTx[0];
+    var txKey = t0 ? (t0.id + '|' + t0.createdAt) : '';
+    if (lastTxKey && txKey && txKey !== lastTxKey) toast('🔔 实时进账: ' + t0.user + ' ' + (t0.type === 'topup' ? '充值 ' : '消费 ') + fmtMoney(t0.amount));
+    lastTxKey = txKey;
     renderDashStats(d.stats);
     renderTrend(d.trend);
     renderDashPerf(d.perf);
@@ -787,7 +811,7 @@ LOADERS.tx = function(){
     TXL = l;
     if (!l.length){ $('#txBody').innerHTML = emptyBox('暂无交易'); return; }
     var rows = l.map(function(t){
-      var canRefund = t.type === 'consume' && t.status === 'success';
+      var canRefund = ME.level === 0 && t.type === 'consume' && t.status === 'success'; // 退款仅总监
       return '<tr>' +
         '<td class="dim num">#' + t.id + '</td>' +
         '<td>' + txTypePill(t.type) + '</td>' +
@@ -1031,9 +1055,13 @@ LOADERS.chain = function(){
     $('#chainTreeSub').textContent = ME.level === 0 ? '全组织视角 · 总监可看所有销售链路' : '我的团队视角 · 展示本人及全部下级';
     $('#chainTree').innerHTML = roots.map(orgHtml).join('') || emptyBox();
 
-    // ---- 实时分佣链路 ----
+    // ---- 实时分佣链路(自动监听: 新链路 toast 提示 + 首条高亮) ----
     var chains = d.chains || [];
-    $('#chainList').innerHTML = chains.length ? chains.map(function(ch){
+    var newKey = chains.length ? (chains[0].createdAt + '|' + (chains[0].path[0] ? chains[0].path[0].sales : '') + '|' + chains[0].amount) : '';
+    var hasNew = lastChainKey !== null && newKey !== '' && newKey !== lastChainKey;
+    if (hasNew) toast('🔔 新的分佣链路: ' + chains[0].user + ' ' + (chains[0].type === 'topup' ? '充值 ' : '消费 ') + fmtMoney(chains[0].amount) + ', 佣金已沿链自动入账');
+    lastChainKey = newKey;
+    $('#chainList').innerHTML = chains.length ? chains.map(function(ch, ci){
       var maxAmt = Math.max.apply(null, ch.path.map(function(p){ return p.amount; }));
       var pathHtml = ch.path.map(function(p){
         return '<div class="chain-node' + (maxAmt > 0 && p.amount === maxAmt ? ' max' : '') + '">' +
@@ -1042,7 +1070,7 @@ LOADERS.chain = function(){
           '<div class="amt num">' + fmtMoney(p.amount) + '</div>' +
           '<div class="sub-line num">' + esc(p.rate) + '</div></div>';
       }).join('<span class="chain-arrow">→</span>');
-      return '<div class="chain"><div class="chain-tx">' + txTypePill(ch.type) + ' <b>' + esc(ch.user) + '</b>' +
+      return '<div class="chain' + (hasNew && ci === 0 ? ' new' : '') + '"><div class="chain-tx">' + txTypePill(ch.type) + ' <b>' + esc(ch.user) + '</b>' +
         '<div class="sub-line">' + esc(ch.merchant || '充值入金') + ' · <b class="num">' + fmtMoney(ch.amount) + '</b> · ' + fmtTime(ch.createdAt) + '</div>' +
         '<div class="sub-line">直属销售: ' + esc(ch.directRep || '—') + '</div></div>' +
         '<span class="chain-arrow">➜</span>' + pathHtml + '</div>';
