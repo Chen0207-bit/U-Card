@@ -22,6 +22,7 @@ import { createBiService } from './src/domain/bi/bi-service.js';
 import { createMerchantAdminPlatformService } from './src/domain/merchant/merchant-admin-platform-service.js';
 import { createApprovalService } from './src/domain/approval/approval-service.js';
 import { createRiskEngineService } from './src/domain/risk/risk-engine-service.js';
+import { createEnterpriseService } from './src/domain/enterprise/enterprise-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -5074,6 +5075,15 @@ const riskEngineService = createRiskEngineService({
   nextId: nid, now, fields: ENGINE_FIELDS, ops: ENGINE_OPS, actionLabels: ENGINE_ACTION_LABEL, levelLabels: RISK_LEVEL_LABEL,
   operatorName: id => repById(id)?.name || '运营总监',
 });
+const enterpriseService = createEnterpriseService({
+  entAccounts: seeded(() => entAccounts), entMembers: seeded(() => entMembers), entDepts: seeded(() => entDepts),
+  entCards: seeded(() => entCards), entTxApprovals: seeded(() => entTxApprovals), entBills: seeded(() => entBills),
+  entDeptLogs: seeded(() => entDeptLogs), workflowApprovals: seeded(() => approvals), kybCases: seeded(() => kybCases),
+  ledgerAccounts: seeded(() => ledgerAccounts), ledgerTypeLabels: LEDGER_TYPE_LABEL, routeFor,
+  ensureEntLedgerAccount, ensureLedgerAccount, ensureMerchantLedgerAccount,
+  postLedgerTx, operatorName: id => repById(id)?.name || '总监', maskCardNo, round: lgR2, isoDay,
+  randomInt: ri, nid, now,
+});
 
 return {
   getOpsDataState,
@@ -5104,6 +5114,7 @@ return {
   merchantAdminPlatformService,
   approvalService,
   riskEngineService,
+  enterpriseService,
 };
 }
 
