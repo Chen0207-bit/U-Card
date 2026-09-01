@@ -5,6 +5,7 @@ export function registerBasicOperationsRoutes(router, service) {
     ? handler(request, request.context.actor.id)
     : failure(401, '请先选择运营后台账号', 'AUTH_REQUIRED');
 
+  router.register('GET', '/api/admin/me', sales((request, actorId) => service.me(actorId)));
   router.register('GET', '/api/admin/dashboard', sales((request, actorId) => service.dashboard(actorId, request.query)));
   router.register('GET', '/api/admin/cards', sales((request, actorId) => service.listCards(actorId)));
   router.register('POST', '/api/admin/cards/issue', sales((request, actorId) => service.issueCard(actorId, request.body)));

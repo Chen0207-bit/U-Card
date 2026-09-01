@@ -168,5 +168,10 @@ export function createBasicOperationsService(port) {
       const rates = ['cards', 'topup', 'consume', 'points'].map(key => rate(sumDone(key), sumTarget(key)));
       return ok({ dim, period, mult, periodStart, summary: { repCount: rows.length, overall: +(rates.reduce((sum, value) => sum + value, 0) / rates.length).toFixed(1), rates: { cards: rates[0], topup: rates[1], consume: rates[2], points: rates[3] }, done: { cards: sumDone('cards'), topup: +sumDone('topup').toFixed(2), consume: +sumDone('consume').toFixed(2), points: sumDone('points') }, targets: { cards: sumTarget('cards'), topup: sumTarget('topup'), consume: sumTarget('consume'), points: sumTarget('points') }, top: rows[0] ? { id: rows[0].id, name: rows[0].name, overall: rows[0].overall } : null }, rows });
     },
+
+    me(actorId) {
+      const auth = requireSession(actorId); if (auth.status) return auth;
+      return ok({ ...auth.me, scope: '全部数据', teamIds: port.subtreeIds(auth.sid) });
+    },
   };
 }
