@@ -23,6 +23,7 @@ import { createMerchantAdminPlatformService } from './src/domain/merchant/mercha
 import { createApprovalService } from './src/domain/approval/approval-service.js';
 import { createRiskEngineService } from './src/domain/risk/risk-engine-service.js';
 import { createEnterpriseService } from './src/domain/enterprise/enterprise-service.js';
+import { createPaymentOrchestrationService } from './src/domain/orchestration/payment-orchestration-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -5084,6 +5085,16 @@ const enterpriseService = createEnterpriseService({
   postLedgerTx, operatorName: id => repById(id)?.name || '总监', maskCardNo, round: lgR2, isoDay,
   randomInt: ri, nid, now,
 });
+const paymentOrchestrationService = createPaymentOrchestrationService({
+  adapters: seeded(() => orchAdapters), transactions: seeded(() => transactions), txs: seeded(() => orchTxs),
+  healthLog: seeded(() => orchHealthLog), webhookLogs: seeded(() => orchWebhookLogs), reconFixed: seeded(() => orchReconFixed),
+  adapterById: orchById, routeFor, presentTx: pubOrchTx, transit: orchTransit,
+  reconciliationDiffs: orchReconDiffs, fixDifference: orchFixDiff,
+  feeOf: orchFeeOf, effectivePriority: orchEffPriority, now, random: rnd, randomInt: ri, nextId: nid,
+  kindLabels: ORCH_KIND_LABEL, sceneKinds: ORCH_SCENE_KIND, sceneLabels: ORCH_SCENE_LABEL,
+  stateLabels: ORCH_STATE_LABEL, nextStates: ORCH_NEXT,
+  operatorName: id => repById(id)?.name || '运营总监',
+});
 
 return {
   getOpsDataState,
@@ -5115,6 +5126,7 @@ return {
   approvalService,
   riskEngineService,
   enterpriseService,
+  paymentOrchestrationService,
 };
 }
 

@@ -23,6 +23,7 @@ import { registerMerchantAdminPlatformRoutes } from '../api/merchant-admin-platf
 import { registerApprovalRoutes } from '../api/approval-routes.js';
 import { registerRiskEngineRoutes } from '../api/risk-engine-routes.js';
 import { registerEnterpriseRoutes } from '../api/enterprise-routes.js';
+import { registerPaymentOrchestrationRoutes } from '../api/payment-orchestration-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -58,6 +59,7 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
   registerApprovalRoutes(router, core.approvalService);
   registerRiskEngineRoutes(router, core.riskEngineService);
   registerEnterpriseRoutes(router, core.enterpriseService);
+  registerPaymentOrchestrationRoutes(router, core.paymentOrchestrationService);
 
   return {
     config,
