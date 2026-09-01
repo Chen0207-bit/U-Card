@@ -2,7 +2,7 @@ import { createApp } from '../src/app/create-app.js';
 import { createConfig } from '../src/config.js';
 import { corsHeaders } from '../src/runtime/http.js';
 import { resolveStaticPath } from '../src/runtime/static-routes.js';
-import { createCoreRuntime, exportInternalSnapshot, importInternalSnapshot, handleApi, restoreOpsSeed } from '../core.js';
+import { createCoreRuntime, exportInternalSnapshot, importInternalSnapshot, restoreOpsSeed } from '../core.js';
 import { AppState } from '../do.js';
 import { MemorySnapshotRepository } from '../src/repositories/memory-repository.js';
 import { DurableSnapshotRepository, RUNTIME_SNAPSHOT_KEY } from '../src/repositories/durable-repository.js';
@@ -18,6 +18,9 @@ const check = (name, condition, detail = '') => {
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
 check('Router 注册首批领域路由', demo.routes.length === 185, demo.routes.join(','));
+// legacy core.handleApi 已删除: 所有直连调用统一走 Router-first 的 app.handleApi
+const appOf = (core) => createApp({ core, env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
+const coreApp = appOf();
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
@@ -63,9 +66,9 @@ check('卡片解冻由新 Router 和状态机处理', r.status === 200 && r.json
 check('挂失状态不能自助解冻', transitionCardStatus('lost', 'unfreeze').ok === false);
 const isolatedA = createCoreRuntime();
 const isolatedB = createCoreRuntime();
-const isolatedBefore = isolatedB.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance;
-isolatedA.handleApi('POST', '/api/app/topup', {}, { amount: 88, method: 'usdt' }, { 'x-user': '1' });
-const isolatedAfter = isolatedB.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance;
+const isolatedBefore = (await appOf(isolatedB).handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' })).json.card.balance;
+await appOf(isolatedA).handleApi('POST', '/api/app/topup', {}, { amount: 88, method: 'usdt' }, { 'x-user': '1' });
+const isolatedAfter = (await appOf(isolatedB).handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' })).json.card.balance;
 check('不同 StateContainer 实例互不串数据', isolatedAfter === isolatedBefore, `${isolatedAfter} != ${isolatedBefore}`);
 
 const production = createConfig({ APP_MODE: 'production' });
@@ -84,26 +87,26 @@ check('数据控制台入口统一映射', resolveStaticPath('/data-console') ==
 
 console.log('\n== 内部快照 ==');
 restoreOpsSeed('snapshot_test_seed');
-const beforeMe = handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json;
+const beforeMe = (await coreApp.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' })).json;
 const beforeBalance = beforeMe.card.balance;
-const topup = handleApi('POST', '/api/app/topup', {}, { amount: 123, method: 'usdt' }, { 'x-user': '1' });
-const changedMe = handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json;
+const topup = await coreApp.handleApi('POST', '/api/app/topup', {}, { amount: 123, method: 'usdt' }, { 'x-user': '1' });
+const changedMe = (await coreApp.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' })).json;
 const changedBalance = changedMe.card.balance;
 check('快照测试充值改变余额', topup.status === 200 && changedBalance > beforeBalance, JSON.stringify({ topup, before: beforeBalance, after: changedBalance }));
 const snapshot = exportInternalSnapshot();
 check('内部快照带版本、checksum 和必要集合', snapshot.schemaVersion === 2 && snapshot.checksum && snapshot.data.users.length >= 1 && snapshot.data.ledgerEntries.length >= 1);
 restoreOpsSeed('snapshot_test_reset');
 importInternalSnapshot(snapshot);
-const restoredMe = handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json;
-check('内部快照可恢复业务状态', restoredMe.card.balance === changedBalance, `${restoredMe.card.balance} != ${changedBalance}`);
+const restoredMe = (await coreApp.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' })).json;
+check('内部快照可恢复业务状态', restoredMe.card.balance === changedBalance, `${restoredMe.card?.balance} != ${changedBalance}`);
 let badSnapshotRejected = false;
 try { importInternalSnapshot({ schemaVersion: 999, data: {}, counters: {} }); } catch { badSnapshotRejected = true; }
 check('拒绝未知快照版本', badSnapshotRejected);
 let corruptSnapshotRejected = false;
-const balanceBeforeCorruptImport = handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance;
+const balanceBeforeCorruptImport = (await coreApp.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' })).json.card.balance;
 try { const corrupt = structuredClone(snapshot); corrupt.data.users[0].name = 'tampered'; importInternalSnapshot(corrupt); } catch { corruptSnapshotRejected = true; }
 check('拒绝 checksum 不匹配的损坏快照', corruptSnapshotRejected);
-check('损坏快照恢复失败不破坏当前状态', handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance === balanceBeforeCorruptImport);
+check('损坏快照恢复失败不破坏当前状态', (await coreApp.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' })).json.card.balance === balanceBeforeCorruptImport);
 const legacySnapshot = structuredClone(snapshot);
 legacySnapshot.schemaVersion = 1;
 delete legacySnapshot.checksum;
@@ -115,7 +118,7 @@ restoreOpsSeed('snapshot_test_cleanup');
 const deterministicRuntime = createCoreRuntime();
 deterministicRuntime.restoreOpsSeed('deterministic_first');
 const deterministicFirst = deterministicRuntime.exportInternalSnapshot();
-deterministicRuntime.handleApi('POST', '/api/app/topup', {}, { amount: 33, method: 'usdt' }, { 'x-user': '1' });
+await appOf(deterministicRuntime).handleApi('POST', '/api/app/topup', {}, { amount: 33, method: 'usdt' }, { 'x-user': '1' });
 deterministicRuntime.restoreOpsSeed('deterministic_second');
 const deterministicSecond = deterministicRuntime.exportInternalSnapshot();
 check('重复恢复会重置随机种子与 ID 基线',
