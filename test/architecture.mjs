@@ -17,7 +17,7 @@ const check = (name, condition, detail = '') => {
 
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
-check('Router 注册首批领域路由', demo.routes.length === 70, demo.routes.join(','));
+check('Router 注册首批领域路由', demo.routes.length === 75, demo.routes.join(','));
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
@@ -37,6 +37,11 @@ r = await demo.handleApi('GET', '/api/admin/tenants', {}, {}, { 'x-sales': '1' }
 check('租户列表由新 Router/Service 提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 120));
 r = await demo.handleApi('GET', '/api/admin/open/apps', {}, {}, { 'x-sales': '1' });
 check('开放平台应用由新 Router/Service 提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 120));
+const openAppKey = r.json.list?.find(item => item.enabled)?.appKey;
+const openMock = await demo.handleApi('POST', '/api/open/balance.query', {}, { userId: 1 }, { 'x-app-key': openAppKey });
+check('开放 API mock 由新 Router/Service 提供', openMock.status === 200 && openMock.json.endpoint === 'balance.query', JSON.stringify(openMock).slice(0, 120));
+const openMockUnauthorized = await demo.handleApi('POST', '/api/open/balance.query');
+check('开放 API mock 拒绝无 AppKey 请求', openMockUnauthorized.status === 401, JSON.stringify(openMockUnauthorized));
 r = await demo.handleApi('GET', '/api/admin/notify/channels', {}, {}, { 'x-sales': '1' });
 check('消息渠道由新 Router/Service 提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 120));
 r = await demo.handleApi('GET', '/api/admin/sys/roles', {}, {}, { 'x-sales': '1' });

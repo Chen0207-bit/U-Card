@@ -11,6 +11,7 @@ import { registerSystemRoutes } from '../api/system-routes.js';
 import { registerOpsManagementRoutes } from '../api/ops-management-routes.js';
 import { registerMerchantPortalRoutes } from '../api/merchant-portal-routes.js';
 import { registerAppUserRoutes } from '../api/app-user-routes.js';
+import { registerOpenApiMockRoutes } from '../api/open-api-mock-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -34,6 +35,7 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
   registerOpsManagementRoutes(router, core.opsManagementService);
   registerMerchantPortalRoutes(router, core.merchantPortalService);
   registerAppUserRoutes(router, core.appUserService);
+  registerOpenApiMockRoutes(router, core.openApiMockService);
 
   return {
     config,

@@ -11,6 +11,7 @@ import { createSystemService } from './src/domain/system/system-service.js';
 import { createOpsManagementService } from './src/domain/ops/ops-management-service.js';
 import { createMerchantPortalService } from './src/domain/merchant/merchant-portal-service.js';
 import { createAppUserService } from './src/domain/app/app-user-service.js';
+import { createOpenApiMockService } from './src/domain/open-api/open-api-mock-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -1786,21 +1787,6 @@ function logOpenApi(appKey, endpoint, method, status, ms, ip) {
   openApiLogs.unshift({ id: openApiLogs.length ? Math.max(...openApiLogs.map(l => l.id)) + 1 : 950001, createdAt: now(), appKey, endpoint, method, status, ms, ip: ip || '127.0.0.1' });
   if (openApiLogs.length > 200) openApiLogs.length = 200;
 }
-// P4.5 开放平台 mock 接口注册表: 供接口文档「在线调试」真实调用(只读模拟, 不动真实账本)
-const OPEN_MOCKS = {
-  'user.create': { label: '用户开户', data: (b) => ({ userId: ri(100, 999), name: b.name || 'OpenAPI User', kycLevel: 0, status: 'created', invitedBy: null, createdAt: now() }) },
-  'kyc.submit': { label: 'KYC 提交', data: (b) => ({ kycId: 'KYC-' + ri(100000, 999999), applyLevel: Math.min(2, +b.applyLevel || 1), docs: ['passport.jpg', 'selfie.jpg'], status: 'pending_review', sla: '2 小时' }) },
-  'card.issue': { label: '发卡', data: (b) => ({ cardId: ri(100, 999), cardNo: maskCardNo(genCardNo()), level: b.level || 'standard', status: 'active', balance: 0, expMonth: ri(1, 12), expYear: ri(28, 31) }) },
-  'balance.query': { label: '查询余额', data: (b) => { const u = users.find(x => x.id === +b.userId) || users[0]; const c = cards.find(x => x.userId === u.id); return { userId: u.id, userName: u.name, currency: 'USD', balance: c ? +c.balance.toFixed(2) : 0, available: c ? +c.balance.toFixed(2) : 0, frozen: 0, asOf: now() }; } },
-  'transaction.query': { label: '查询交易', data: (b) => ({ total: transactions.length, list: transactions.slice(0, 5).map(pubTx) }) },
-  'topup.callback': { label: '充值回调', data: (b) => ({ accepted: true, txId: 'TX' + ri(100000, 999999), amount: +b.amount || 100, currency: 'USD', method: b.method || 'usdt', status: 'settled', receivedAt: now() }) },
-  'consume.callback': { label: '消费回调', data: (b) => ({ accepted: true, txId: 'TX' + ri(100000, 999999), merchant: b.merchant || 'Amazon', amount: +b.amount || 58.4, fee: +(((+b.amount || 58.4) * 0.02)).toFixed(2), status: 'cleared', receivedAt: now() }) },
-  'refund.create': { label: '退款', data: (b) => ({ refundId: 'RF' + ri(100000, 999999), txId: b.txId || 'TX' + ri(100000, 999999), amount: +b.amount || 45, status: 'processing', eta: 'T+1 到账' }) },
-  'points.query': { label: '积分查询', data: (b) => { const u = users.find(x => x.id === +b.userId) || users[0]; const s = pointsSummary(u.id); return { userId: u.id, userName: u.name, available: s.available, frozen: s.frozen, expiringSoon: s.expiringSoon, totalEarned: s.total }; } },
-  'order.query': { label: '订单查询', data: (b) => (b.orderId ? { order: pubOrder(orders.find(o => o.id === +b.orderId) || orders[0]) } : { total: orders.length, list: orders.slice(0, 5).map(pubOrder) }) },
-};
-
-
 // ---------------- P5.1 支付编排: 模块级模型与工具(routeFor 供后续波次复用) ----------------
 const ORCH_SCENE_KIND = { topup_fiat: 'fiat_gateway', topup_crypto: 'crypto_gateway', pay: 'card_issuer', issue_card: 'card_issuer', fx: 'fx', settle: 'settlement' };
 const ORCH_SCENE_LABEL = { topup_fiat: '法币充值', topup_crypto: '加密充值', pay: '卡消费授权', issue_card: '发卡', fx: '换汇', settle: '结算打款' };
@@ -4924,24 +4910,6 @@ function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
     return J({ error: 'not found' }, 404);
   }
 
-  // ============ P4.5 开放平台 mock 接口(接口文档「在线调试」真实可调; AppKey 鉴权, 不动真实账本) ============
-  if (p.startsWith('/api/open/')) {
-    const appKey = h['x-app-key'] || h['X-App-Key'] || '';
-    const app = openApps.find(a => a.appKey === appKey);
-    if (!app) return J({ error: '401 Unauthorized: 无效的 x-app-key, 请在「开放平台 → 应用管理」获取启用的 AppKey' }, 401);
-    if (!app.enabled) return J({ error: '403 Forbidden: 应用已停用, 拒绝访问' }, 403);
-    const mock = p.slice('/api/open/'.length);
-    const def = OPEN_MOCKS[mock];
-    if (!def) {
-      logOpenApi(app.appKey, p, method, 404, ri(4, 18), h['x-forwarded-for']);
-      return J({ error: '404 Not Found: 未知的开放接口: /api/open/' + mock, available: Object.keys(OPEN_MOCKS) }, 404);
-    }
-    const data = def.data(b || {});
-    const ms = ri(16, 180);
-    app.todayCalls++; app.totalCalls++;
-    logOpenApi(app.appKey, p, method, 200, ms, h['x-forwarded-for']);
-    return J({ ok: true, endpoint: mock, label: def.label, app: app.name, latencyHint: ms + 'ms', data });
-  }
   return J({ error: 'not found: ' + p }, 404); // 未匹配的 /api/* 路径统一 404(防壳层读 null.status 崩 500)
 }
 
@@ -5028,6 +4996,12 @@ const appUserService = createAppUserService({
   addPoints: addPointsLog, pointsSummary, productLimit, productRating, notifications: appNotificationsFor,
   featureEnabled: ffOn, randomInt: ri, now,
 });
+const openApiMockService = createOpenApiMockService({
+  apps: () => { ensureSeeded(); return openApps; }, users: () => { ensureSeeded(); return users; },
+  cards: () => { ensureSeeded(); return cards; }, transactions: () => { ensureSeeded(); return transactions; },
+  orders: () => { ensureSeeded(); return orders; }, pointsSummary, presentTransaction: pubTx, presentOrder: pubOrder,
+  maskCardNumber: maskCardNo, generateCardNumber: genCardNo, randomInt: ri, now, logCall: logOpenApi,
+});
 
 return {
   getOpsDataState,
@@ -5047,6 +5021,7 @@ return {
   opsManagementService,
   merchantPortalService,
   appUserService,
+  openApiMockService,
 };
 }
 
