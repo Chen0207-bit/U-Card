@@ -17,7 +17,7 @@ const check = (name, condition, detail = '') => {
 
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
-check('Router 注册首批领域路由', demo.routes.length === 44, demo.routes.join(','));
+check('Router 注册首批领域路由', demo.routes.length === 50, demo.routes.join(','));
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
@@ -27,6 +27,8 @@ r = await demo.handleApi('GET', '/api/app/users');
 check('用户端账号选择列表由 Router 匿名提供', r.status === 200 && Array.isArray(r.json), JSON.stringify(r).slice(0, 100));
 r = await demo.handleApi('GET', '/api/mch/merchants');
 check('商户端账号选择列表由 Router 匿名提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 100));
+r = await demo.handleApi('GET', '/api/mch/me', {}, {}, { 'x-mch': '8301' });
+check('商户看板由新 Router/Service 提供', r.status === 200 && r.json.me?.id === 8301, JSON.stringify(r).slice(0, 120));
 r = await demo.handleApi('GET', '/api/admin/ops/backup', {}, {}, { 'x-sales': '30' });
 check('普通销售不能导出运维备份', r.status === 403, JSON.stringify(r));
 r = await demo.handleApi('GET', '/api/admin/tenants', {}, {}, { 'x-sales': '30' });

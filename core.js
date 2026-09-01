@@ -9,6 +9,7 @@ import { createOpenPlatformService } from './src/domain/open-platform/open-platf
 import { createNotificationService } from './src/domain/notification/notification-service.js';
 import { createSystemService } from './src/domain/system/system-service.js';
 import { createOpsManagementService } from './src/domain/ops/ops-management-service.js';
+import { createMerchantPortalService } from './src/domain/merchant/merchant-portal-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -4996,6 +4997,27 @@ const opsManagementService = createOpsManagementService({
   audit: (actorId, module, action, target, result = '成功') => appendOpsLog(module, action, target, repById(actorId)?.name || '未知账号', result),
   now,
 });
+const merchantPortalService = createMerchantPortalService({
+  accounts: () => { ensureSeeded(); return mchAccounts; },
+  orders: () => { ensureSeeded(); return mchOrders; },
+  refunds: () => { ensureSeeded(); return mchRefunds; },
+  settles: () => { ensureSeeded(); return mchSettles; },
+  splits: () => { ensureSeeded(); return mchSplits; },
+  risks: () => { ensureSeeded(); return mchRisk; },
+  orderById: id => mchOrderById(+id),
+  presentAccount: pubMchAccount,
+  presentOrder: pubMchOrder,
+  presentRefund: pubMchRefund,
+  presentSettle: pubMchSettle,
+  mccLabels: MCC_LABEL,
+  splitTypeLabels: SPLIT_TYPE_LABEL,
+  orderStatusLabels: MCH_ORDER_STATUS_LABEL,
+  dayKey,
+  isoDay,
+  round: lgR2,
+  nextId: nid,
+  now,
+});
 
 return {
   getOpsDataState,
@@ -5013,6 +5035,7 @@ return {
   notificationService,
   systemService,
   opsManagementService,
+  merchantPortalService,
 };
 }
 
