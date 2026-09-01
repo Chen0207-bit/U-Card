@@ -10,9 +10,9 @@ const routes = [...new Set(
 )].sort();
 
 const baseline = {
-  count: 176,
-  sha256: '8c65f69522bda0977b51e6d7248018f3287a1ef44a7b2684aabc7fab3e0e5597',
-  groups: { admin: 139, app: 25, merchant: 7, open: 2, other: 3 },
+  count: 178,
+  sha256: '99d25fd76fe43fb80551283671705b447c748470cc1204af7289a991f6740ac8',
+  groups: { admin: 141, app: 25, merchant: 7, open: 2, other: 3 },
 };
 
 const groupOf = (p) => p.startsWith('/api/admin/') ? 'admin'

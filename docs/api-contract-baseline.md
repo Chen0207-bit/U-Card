@@ -19,19 +19,20 @@
 从 `core.js` 与 `src/api/*.js`（不含 `src/api/staging/`）字面路径提取，排序后以换行连接：
 
 ```text
-总计：176
-admin：139
+总计：178
+admin：141
 app：25
 merchant：7
 open：2
 other：3
-SHA-256：8c65f69522bda0977b51e6d7248018f3287a1ef44a7b2684aabc7fab3e0e5597
+SHA-256：99d25fd76fe43fb80551283671705b447c748470cc1204af7289a991f6740ac8
 ```
 
 ### 基线变更记录
 
 - **42534be（冻结）→ 173（1a670b9 前）**：3.x 迁移期间 Router 接管动态路由时引入了带尾斜杠的**前缀注册字面量**（如 `/api/admin/customers/`），对应旧 `core.js` 正则匹配的既有端点，未新增公开能力；另在 P4.3 风控规则引擎迁移时**有意新增**两个端点：`POST /api/admin/risk-engine/versions/publish`（手动发布当前策略）与 `POST /api/admin/risk-engine/versions/{ver}/rollback`（回滚到含快照的版本，旧版本无 `rulesSnapshot` 时返回 409 防伪造）。净增 12 条：161 → 173（admin 124 → 136）。
 - **173 → 176（P5.1 支付编排接入）**：`src/api/payment-orchestration-routes.js` 从 staging 移入后，其 4 个前缀注册中的 3 个带尾斜杠字面量 `/api/admin/orch/adapters/`、`/api/admin/orch/tx/`、`/api/admin/orch/diff/` 进入扫描（旧 `core.js` 以正则字面量匹配同样端点，不被扫描）；9 个精确路径全部为既有端点，未新增公开能力。173 → 176（admin 136 → 139）。
+- **176 → 178（P1.5 经典风控接入）**：`src/api/classic-risk-routes.js` 移入后新增 2 个带尾斜杠前缀字面量 `/api/admin/risk/rules/`、`/api/admin/risk/lists/`（旧 `core.js` 以正则字面量匹配同样端点）；`/api/admin/risk/` 与 4 个精确路径均为既有字面量。176 → 178（admin 139 → 141）。
 
 `node test/api-contract.mjs` 会检查该集合。新增、删除或重命名路径时必须先审查兼容性，再更新基线，不能为了让测试通过而直接修改哈希。
 

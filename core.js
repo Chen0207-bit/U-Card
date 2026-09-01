@@ -24,6 +24,7 @@ import { createApprovalService } from './src/domain/approval/approval-service.js
 import { createRiskEngineService } from './src/domain/risk/risk-engine-service.js';
 import { createEnterpriseService } from './src/domain/enterprise/enterprise-service.js';
 import { createPaymentOrchestrationService } from './src/domain/orchestration/payment-orchestration-service.js';
+import { createClassicRiskService } from './src/domain/risk/classic-risk-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -5095,6 +5096,16 @@ const paymentOrchestrationService = createPaymentOrchestrationService({
   stateLabels: ORCH_STATE_LABEL, nextStates: ORCH_NEXT,
   operatorName: id => repById(id)?.name || '运营总监',
 });
+const classicRiskService = createClassicRiskService({
+  users: seeded(() => users), cards: seeded(() => cards),
+  riskEvents: seeded(() => riskEvents), riskRules: seeded(() => riskRules),
+  riskLists: seeded(() => riskLists), riskTags: seeded(() => riskTags),
+  engineRules: seeded(() => engineRules), engineConditionText: engineCondStr,
+  frozenBalances: seeded(() => frozenBalances), ensureCardLedgerAccount,
+  levelLabels: RISK_LEVEL_LABEL, statusLabels: RISK_STATUS_LABEL, actionLabels: RISK_ACTION_LABEL,
+  nextId: nid, now, round: lgR2,
+  operatorName: id => repById(id)?.name || '运营总监',
+});
 
 return {
   getOpsDataState,
@@ -5127,6 +5138,7 @@ return {
   riskEngineService,
   enterpriseService,
   paymentOrchestrationService,
+  classicRiskService,
 };
 }
 

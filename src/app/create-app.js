@@ -24,6 +24,7 @@ import { registerApprovalRoutes } from '../api/approval-routes.js';
 import { registerRiskEngineRoutes } from '../api/risk-engine-routes.js';
 import { registerEnterpriseRoutes } from '../api/enterprise-routes.js';
 import { registerPaymentOrchestrationRoutes } from '../api/payment-orchestration-routes.js';
+import { registerClassicRiskRoutes } from '../api/classic-risk-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -60,6 +61,7 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
   registerRiskEngineRoutes(router, core.riskEngineService);
   registerEnterpriseRoutes(router, core.enterpriseService);
   registerPaymentOrchestrationRoutes(router, core.paymentOrchestrationService);
+  registerClassicRiskRoutes(router, core.classicRiskService);
 
   return {
     config,
