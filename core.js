@@ -1,8 +1,9 @@
 /**
  * 优卡 U-Card Demo — 业务核心 (node 本地 / Cloudflare Worker 共用, ESM)
- * 数据模型 + 种子数据 + 业务动作 + API 路由, 纯内存, 冷启动重建。
+ * 数据模型 + 种子数据 + 业务动作 + legacy API 路由；运行壳层负责持久化快照。
  */
 import { createVersionedSnapshot, validateVersionedSnapshot } from './src/state/snapshot-codec.js';
+import { transitionCardStatus } from './src/domain/card/card-state-machine.js';
 
 // ---------------- 工具 ----------------
 let seed = 42;
@@ -3015,6 +3016,17 @@ export function getMerchantAccountChoices() {
   };
 }
 
+export function changeAppCardStatus(userId, action) {
+  if (!inited) initSeed();
+  if (!users.some(u => u.id === userId)) return { status: 401, json: { error: '未登录', code: 'AUTH_REQUIRED' } };
+  const card = cards.find(c => c.userId === userId);
+  if (!card) return { status: 404, json: { error: '未找到卡' } };
+  const transition = transitionCardStatus(card.status, action);
+  if (!transition.ok) return { status: 400, json: { error: transition.error } };
+  card.status = transition.status;
+  return { status: 200, json: { status: card.status } };
+}
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
 export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
@@ -4789,12 +4801,8 @@ export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
       addPointsLog(uid, t.points, '任务奖励:' + t.title, 'TASK' + t.id, now()); return J({ ok: true }); }
     // 卡片自助管控: 冻结/解冻/挂失(挂失需后台解除)
     if ((p === '/api/app/card/freeze' || p === '/api/app/card/unfreeze' || p === '/api/app/card/lost') && method === 'POST') {
-      const card = cards.find(c => c.userId === uid); if (!card) return J({ error: '未找到卡' }, 404);
       const act = p.split('/').pop();
-      if (act === 'freeze') { if (card.status !== 'active') return J({ error: '当前状态不可冻结' }, 400); card.status = 'frozen'; }
-      if (act === 'unfreeze') { if (card.status !== 'frozen') return J({ error: '只有冻结状态可自助解冻, 挂失请联系客服' }, 400); card.status = 'active'; }
-      if (act === 'lost') { if (card.status === 'lost') return J({ error: '卡已处于挂失状态' }, 400); card.status = 'lost'; }
-      return J({ status: card.status });
+      return changeAppCardStatus(uid, act);
     }
     if (p === '/api/app/products') { // P2.3: 返回商品(含限购/评分) + 分类列表
       if (ffFlags && !ffOn('shopFlag')) return J({ error: '积分商城功能已下线 (Feature Flag: shopFlag=off), 请联系运营在后台「运维中心」恢复', flag: 'shopFlag', degraded: true }, 503); // P5.6 生效点

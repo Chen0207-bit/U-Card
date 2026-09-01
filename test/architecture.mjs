@@ -6,6 +6,7 @@ import { exportInternalSnapshot, importInternalSnapshot, handleApi, restoreOpsSe
 import { AppState } from '../do.js';
 import { MemorySnapshotRepository } from '../src/repositories/memory-repository.js';
 import { DurableSnapshotRepository, RUNTIME_SNAPSHOT_KEY } from '../src/repositories/durable-repository.js';
+import { transitionCardStatus } from '../src/domain/card/card-state-machine.js';
 
 let pass = 0;
 let fail = 0;
@@ -16,7 +17,7 @@ const check = (name, condition, detail = '') => {
 
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
-check('Router 注册 4 条运维路由和 3 条 Demo 入口路由', demo.routes.length === 7, demo.routes.join(','));
+check('Router 注册运维、Demo 入口和卡片状态路由', demo.routes.length === 10, demo.routes.join(','));
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
@@ -34,6 +35,11 @@ r = await demo.handleApi('GET', '/api/app/me');
 check('用户端无身份返回 401', r.status === 401, JSON.stringify(r));
 r = await demo.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' });
 check('Demo 用户身份兼容', r.status === 200 && r.json.id === 1, JSON.stringify(r).slice(0, 100));
+r = await demo.handleApi('POST', '/api/app/card/freeze', {}, {}, { 'x-user': '1' });
+check('卡片冻结由新 Router 和状态机处理', r.status === 200 && r.json.status === 'frozen', JSON.stringify(r));
+r = await demo.handleApi('POST', '/api/app/card/unfreeze', {}, {}, { 'x-user': '1' });
+check('卡片解冻由新 Router 和状态机处理', r.status === 200 && r.json.status === 'active', JSON.stringify(r));
+check('挂失状态不能自助解冻', transitionCardStatus('lost', 'unfreeze').ok === false);
 
 const production = createConfig({ APP_MODE: 'production' });
 check('生产模式默认 session 且禁止 reset', production.authMode === 'session' && production.allowDemoReset === false, JSON.stringify(production));

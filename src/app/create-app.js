@@ -3,9 +3,10 @@ import { createRequestContext } from './request-context.js';
 import { createRouter } from '../api/router.js';
 import { registerOpsRoutes } from '../api/ops-routes.js';
 import { registerDemoEntryRoutes } from '../api/demo-entry-routes.js';
+import { registerCardRoutes } from '../api/card-routes.js';
 import {
   handleApi as legacyHandleApi, getOpsDataState, exportOpsBackup, restoreOpsSeed,
-  getAdminAccountChoices, getAppAccountChoices, getMerchantAccountChoices,
+  getAdminAccountChoices, getAppAccountChoices, getMerchantAccountChoices, changeAppCardStatus,
 } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {} } = {}) {
@@ -21,6 +22,7 @@ export function createApp({ env = {}, defaults = {} } = {}) {
     getAppAccounts: getAppAccountChoices,
     getMerchantAccounts: getMerchantAccountChoices,
   });
+  registerCardRoutes(router, { changeStatus: changeAppCardStatus });
 
   return {
     config,
