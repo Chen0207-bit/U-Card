@@ -1283,7 +1283,16 @@ function renderMe(){
       : '<button class="btn" style="margin-top:12px" onclick="openKycM()">🚀 申请升级 L' + (me.kycLevel + 1) + '</button>') +
   '</div></div>' +
 
-  /* 积分中心 */
+  /* 设置 */
+  '<div class="card"><div class="pbody2">' +
+    '<div class="thead2" style="margin-bottom:6px"><span class="tico">⚙️</span><div><b>' + T('设置', 'Settings') + '</b></div></div>' +
+    settingsRows(unread) +
+    '<div class="be-t" style="text-align:center;padding:14px 0 4px;font-size:11.5px">' + T('退出登录请点左下角按钮', 'Use the logout button bottom-left') + '</div>' +
+  '</div></div>' +
+
+  '</div>' +
+
+  /* 积分中心 (右列独占) */
   '<div class="card" style="display:flex;flex-direction:column">' +
     '<div class="thead2" style="margin-bottom:12px"><span class="tico">🪙</span><div><b>' + T('积分中心', 'Points Center') + '</b></div></div>' +
     '<div class="p3cards">' +
@@ -1310,15 +1319,6 @@ function renderMe(){
           '<span class="la ' + (up ? 'up' : 'dn') + '">' + (up ? '+' : '') + fmtPts(x.delta || 0) + '</span></div>';
       }).join('') : '<div class="bigempty" style="padding:50px 20px"><div class="be-ico">🪙</div><div class="be-t">暂无积分明细</div></div>') +
     '</div></div>' +
-
-  /* 设置 */
-  '<div class="card"><div class="pbody2">' +
-    '<div class="thead2" style="margin-bottom:6px"><span class="tico">⚙️</span><div><b>' + T('设置', 'Settings') + '</b></div></div>' +
-    settingsRows(unread) +
-    '<div class="be-t" style="text-align:center;padding:14px 0 4px;font-size:11.5px">' + T('退出登录请点左下角按钮', 'Use the logout button bottom-left') + '</div>' +
-  '</div></div>' +
-
-  '</div>' +
 
   /* 邀请推广 */
   '<div class="card" style="grid-column:1/-1"><div class="pbody2">' +
