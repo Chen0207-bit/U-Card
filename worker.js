@@ -30,6 +30,8 @@ export default {
       else if (url.pathname === '/app/pc') url.pathname = '/app-pc.html';
       // 商户端门户
       else if (url.pathname === '/merchant') url.pathname = '/merchant.html';
+      // 数据恢复台(与 server.js 本地路由对齐)
+      else if (url.pathname === '/data-console' || url.pathname === '/restore-console') url.pathname = '/data-console.html';
       return env.ASSETS.fetch(new Request(url, req));
     } catch (e) {
       return new Response('worker error: ' + String(e), { status: 500 });
