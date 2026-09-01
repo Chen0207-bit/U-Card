@@ -5,7 +5,7 @@
 ## 访问
 
 - **线上**：后台 https://fc-ucard.feng85656.workers.dev/ ｜ 用户端 https://fc-ucard.feng85656.workers.dev/app ｜ 商户端 https://fc-ucard.feng85656.workers.dev/merchant
-- **本地**：`node server.js` → http://localhost:5177/ 和 /app、/merchant（零依赖，Node ≥ 14）
+- **本地**：`node server.js` → http://localhost:5177/、/app、/merchant、/data-console（零依赖，Node ≥ 14）
 - **源码**：https://github.com/Chen0207-bit/U-Card（按功能拆分 commit）
 
 内存数据库 + 确定性种子数据（12 持卡人 / 12 卡 / 30 天交易 / 18 CRM 客户 / 10 商品 / 19 人销售组织），重启即还原。
@@ -55,6 +55,7 @@
 - **风控模拟中心**：风险事件（15 条种子 + 处置动作 + 事件时间轴）、5 条模拟规则（可启停）、黑白名单、风险标签；处置「解除风控」联动解冻卡片
 - **财务对账中心**：充值/消费/退款按天对账（应入账/实际入账/差异/凭证号）、差异清单、商户结算（可标记已结算）、月度财务报表（净收入=手续费+卡月费−佣金）+ CSV 导出
 - **演示数据重置**：后台一键 `POST /api/demo/reset`（二次确认），恢复种子数据
+- **数据恢复控制台**：`/data-console` 查看内存数据状态、下载脱敏快照，并输入 `RESTORE_SEED` 恢复全部初始种子；重启服务同样会在首次请求时重新执行 `initSeed()`，当前 demo 不支持快照回灌
 
 ## 3.0 平台化能力（P4/P5）
 

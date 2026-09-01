@@ -32,6 +32,7 @@ const server = http.createServer(async (req, res) => {
       : p === '/app/select' ? '/app-select.html'
       : (p === '/app/m' || p === '/app/mobile') ? '/app.html'
       : p === '/app/pc' ? '/app-pc.html'
+      : (p === '/data-console' || p === '/restore-console') ? '/data-console.html'
       : p === '/merchant' ? '/merchant.html' : p;
     const fp = path.join(__dirname, 'public', file);
     if (!fp.startsWith(path.join(__dirname, 'public'))) { res.writeHead(403); return res.end('403'); }

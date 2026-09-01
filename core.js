@@ -51,7 +51,12 @@ let entAccounts, entMembers, entDepts, entCards, entTxApprovals, entBills, entDe
 let mchAccounts, mchOrders, mchRefunds, mchSettles, mchSplits, mchRisk; // P5.4 商户平台: 收单商户 / 收款订单 / 退款单 / 结算批次 / 订单分账 / 商户风控
 let ffFlags, opsRateCfg, rlBuckets; // P5.6 运维中心: Feature Flag 开关 / 限流配置 / 内存令牌桶(演示级限流计数器)
 let inited = false;
+let demoSeededAt = 0, demoRestoreCount = 0, demoLastAction = 'cold_start', demoSeedReason = 'cold_start';
 function initSeed() {
+  demoSeededAt = now();
+  demoRestoreCount += 1;
+  demoLastAction = demoSeedReason;
+  demoSeedReason = 'cold_start';
 // ---------------- 销售组织(总监→一级→二级→三级) ----------------
 // id 段: 1=总监, 10-11 一级, 20-23 二级, 30-41 三级
 const S1 = [
@@ -2898,13 +2903,33 @@ function opsBackupData() {
   };
 }
 
+// 数据恢复控制台只暴露状态摘要, 不回显备份中的敏感字段
+function opsDataState() {
+  const counts = {
+    users: users.length, cards: cards.length, transactions: transactions.length,
+    pointsLogs: pointsLogs.length, commissions: commissions.length, customers: customers.length,
+    orders: orders.length, products: products.length, approvals: approvals.length,
+    riskEvents: riskEvents.length, ledgerEntries: ledgerEntries.length, orchTxs: orchTxs.length,
+    kybCases: kybCases.length, compCases: compCases.length, entAccounts: entAccounts.length,
+    entCards: entCards.length, mchAccounts: mchAccounts.length, mchOrders: mchOrders.length,
+  };
+  return {
+    mode: 'memory', persistence: 'none', seededAt: demoSeededAt, lastAction: demoLastAction,
+    restoreCount: demoRestoreCount, counts,
+    totalRecords: Object.values(counts).reduce((sum, n) => sum + n, 0),
+    restartBehavior: '进程重启后内存清空, 首次请求重新执行 initSeed() 生成演示种子',
+    restoreBehavior: '控制台恢复会立即重建全部演示种子, 清空当前现场操作',
+    backupBehavior: '备份导出为当前内存快照 JSON, 字段已脱敏; 当前 demo 不支持把快照回灌为业务数据',
+  };
+}
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
 export function handleApi(method, p, q = {}, b = {}, h = {}) {
   if (!inited) initSeed(); // 懒初始化: 首个请求时生成种子(此时 Date.now() 为真实时间)
   const J = (data, status = 200) => ({ status, json: data });
   // 演示数据一键重置: 重建全部种子, 清空现场操作产生的数据(须在 J 声明后)
-  if (p === '/api/demo/reset' && method === 'POST') { inited = false; initSeed(); return J({ ok: true, at: now() }); }
+  if (p === '/api/demo/reset' && method === 'POST') { demoSeedReason = 'header_reset'; inited = false; initSeed(); return J({ ok: true, at: now(), state: opsDataState() }); }
 
   // ============ 运营后台 / 销售工作台 ============
   if (p.startsWith('/api/admin')) {
@@ -4632,6 +4657,16 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
         const bk = opsBackupData();
         opsOp('运维中心', '数据备份导出', '全量内存 JSON · ' + Object.keys(bk.counts).length + ' 个集合 / ' + Object.values(bk.counts).reduce((s, n) => s + n, 0) + ' 条');
         return J(bk);
+      }
+      if (p === '/api/admin/ops/data-state' && method === 'GET') return J(opsDataState());
+      if (p === '/api/admin/ops/restore' && method === 'POST') {
+        if (sid !== 1) return J({ error: '仅运营总监可恢复演示数据' }, 403);
+        if (b.mode !== 'seed' || b.confirm !== 'RESTORE_SEED') return J({ error: '请输入 RESTORE_SEED 确认恢复初始种子' }, 400);
+        demoSeedReason = 'console_restore';
+        inited = false;
+        initSeed();
+        opsOp('运维中心', '恢复演示数据', '数据控制台 · 全量重建初始种子');
+        return J({ ok: true, at: now(), state: opsDataState() });
       }
       return J({ error: 'not found: ' + p }, 404);
     }
