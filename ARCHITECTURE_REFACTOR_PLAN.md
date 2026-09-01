@@ -4,6 +4,16 @@
 > 当前基线：3.0 功能 Demo，约 161 个字面 API 路径，`core.js` 约 4852 行，`admin.html` 约 7031 行。  
 > 核心原则：先冻结可展示版本，再建立兼容层，最后逐域迁移；任何阶段都不得破坏现有演示入口、接口路径和种子数据闭环。
 
+## 当前执行进度（2026-09-01）
+
+- 已冻结 3.0 行为基线：API 契约 161 paths、核心回归 192 PASS、HTTP 演示线路 50 PASS。
+- 已建立统一 `createApp`、请求上下文、显式 Demo/Production 配置、鉴权和精确 Router 边界。
+- 已统一 Node/Worker 静态路由、CORS、安全响应头和 requestId。
+- 已实现版本化内部快照与 Durable Object 持久化，并在线验证重新部署后业务余额仍可恢复。
+- 已将 Durable Object storage 收口到 `DurableSnapshotRepository`，同时提供可测试的 `MemorySnapshotRepository`。
+- 已迁移 4 条运维接口和 3 条免密演示入口接口到新 Router；其余接口继续由 legacy fallback 承接。
+- 下一批：抽取统一响应/错误对象和参数校验，再优先迁移卡片状态机与用户端支付域。
+
 ## 1. 目标与边界
 
 ### 1.1 本轮目标
@@ -618,4 +628,3 @@ Phase C1-C3 的基础设施与 ops 首批路由
 - `core.js` 只剩兼容入口或被逐域替代。
 - 三层测试覆盖关键闭环。
 - 每个阶段可回滚，现有展示动线持续可用。
-

@@ -1,21 +1,20 @@
 /**
- * Durable Object — 持有 core.js 的内存状态(种子数据+运行时交易)
- * 所有 API 请求经 worker 转发到同一 DO 实例, 保证演示期间数据强一致。
- * DO 空闲被回收后自动重建种子数据(demo 可接受)。
+ * Durable Object — 持有 core.js 的运行状态并通过 Repository 写入 storage。
+ * 所有 API 请求经 worker 转发到同一 DO 实例，实例回收后从版本化快照恢复。
  */
 import { createApp } from './src/app/create-app.js';
 import { exportInternalSnapshot, importInternalSnapshot } from './core.js';
-
-const SNAPSHOT_KEY = 'runtime-snapshot-v1';
+import { DurableSnapshotRepository } from './src/repositories/durable-repository.js';
 
 export class AppState {
   constructor(state, env) {
     this.state = state;
     this.env = env;
     this.app = createApp({ env });
+    this.repository = new DurableSnapshotRepository(state.storage);
     this.hasSnapshot = false;
     this.ready = state.blockConcurrencyWhile(async () => {
-      const snapshot = await state.storage.get(SNAPSHOT_KEY);
+      const snapshot = await this.repository.load();
       if (snapshot) {
         importInternalSnapshot(snapshot);
         this.hasSnapshot = true;
@@ -30,7 +29,7 @@ export class AppState {
       const h = Object.fromEntries(req.headers.entries()); // Headers → 普通对象(小写键), 与 node 壳一致
       const r = await this.app.handleApi(req.method, url.pathname, Object.fromEntries(url.searchParams), b || {}, h);
       if (!this.hasSnapshot || req.method !== 'GET') {
-        await this.state.storage.put(SNAPSHOT_KEY, exportInternalSnapshot());
+        await this.repository.save(exportInternalSnapshot());
         this.hasSnapshot = true;
       }
       return Response.json(r.json, { status: r.status, headers: { 'X-Request-Id': r.requestId } });

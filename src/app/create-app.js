@@ -2,7 +2,11 @@ import { createConfig } from '../config.js';
 import { createRequestContext } from './request-context.js';
 import { createRouter } from '../api/router.js';
 import { registerOpsRoutes } from '../api/ops-routes.js';
-import { handleApi as legacyHandleApi, getOpsDataState, exportOpsBackup, restoreOpsSeed } from '../../core.js';
+import { registerDemoEntryRoutes } from '../api/demo-entry-routes.js';
+import {
+  handleApi as legacyHandleApi, getOpsDataState, exportOpsBackup, restoreOpsSeed,
+  getAdminAccountChoices, getAppAccountChoices, getMerchantAccountChoices,
+} from '../../core.js';
 
 export function createApp({ env = {}, defaults = {} } = {}) {
   const config = createConfig(env, defaults);
@@ -12,6 +16,11 @@ export function createApp({ env = {}, defaults = {} } = {}) {
     exportBackup: exportOpsBackup,
     restoreSeed: restoreOpsSeed,
   }, config);
+  registerDemoEntryRoutes(router, {
+    getAdminAccounts: getAdminAccountChoices,
+    getAppAccounts: getAppAccountChoices,
+    getMerchantAccounts: getMerchantAccountChoices,
+  });
 
   return {
     config,

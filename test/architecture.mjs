@@ -4,6 +4,8 @@ import { corsHeaders } from '../src/runtime/http.js';
 import { resolveStaticPath } from '../src/runtime/static-routes.js';
 import { exportInternalSnapshot, importInternalSnapshot, handleApi, restoreOpsSeed } from '../core.js';
 import { AppState } from '../do.js';
+import { MemorySnapshotRepository } from '../src/repositories/memory-repository.js';
+import { DurableSnapshotRepository, RUNTIME_SNAPSHOT_KEY } from '../src/repositories/durable-repository.js';
 
 let pass = 0;
 let fail = 0;
@@ -14,12 +16,16 @@ const check = (name, condition, detail = '') => {
 
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
-check('首批 router 注册 4 条运维路由', demo.routes.length === 4, demo.routes.join(','));
+check('Router 注册 4 条运维路由和 3 条 Demo 入口路由', demo.routes.length === 7, demo.routes.join(','));
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
 r = await demo.handleApi('GET', '/api/admin/accounts');
 check('Demo 账号选择列表允许匿名访问', r.status === 200 && Array.isArray(r.json), JSON.stringify(r).slice(0, 100));
+r = await demo.handleApi('GET', '/api/app/users');
+check('用户端账号选择列表由 Router 匿名提供', r.status === 200 && Array.isArray(r.json), JSON.stringify(r).slice(0, 100));
+r = await demo.handleApi('GET', '/api/mch/merchants');
+check('商户端账号选择列表由 Router 匿名提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 100));
 r = await demo.handleApi('GET', '/api/admin/ops/backup', {}, {}, { 'x-sales': '30' });
 check('普通销售不能导出运维备份', r.status === 403, JSON.stringify(r));
 r = await demo.handleApi('GET', '/api/admin/ops/data-state', {}, {}, { 'x-sales': '1' });
@@ -62,7 +68,14 @@ try { importInternalSnapshot({ schemaVersion: 999, data: {}, counters: {} }); } 
 check('拒绝未知快照版本', badSnapshotRejected);
 restoreOpsSeed('snapshot_test_cleanup');
 
-console.log('\n== Durable Object Repository ==');
+console.log('\n== Snapshot Repository ==');
+const memoryRepository = new MemorySnapshotRepository();
+check('Memory Repository 初始为空', await memoryRepository.load() === null);
+await memoryRepository.save({ schemaVersion: 1, data: { marker: 'memory' } });
+const memoryLoaded = await memoryRepository.load();
+memoryLoaded.data.marker = 'mutated';
+check('Memory Repository 保存隔离副本', (await memoryRepository.load()).data.marker === 'memory');
+
 const durableMemory = new Map();
 const fakeState = {
   storage: {
@@ -71,6 +84,10 @@ const fakeState = {
   },
   blockConcurrencyWhile: (fn) => fn(),
 };
+const durableRepository = new DurableSnapshotRepository(fakeState.storage);
+await durableRepository.save({ schemaVersion: 1, data: { marker: 'durable' } });
+check('Durable Repository 使用固定版本键', (await durableRepository.load()).data.marker === 'durable' && durableMemory.has(RUNTIME_SNAPSHOT_KEY));
+durableMemory.clear();
 const durableEnv = { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*', PERSISTENCE: 'durable' };
 const durable1 = new AppState(fakeState, durableEnv);
 let durableResponse = await durable1.fetch(new Request('http://do/api/app/topup', {

@@ -2991,6 +2991,30 @@ export function importInternalSnapshot(input) {
   return opsDataState();
 }
 
+export function getAdminAccountChoices() {
+  if (!inited) initSeed();
+  return salesReps.map(s => ({
+    id: s.id, name: s.name, role: s.role, level: s.level, region: s.region,
+    parentId: s.parentId, parentName: repById(s.parentId)?.name || '—',
+    teamSize: subtreeIds(s.id).length - 1,
+  }));
+}
+
+export function getAppAccountChoices() {
+  if (!inited) initSeed();
+  return users.map(u => ({ id: u.id, name: u.name, phone: u.phone, kycLevel: u.kycLevel, points: u.points }));
+}
+
+export function getMerchantAccountChoices() {
+  if (!inited) initSeed();
+  return {
+    list: mchAccounts.filter(m => m.status === 'active').map(m => ({
+      id: m.id, name: m.name, mchNo: m.mchNo, mcc: m.mcc,
+      mccLabel: MCC_LABEL[m.mcc] || m.mcc, country: m.country, settleDays: m.settleDays,
+    })),
+  };
+}
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
 export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
@@ -3002,7 +3026,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
   // ============ 运营后台 / 销售工作台 ============
   if (p.startsWith('/api/admin')) {
     if (p === '/api/admin/accounts') { // demo 登录账号列表(匿名可见)
-      return J(salesReps.map(s => ({ id: s.id, name: s.name, role: s.role, level: s.level, region: s.region, parentId: s.parentId, parentName: repById(s.parentId)?.name || '—', teamSize: subtreeIds(s.id).length - 1 })));
+      return J(getAdminAccountChoices());
     }
     const actorSid = context.actor?.type === 'sales' ? context.actor.id : parseInt(h['x-sales'] || h['x-Sales'] || '0', 10);
     if (!repById(actorSid)) return J({ error: '请先选择运营后台账号', code: 'AUTH_REQUIRED' }, 401);
@@ -4745,7 +4769,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
 
   // ============ 用户端 H5 ============
   if (p.startsWith('/api/app')) {
-    if (p === '/api/app/users') return J(users.map(u => ({ id: u.id, name: u.name, phone: u.phone, kycLevel: u.kycLevel, points: u.points })));
+    if (p === '/api/app/users') return J(getAppAccountChoices());
     const uid = context.actor?.type === 'user' ? context.actor.id : parseInt(h['x-user'] || '0', 10);
     const me = () => users.find(u => u.id === uid);
     if (!me()) return J({ error: '未登录', code: 'AUTH_REQUIRED' }, 401);
@@ -4839,7 +4863,7 @@ export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
   if (p.startsWith('/api/mch/')) {
     // 登录页商户下拉(已开通商户, 免密)
     if (p === '/api/mch/merchants' && method === 'GET') {
-      return J({ list: mchAccounts.filter(m => m.status === 'active').map(m => ({ id: m.id, name: m.name, mchNo: m.mchNo, mcc: m.mcc, mccLabel: MCC_LABEL[m.mcc] || m.mcc, country: m.country, settleDays: m.settleDays })) });
+      return J(getMerchantAccountChoices());
     }
     const mid = parseInt(h['x-mch'] || h['X-Mch'] || '0', 10);
     const mch = mchAccounts.find(m => m.id === mid && m.status === 'active');
