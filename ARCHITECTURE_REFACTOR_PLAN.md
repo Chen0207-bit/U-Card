@@ -4,18 +4,16 @@
 > 当前基线：3.0 功能 Demo，约 161 个字面 API 路径，`core.js` 约 4852 行，`admin.html` 约 7031 行。  
 > 核心原则：先冻结可展示版本，再建立兼容层，最后逐域迁移；任何阶段都不得破坏现有演示入口、接口路径和种子数据闭环。
 
-## 当前执行进度（2026-09-01）
+## 当前执行进度（2026-09-01，迁移完成）
 
-- 已冻结 3.0 行为基线：API 契约 161 paths、核心回归 192 PASS、HTTP 演示线路 50 PASS。
-- 已建立统一 `createApp`、请求上下文、显式 Demo/Production 配置、鉴权和精确 Router 边界。
-- 已统一 Node/Worker 静态路由、CORS、安全响应头和 requestId。
-- 已实现版本化内部快照与 Durable Object 持久化，并在线验证重新部署后业务余额仍可恢复。
-- 已将 Durable Object storage 收口到 `DurableSnapshotRepository`，同时提供可测试的 `MemorySnapshotRepository`。
-- 已迁移 4 条运维接口和 3 条免密演示入口接口到新 Router；其余接口继续由 legacy fallback 承接。
-- 已抽取统一响应/错误对象、轻量校验和卡片状态机；冻结/解冻/挂失 3 条接口已迁入新 Router，并通过真实页面交互验证。
-- 已将模块单例改为每实例独立 `CoreRuntime`/StateContainer，Node、测试和 Durable Object 显式注入实例，杜绝跨实例串数据。
-- 内部快照升级为 schema v2，包含 `createdAt` 与 checksum，同时兼容线上 schema v1；Repository 已补齐 reset、脱敏投影和写失败保护。
-- 迁移实时状态与剩余路径计数见 `docs/migration-status.md`。
+- **3.x 迁移已收尾**：全部公开路径由新 Router 显式注册（185 个注册项），`core.js::handleApi` 与 legacy fallback 已物理删除，未命中路径统一 404（`test/no-fallback.mjs` 源码治理 + 全路由匿名探测双重守护）。
+- API 契约基线 169 个字面路径（治理起点 161，历次变化均有 `docs/api-contract-baseline.md` 变更记录）；核心回归 192 PASS、HTTP 演示线路 50 PASS 保持不变。
+- `core.js` 从约 5155 行收缩到约 3260 行，仅保留运行时服务、种子与快照导入导出等纯业务能力。
+- 已建立统一 `createApp`、请求上下文、显式 Demo/Production 配置、鉴权和精确 Router 边界；Node/Worker 静态路由、CORS、安全响应头和 requestId 已统一。
+- 已实现版本化内部快照（schema v2，兼容线上 v1）与 Durable Object 持久化；storage 收口到 `DurableSnapshotRepository`/`MemorySnapshotRepository`。
+- UnitOfWork（快照基线 + 业务/持久化两阶段回滚）已接入 DO 写路径，高风险写入（充值/退款/调账/结算/企业账单）与回滚、实例回收均有测试（`test/unit-of-work.mjs`）。
+- 前端四入口已抽取公共模块（`public/assets/` 七件套，UC 命名空间 + var 别名委托，270+ 调用点零改动），`test/handler-check.mjs` 守护全部事件处理函数可解析。
+- 迁移结论与领域清单见 `docs/migration-status.md`。
 
 ## 1. 目标与边界
 

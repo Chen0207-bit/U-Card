@@ -75,9 +75,12 @@ npm run test:all
 最低预期：
 
 ```text
-语法检查通过
+语法检查通过（79 源文件）
 API contract PASS
 核心回归 192 PASS / 0 FAIL
+no-fallback PASS（legacy 已删除，全路由 Router 承接）
+UnitOfWork 17 PASS / 0 FAIL
+handler-check PASS（四入口事件函数全部可解析）
 用户端 HTTP smoke 0 FAIL
 跨域业务 HTTP smoke 0 FAIL
 账本 balanced=true
