@@ -7,6 +7,8 @@ import { transitionCardStatus } from './src/domain/card/card-state-machine.js';
 import { createTenantService } from './src/domain/tenant/tenant-service.js';
 import { createOpenPlatformService } from './src/domain/open-platform/open-platform-service.js';
 import { createNotificationService } from './src/domain/notification/notification-service.js';
+import { createSystemService } from './src/domain/system/system-service.js';
+import { createOpsManagementService } from './src/domain/ops/ops-management-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -4963,6 +4965,37 @@ const notificationService = createNotificationService({
   now,
   randomInt: ri,
 });
+const systemService = createSystemService({
+  accounts: () => { ensureSeeded(); return sysAccounts; },
+  roles: () => { ensureSeeded(); return sysRoles; },
+  permissions: () => { ensureSeeded(); return sysPerms; },
+  parameters: () => { ensureSeeded(); return sysParams; },
+  dictionaries: () => { ensureSeeded(); return sysDicts; },
+  loginLogs: () => { ensureSeeded(); return sysLogs; },
+  operationLogs: () => { ensureSeeded(); return opLogs; },
+  salesReps: () => { ensureSeeded(); return salesReps; },
+  customers: () => { ensureSeeded(); return customers; },
+  cards: () => { ensureSeeded(); return cards; },
+  organizationTree: () => { ensureSeeded(); return sysOrgTree(); },
+  operatorName: id => repById(id)?.name || '未知账号',
+  permissionTree: PERM_TREE,
+  allPermissionKeys: ALL_PERM_KEYS,
+  now,
+});
+const opsManagementService = createOpsManagementService({
+  architecture: () => { ensureSeeded(); return opsArchData(); },
+  flags: () => { ensureSeeded(); return ffFlags; },
+  rateConfig: () => { ensureSeeded(); return opsRateCfg; },
+  rateBuckets: () => { ensureSeeded(); return rlBuckets; },
+  rateAllow: rlAllow,
+  auditData: opsAuditData,
+  monitorData: opsMonitorData,
+  alertsData: opsAlertsData,
+  traceCandidates: opsTraceCandidates,
+  traceData: opsTraceData,
+  audit: (actorId, module, action, target, result = '成功') => appendOpsLog(module, action, target, repById(actorId)?.name || '未知账号', result),
+  now,
+});
 
 return {
   getOpsDataState,
@@ -4978,6 +5011,8 @@ return {
   tenantService,
   openPlatformService,
   notificationService,
+  systemService,
+  opsManagementService,
 };
 }
 

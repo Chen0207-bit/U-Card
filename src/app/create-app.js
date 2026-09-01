@@ -7,6 +7,8 @@ import { registerCardRoutes } from '../api/card-routes.js';
 import { registerTenantRoutes } from '../api/tenant-routes.js';
 import { registerOpenPlatformRoutes } from '../api/open-platform-routes.js';
 import { registerNotificationRoutes } from '../api/notification-routes.js';
+import { registerSystemRoutes } from '../api/system-routes.js';
+import { registerOpsManagementRoutes } from '../api/ops-management-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -26,6 +28,8 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
   registerTenantRoutes(router, core.tenantService);
   registerOpenPlatformRoutes(router, core.openPlatformService);
   registerNotificationRoutes(router, core.notificationService);
+  registerSystemRoutes(router, core.systemService);
+  registerOpsManagementRoutes(router, core.opsManagementService);
 
   return {
     config,
