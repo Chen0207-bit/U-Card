@@ -22,11 +22,14 @@ export function createConfig(env = {}, defaults = {}) {
   const authMode = String(get('AUTH_MODE') || (demo ? 'demo-header' : 'session')).trim().toLowerCase();
   if (!['demo-header', 'session'].includes(authMode)) throw new Error(`不支持的 AUTH_MODE: ${authMode}`);
   if (!demo && authMode === 'demo-header') throw new Error('production 模式禁止使用 demo-header 鉴权');
+  const persistence = String(get('PERSISTENCE') || 'memory').trim().toLowerCase();
+  if (!['memory', 'durable', 'file'].includes(persistence)) throw new Error(`不支持的 PERSISTENCE: ${persistence}`);
 
   return Object.freeze({
     mode,
     demo,
     authMode,
+    persistence,
     allowDemoReset: boolValue(get('ALLOW_DEMO_RESET'), demo),
     corsOrigins: listValue(get('CORS_ORIGINS'), demo ? ['*'] : []),
   });

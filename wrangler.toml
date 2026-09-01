@@ -7,6 +7,7 @@ APP_MODE = "demo"
 AUTH_MODE = "demo-header"
 ALLOW_DEMO_RESET = "true"
 CORS_ORIGINS = "*"
+PERSISTENCE = "durable"
 
 [assets]
 directory = "./public"

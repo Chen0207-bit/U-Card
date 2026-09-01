@@ -2,6 +2,8 @@
  * 优卡 U-Card Demo — 业务核心 (node 本地 / Cloudflare Worker 共用, ESM)
  * 数据模型 + 种子数据 + 业务动作 + API 路由, 纯内存, 冷启动重建。
  */
+import { createVersionedSnapshot, validateVersionedSnapshot } from './src/state/snapshot-codec.js';
+
 // ---------------- 工具 ----------------
 let seed = 42;
 function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
@@ -2942,6 +2944,51 @@ export function restoreOpsSeed(reason = 'console_restore') {
   initSeed();
   appendOpsLog('运维中心', reason === 'console_restore' ? '恢复演示数据' : '重置演示数据', '全量重建初始种子');
   return { ok: true, at: now(), state: opsDataState() };
+}
+
+// 内部运行快照: 未脱敏，仅供受控 Repository/DO storage 使用，不能直接下载给前端。
+export function exportInternalSnapshot() {
+  ensureSeeded();
+  return createVersionedSnapshot({
+    counters: { seed, idSeq, demoSeededAt, demoRestoreCount, demoLastAction, demoSeedReason },
+    metadata: { persistence: 'runtime-internal' },
+    data: {
+      salesReps, users, cards, transactions, pointsLogs, commissions, customers, followups, products, orders, tasks,
+      riskEvents, riskRules, riskLists, riskTags, financeMeta,
+      sysAccounts, sysRoles, sysPerms, sysLogs, opLogs, sysParams, sysDicts,
+      tenants, openApps, openKeys, openWebhooks, openApiLogs,
+      notifyTemplates, notifySends, notifyChannels, approvals,
+      engineRules, engineHits, engineVersions,
+      orchAdapters, orchTxs, orchHealthLog, orchWebhookLogs, orchReconFixed,
+      kybCases, sanctions, peps, strReports, userDocs, compCases, countryRules,
+      entAccounts, entMembers, entDepts, entCards, entTxApprovals, entBills, entDeptLogs,
+      mchAccounts, mchOrders, mchRefunds, mchSettles, mchSplits, mchRisk,
+      ffFlags, opsRateCfg, rlBuckets: [...rlBuckets.entries()],
+      ledgerAccounts, ledgerEntries, balanceSnapshots, frozenBalances, notifRead,
+    },
+  });
+}
+
+export function importInternalSnapshot(input) {
+  const snapshot = validateVersionedSnapshot(input);
+  const d = structuredClone(snapshot.data);
+  ({
+    salesReps, users, cards, transactions, pointsLogs, commissions, customers, followups, products, orders, tasks,
+    riskEvents, riskRules, riskLists, riskTags, financeMeta,
+    sysAccounts, sysRoles, sysPerms, sysLogs, opLogs, sysParams, sysDicts,
+    tenants, openApps, openKeys, openWebhooks, openApiLogs,
+    notifyTemplates, notifySends, notifyChannels, approvals,
+    engineRules, engineHits, engineVersions,
+    orchAdapters, orchTxs, orchHealthLog, orchWebhookLogs, orchReconFixed,
+    kybCases, sanctions, peps, strReports, userDocs, compCases, countryRules,
+    entAccounts, entMembers, entDepts, entCards, entTxApprovals, entBills, entDeptLogs,
+    mchAccounts, mchOrders, mchRefunds, mchSettles, mchSplits, mchRisk,
+    ffFlags, opsRateCfg, ledgerAccounts, ledgerEntries, balanceSnapshots, frozenBalances, notifRead,
+  } = d);
+  rlBuckets = new Map(d.rlBuckets || []);
+  ({ seed, idSeq, demoSeededAt, demoRestoreCount, demoLastAction, demoSeedReason } = snapshot.counters);
+  inited = true;
+  return opsDataState();
 }
 
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------

@@ -6,7 +6,7 @@ export function registerOpsRoutes(router, services, config) {
     return denied || await handler(request);
   };
 
-  router.register('GET', '/api/admin/ops/data-state', director(() => ({ status: 200, json: services.getState() })));
+  router.register('GET', '/api/admin/ops/data-state', director(() => ({ status: 200, json: { ...services.getState(), persistence: config.persistence } })));
   router.register('GET', '/api/admin/ops/backup', director(() => ({ status: 200, json: services.exportBackup() })));
   router.register('POST', '/api/admin/ops/restore', director(({ body }) => {
     if (!config.allowDemoReset) return { status: 403, json: { error: '当前环境禁止恢复演示种子', code: 'DEMO_RESET_DISABLED' } };
