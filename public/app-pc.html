@@ -276,8 +276,10 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .be-ico{font-size:64px}
 .be-t{color:#94a3b8;font-size:14px;margin-top:14px}
 
-/* ===== 我的(多列网格) ===== */
-.megrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:20px;align-items:start}
+/* ===== 我的(左列 KYC+设置 / 右列积分中心, 显式两列防宽屏散列) ===== */
+.megrid{display:grid;grid-template-columns:1fr;gap:20px;align-items:start}
+.mecol{display:flex;flex-direction:column;gap:20px}
+@media (min-width:1180px){.megrid{grid-template-columns:minmax(360px,5fr) minmax(460px,7fr)}}
 .mebox{padding:20px;display:flex;align-items:center;gap:15px;flex-wrap:wrap}
 .meav{width:60px;height:60px;border-radius:50%;background:#eef2ff;display:flex;align-items:center;justify-content:center;font-size:30px;flex:none}
 .memain{flex:1;min-width:200px}
@@ -1259,7 +1261,9 @@ function renderMe(){
     '<span class="kbadge">🪙 ' + fmtPts(me.points) + ' 分</span>' +
   '</div></div>' +
 
-  /* KYC 认证 */
+  /* 左列: KYC 认证 + 设置 竖排 */
+  '<div class="mecol">' +
+
   '<div class="card"><div class="pbody2">' +
     '<div class="thead2"><span class="tico">🪪</span><div><b>' + T('KYC 实名认证', 'KYC Verification') + '</b></div></div>' +
     '<div class="kdots">' +
@@ -1313,6 +1317,8 @@ function renderMe(){
     settingsRows(unread) +
     '<div class="be-t" style="text-align:center;padding:14px 0 4px;font-size:11.5px">' + T('退出登录请点左下角按钮', 'Use the logout button bottom-left') + '</div>' +
   '</div></div>' +
+
+  '</div>' +
 
   /* 邀请推广 */
   '<div class="card" style="grid-column:1/-1"><div class="pbody2">' +
