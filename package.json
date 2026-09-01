@@ -13,6 +13,7 @@
     "test:http:user": "node test/route1-smoke.mjs",
     "test:http:cross": "node test/routes-cross-smoke.mjs",
     "test:http": "npm run test:http:user && npm run test:http:cross",
-    "test:all": "npm run check && npm run test:arch && npm run test:contract && npm run test:core && npm run test:http"
+    "test:all": "npm run check && npm run test:arch && npm run test:contract && npm run test:core && npm run test:nofallback && npm run test:http",
+    "test:nofallback": "node test/no-fallback.mjs"
   }
 }

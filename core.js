@@ -3043,12 +3043,9 @@ function changeAppCardStatus(userId, action) {
   return { status: 200, json: { status: card.status } };
 }
 
-// ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
-// 返回 {status, json}; p=pathname, q=query, b=body, h=headers
-function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
-  if (!inited) initSeed(); // 懒初始化: 首个请求时生成种子(此时 Date.now() 为真实时间)
-  return { status: 404, json: { error: 'not found: ' + p } }; // 兜底 404: 公开路径已全部由 Router 接管
-}
+// ---------------- API 路由 ----------------
+// 3.x 迁移完成后 handleApi 已删除: 全部公开路径由 src/api Router 接管,
+// 未命中路径由 src/app/create-app.js 统一返回 404。
 
 const tenantService = createTenantService({
   all: () => { ensureSeeded(); return tenants; },
@@ -3241,7 +3238,6 @@ return {
   getAppAccountChoices,
   getMerchantAccountChoices,
   changeAppCardStatus,
-  handleApi,
   tenantService,
   openPlatformService,
   notificationService,
@@ -3276,4 +3272,3 @@ export const getAdminAccountChoices = (...args) => defaultCoreRuntime.getAdminAc
 export const getAppAccountChoices = (...args) => defaultCoreRuntime.getAppAccountChoices(...args);
 export const getMerchantAccountChoices = (...args) => defaultCoreRuntime.getMerchantAccountChoices(...args);
 export const changeAppCardStatus = (...args) => defaultCoreRuntime.changeAppCardStatus(...args);
-export const handleApi = (...args) => defaultCoreRuntime.handleApi(...args);

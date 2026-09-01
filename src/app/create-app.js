@@ -69,8 +69,8 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
     async handleApi(method, pathname, query = {}, body = {}, headers = {}) {
       const context = createRequestContext({ method, pathname, query, headers, config });
       const request = { method, pathname, query, body, headers: context.headers, context };
-      const routed = await router.dispatch(request);
-      const result = routed || core.handleApi(method, pathname, query, body, context.headers, context);
+      // legacy 兜底已删除: Router 未命中即为 404
+      const result = (await router.dispatch(request)) || { status: 404, json: { error: 'not found: ' + pathname } };
       return { ...result, requestId: context.requestId };
     },
   };
