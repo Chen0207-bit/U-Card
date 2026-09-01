@@ -20,6 +20,8 @@ import { registerAdminShopRoutes } from '../api/admin-shop-routes.js';
 import { registerComplianceRoutes } from '../api/compliance-routes.js';
 import { registerBiRoutes } from '../api/bi-routes.js';
 import { registerMerchantAdminPlatformRoutes } from '../api/merchant-admin-platform-routes.js';
+import { registerApprovalRoutes } from '../api/approval-routes.js';
+import { registerRiskEngineRoutes } from '../api/risk-engine-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -52,6 +54,8 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
   registerComplianceRoutes(router, core.complianceService);
   registerBiRoutes(router, core.biService);
   registerMerchantAdminPlatformRoutes(router, core.merchantAdminPlatformService);
+  registerApprovalRoutes(router, core.approvalService);
+  registerRiskEngineRoutes(router, core.riskEngineService);
 
   return {
     config,

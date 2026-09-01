@@ -20,6 +20,8 @@ import { createAdminShopService } from './src/domain/shop/admin-shop-service.js'
 import { createComplianceService } from './src/domain/compliance/compliance-service.js';
 import { createBiService } from './src/domain/bi/bi-service.js';
 import { createMerchantAdminPlatformService } from './src/domain/merchant/merchant-admin-platform-service.js';
+import { createApprovalService } from './src/domain/approval/approval-service.js';
+import { createRiskEngineService } from './src/domain/risk/risk-engine-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -5063,6 +5065,15 @@ const merchantAdminPlatformService = createMerchantAdminPlatformService({
   kybStatusLabels: KYB_STATUS_LABEL, refundStatusLabels: MCH_REFUND_STATUS_LABEL, orderStatusLabels: MCH_ORDER_STATUS_LABEL,
   settleStatusLabels: MCH_SETTLE_STATUS_LABEL, splitTypeLabels: SPLIT_TYPE_LABEL, mccLabels: MCC_LABEL, riskThreshold: MCH_RISK_THRESHOLD,
 });
+const approvalService = createApprovalService({
+  approvals: seeded(() => approvals), flags: seeded(() => ffFlags), now, typeLabels: AP_TYPE_LABEL,
+  statusLabels: AP_STATUS_LABEL, executeBusiness: executeApprovalBiz, operatorName: id => repById(id)?.name || '运营总监',
+});
+const riskEngineService = createRiskEngineService({
+  rules: seeded(() => engineRules), hits: seeded(() => engineHits), versions: seeded(() => engineVersions), scoreAll: engineScoreAll,
+  nextId: nid, now, fields: ENGINE_FIELDS, ops: ENGINE_OPS, actionLabels: ENGINE_ACTION_LABEL, levelLabels: RISK_LEVEL_LABEL,
+  operatorName: id => repById(id)?.name || '运营总监',
+});
 
 return {
   getOpsDataState,
@@ -5091,6 +5102,8 @@ return {
   complianceService,
   biService,
   merchantAdminPlatformService,
+  approvalService,
+  riskEngineService,
 };
 }
 
