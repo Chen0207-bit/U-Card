@@ -2,7 +2,9 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 
-const source = fs.readFileSync(new URL('../core.js', import.meta.url), 'utf8');
+const apiDir = new URL('../src/api/', import.meta.url);
+const apiSources = fs.readdirSync(apiDir).filter(name => name.endsWith('.js')).map(name => fs.readFileSync(new URL(name, apiDir), 'utf8'));
+const source = [fs.readFileSync(new URL('../core.js', import.meta.url), 'utf8'), ...apiSources].join('\n');
 const routes = [...new Set(
   [...source.matchAll(/["'](\/api\/[^"']+)["']/g)].map((m) => m[1]),
 )].sort();

@@ -4,6 +4,9 @@
  */
 import { createVersionedSnapshot, validateVersionedSnapshot } from './src/state/snapshot-codec.js';
 import { transitionCardStatus } from './src/domain/card/card-state-machine.js';
+import { createTenantService } from './src/domain/tenant/tenant-service.js';
+import { createOpenPlatformService } from './src/domain/open-platform/open-platform-service.js';
+import { createNotificationService } from './src/domain/notification/notification-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -3514,32 +3517,6 @@ function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
       return J({ error: 'not found: ' + p }, 404);
     }
     // ============ P4.1 多租户 / P4.5 开放平台 / P4.6 消息中心 (平台管理员=总监专属, 其余角色一律 403) ============
-    if (p.startsWith('/api/admin/tenants')) {
-      if (sid !== 1) return J({ error: '仅平台管理员(总监)可访问多租户管理' }, 403);
-      if (p === '/api/admin/tenants') {
-        const cnt = (st) => tenants.filter(t => t.status === st).length;
-        return J({ list: tenants.map(pubTenant),
-          summary: { total: tenants.length, active: cnt('active'), trial: cnt('trial'), pending: cnt('pending'), frozen: cnt('frozen'),
-            gmv: +tenants.reduce((s, t) => s + t.isolation.gmv, 0).toFixed(2), users: tenants.reduce((s, t) => s + t.isolation.users, 0) } });
-      }
-      const mTn = p.match(/^\/api\/admin\/tenants\/(\d+)$/);
-      if (mTn && method === 'PATCH') { // 状态流转(审核/冻结/解冻) 或 租户配置字段保存
-        const t = tenants.find(x => x.id === +mTn[1]);
-        if (!t) return J({ error: '租户不存在' }, 404);
-        if (b.status) {
-          if (!TENANT_STATUS_LABEL[b.status]) return J({ error: '无效的租户状态: ' + b.status }, 400);
-          if (t.isMain && b.status !== 'active') return J({ error: '主租户不可冻结或变更状态' }, 400);
-          t.status = b.status;
-        }
-        ['domain', 'currency', 'locale', 'timezone', 'brandColor'].forEach(k => { if (b[k] != null) t[k] = String(b[k]).slice(0, 120); });
-        if (b.commission) ['topup', 'consume', 'card'].forEach(k => {
-          const arr = b.commission[k];
-          if (Array.isArray(arr) && arr.length === 3) t.commission[k] = arr.map(v => Math.max(0, +v || 0));
-        });
-        return J({ tenant: pubTenant(t) });
-      }
-      return J({ error: 'not found: ' + p }, 404);
-    }
     if (p.startsWith('/api/admin/open/')) {
       if (sid !== 1) return J({ error: '仅平台管理员(总监)可访问开放平台' }, 403);
       if (p === '/api/admin/open/apps') {
@@ -4964,6 +4941,29 @@ function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
   return J({ error: 'not found: ' + p }, 404); // 未匹配的 /api/* 路径统一 404(防壳层读 null.status 崩 500)
 }
 
+const tenantService = createTenantService({
+  all: () => { ensureSeeded(); return tenants; },
+  findById: (id) => { ensureSeeded(); return tenants.find(tenant => tenant.id === id); },
+  present: pubTenant,
+  statusLabels: TENANT_STATUS_LABEL,
+});
+const openPlatformService = createOpenPlatformService({
+  apps: () => { ensureSeeded(); return openApps; },
+  keys: () => { ensureSeeded(); return openKeys; },
+  webhooks: () => { ensureSeeded(); return openWebhooks; },
+  logs: () => { ensureSeeded(); return openApiLogs; },
+  maskSecret,
+  now,
+  randomInt: ri,
+});
+const notificationService = createNotificationService({
+  templates: () => { ensureSeeded(); return notifyTemplates; },
+  sends: () => { ensureSeeded(); return notifySends; },
+  channels: () => { ensureSeeded(); return notifyChannels; },
+  now,
+  randomInt: ri,
+});
+
 return {
   getOpsDataState,
   exportOpsBackup,
@@ -4975,6 +4975,9 @@ return {
   getMerchantAccountChoices,
   changeAppCardStatus,
   handleApi,
+  tenantService,
+  openPlatformService,
+  notificationService,
 };
 }
 

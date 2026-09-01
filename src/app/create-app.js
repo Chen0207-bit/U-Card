@@ -4,6 +4,9 @@ import { createRouter } from '../api/router.js';
 import { registerOpsRoutes } from '../api/ops-routes.js';
 import { registerDemoEntryRoutes } from '../api/demo-entry-routes.js';
 import { registerCardRoutes } from '../api/card-routes.js';
+import { registerTenantRoutes } from '../api/tenant-routes.js';
+import { registerOpenPlatformRoutes } from '../api/open-platform-routes.js';
+import { registerNotificationRoutes } from '../api/notification-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -20,6 +23,9 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
     getMerchantAccounts: core.getMerchantAccountChoices,
   });
   registerCardRoutes(router, { changeStatus: core.changeAppCardStatus });
+  registerTenantRoutes(router, core.tenantService);
+  registerOpenPlatformRoutes(router, core.openPlatformService);
+  registerNotificationRoutes(router, core.notificationService);
 
   return {
     config,

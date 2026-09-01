@@ -1,5 +1,7 @@
 // U-Card 3.0 全量回归: 前端调用路径 + 核心业务流 — 用法: node test/regress.mjs
-import { handleApi } from '../core.js';
+import { createApp } from '../src/app/create-app.js';
+const regressionApp = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
+const handleApi = (...args) => regressionApp.handleApi(...args);
 const ADMIN = { 'x-sales': '1' };      // 销售总监
 const ADMIN3 = { 'x-sales': '30' };    // 三级销售(权限测试)
 const APP = { 'x-user': '1' };         // 持卡用户 1

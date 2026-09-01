@@ -17,7 +17,7 @@ const check = (name, condition, detail = '') => {
 
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
-check('Router 注册运维、Demo 入口和卡片状态路由', demo.routes.length === 10, demo.routes.join(','));
+check('Router 注册首批领域路由', demo.routes.length === 23, demo.routes.join(','));
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
@@ -29,6 +29,14 @@ r = await demo.handleApi('GET', '/api/mch/merchants');
 check('商户端账号选择列表由 Router 匿名提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 100));
 r = await demo.handleApi('GET', '/api/admin/ops/backup', {}, {}, { 'x-sales': '30' });
 check('普通销售不能导出运维备份', r.status === 403, JSON.stringify(r));
+r = await demo.handleApi('GET', '/api/admin/tenants', {}, {}, { 'x-sales': '30' });
+check('普通销售不能访问租户领域', r.status === 403, JSON.stringify(r));
+r = await demo.handleApi('GET', '/api/admin/tenants', {}, {}, { 'x-sales': '1' });
+check('租户列表由新 Router/Service 提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 120));
+r = await demo.handleApi('GET', '/api/admin/open/apps', {}, {}, { 'x-sales': '1' });
+check('开放平台应用由新 Router/Service 提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 120));
+r = await demo.handleApi('GET', '/api/admin/notify/channels', {}, {}, { 'x-sales': '1' });
+check('消息渠道由新 Router/Service 提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 120));
 r = await demo.handleApi('GET', '/api/admin/ops/data-state', {}, {}, { 'x-sales': '1' });
 check('总监可读取数据状态', r.status === 200 && r.json.persistence === 'memory', JSON.stringify(r).slice(0, 120));
 r = await demo.handleApi('GET', '/api/app/me');
