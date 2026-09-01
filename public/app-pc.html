@@ -487,9 +487,12 @@ details.faq .fabody{padding:0 18px 14px;font-size:13px;color:var(--mut);line-hei
 <div class="mask" id="pmodal"><div class="modal" id="pmodalBox"></div></div>
 
 <div class="toast" id="toast"></div>
+<script src="/assets/format.js"></script>
+<script src="/assets/api.js"></script>
+<script src="/assets/feedback.js"></script>
 <script>
 'use strict';
-/* ================= 基础配置与工具 ================= */
+/* ================= 基础配置与工具(公共模块委托) ================= */
 var MERCHANTS = ['Amazon','Apple Store','Noon','Careem','Starbucks','Talabat','Netflix','Booking.com'];
 var LEVELS = {
   standard: { label:'STANDARD', cn:'标准卡', rate:1,   fee:1,  grad:'linear-gradient(135deg,#64748b 0%,#3b4a63 55%,#1e293b 100%)' },
@@ -513,9 +516,9 @@ var S = { uid:null, me:null, txs:[], tasks:null, products:[], orders:[], points:
 
 function $(id){ return document.getElementById(id); }
 function p2(n){ return String(n).padStart(2,'0'); }
-function fmtUSD(n){ return '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+var fmtUSD = UC.money;
 function fmtPts(n){ return Number(n||0).toLocaleString('en-US'); }
-function fmtTime(ts){ var d = new Date(ts||0); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes()); }
+var fmtTime = UC.time;
 function maskCard(no){
   var g = String(no||'').split(' ');
   if (g.length !== 4) return '5533 68** **** 1234';
@@ -523,7 +526,7 @@ function maskCard(no){
 }
 function avatar(s){ var h = 0; for (var ch of String(s)) h = (h*31 + ch.codePointAt(0)) >>> 0; return AVS[h % AVS.length]; }
 function catGrad(c){ return CATG[c] || 'linear-gradient(135deg,#64748b,#475569)'; }
-function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+var esc = UC.esc;
 
 /* ---- 语言切换(Demo: 仅侧栏 tab 标题与「我的」页标签) ---- */
 function T(zh, en){ return S.lang === 'en' ? (en || zh) : zh; }
@@ -546,25 +549,14 @@ function starsHtml(n){
 }
 
 /* 同源相对路径, 与手机版共用 uc_uid 登录态 */
-async function api(path, opts){
-  opts = opts || {};
-  var headers = { 'Content-Type':'application/json' };
-  if (S.uid) headers['x-user'] = S.uid;
-  var res = await fetch(path, { method: opts.method || 'GET', headers: headers, body: opts.body || null });
-  var data = {};
-  try { data = await res.json(); } catch(e) {}
-  return data;
-}
+var api = UC.createClient({
+  base: '',
+  headers: function(){ return S.uid ? { 'x-user': S.uid } : {}; },
+  throwOnError: false, // 用户端语义: 永不抛错, 解析失败返回 {}
+});
 
 /* ================= toast / modal / 动画 ================= */
-var toastTimer = null;
-function toast(msg, type){
-  var t = $('toast'); t.textContent = msg;
-  var cls = 'toast' + (type==='ok' ? ' ok' : type==='err' ? ' err' : '');
-  t.className = cls + ' on';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ t.className = cls; }, type==='err' ? 3600 : 2600);
-}
+var toast = UC.toastSingle('#toast');
 function openM(html){ $('pmodalBox').innerHTML = html; $('pmodal').classList.add('on'); }
 function closeM(){ $('pmodal').classList.remove('on'); }
 function showMErr(id, msg){ var el = $(id); if (el){ el.textContent = '⚠️ ' + msg; el.classList.add('on'); } }

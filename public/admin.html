@@ -1642,58 +1642,43 @@
 <div id="modalRoot"></div>
 <div id="drawerRoot"></div>
 
+<script src="/assets/format.js"></script>
+<script src="/assets/api.js"></script>
+<script src="/assets/feedback.js"></script>
+<script src="/assets/modal.js"></script>
+<script src="/assets/demo-auth.js"></script>
 <script>
-/* ================= 基础工具 ================= */
+/* ================= 基础工具(公共模块委托) ================= */
 // 同源部署时直接走相对路径; file:// 打开时回落到本地服务地址
 var API = location.protocol.indexOf('http') === 0 ? '' : 'http://localhost:5177';
 
 function $(s, el){ return (el || document).querySelector(s); }
 function $$(s, el){ return Array.prototype.slice.call((el || document).querySelectorAll(s)); }
-function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+var esc = UC.esc;
 
-function fmtMoney(n){ return '$' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
-function fmtMoney0(n){ return '$' + Math.round(Number(n || 0)).toLocaleString('en-US'); }
+var fmtMoney = UC.money, fmtMoney0 = UC.money0;
 function fmtPts(n){ return Number(n || 0).toLocaleString('en-US'); }
-function pad2(n){ return String(n).padStart(2, '0'); }
-function fmtTime(ts){ if (!ts) return '—'; var d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+var pad2 = UC.pad2;
+var fmtTime = UC.time;
 function maskCard(no){ var d = String(no || '').replace(/\s/g, ''); return d.slice(0,4) + ' ' + d.slice(4,6) + '** **** ' + d.slice(-4); }
-function shortHash(h){ return String(h || '').slice(0,6) + '…' + String(h || '').slice(-4); }
+var shortHash = UC.hash;
 
 var loadingBox = function(t){ return '<div class="empty">⏳ ' + (t || '加载中…') + '</div>'; };
 var emptyBox  = function(t){ return '<div class="empty">📭 ' + (t || '暂无数据') + '</div>'; };
 var errBox = function(e){ return '<div class="empty">⚠️ 加载失败: ' + esc(e && e.message) + ' <button class="btn btn-sm" onclick="navigate()">重试</button></div>'; };
 
-function api(path, opts){
-  opts = opts || {};
-  if (opts.body) opts.body = JSON.stringify(opts.body);
-  // 所有后台请求带销售身份头, 后端按身份过滤数据范围
-  opts.headers = {'Content-Type': 'application/json', 'x-sales': String(ME ? ME.id : 0)};
-  return fetch(API + path, opts).then(function(res){
-    return res.json().catch(function(){ return {}; }).then(function(data){
-      if (!res.ok) { var e = new Error(data.error || ('HTTP ' + res.status)); e.status = res.status; throw e; }
-      return data;
-    });
-  });
-}
+// 所有后台请求带销售身份头, 后端按身份过滤数据范围
+var api = UC.createClient({
+  base: API,
+  headers: function(){ return { 'x-sales': String(ME ? ME.id : 0) }; },
+});
 function post(path, body){ return api(path, {method: 'POST', body: body}); }
 function patch(path, body){ return api(path, {method: 'PATCH', body: body}); }
 
 /* ================= 通用组件: toast / modal / drawer ================= */
-function toast(msg, type){
-  var box = document.createElement('div');
-  box.className = 'toast ' + (type === 'err' ? 'err' : type === 'warn' ? 'warn' : '');
-  box.innerHTML = '<span>' + (type === 'err' ? '❌' : type === 'warn' ? '⚠️' : '✅') + '</span><span>' + esc(msg) + '</span>';
-  $('#toasts').appendChild(box);
-  setTimeout(function(){ box.classList.add('out'); setTimeout(function(){ box.remove(); }, 260); }, 3000);
-}
-function showModal(title, bodyHTML){
-  $('#modalRoot').innerHTML =
-    '<div class="overlay" onclick="if(event.target===this)closeModal()">' +
-      '<div class="modal"><div class="modal-head"><h3>' + title + '</h3>' +
-      '<button class="modal-x" onclick="closeModal()">✕</button></div>' +
-      '<div class="modal-body">' + bodyHTML + '</div></div></div>';
-}
-function closeModal(){ $('#modalRoot').innerHTML = ''; }
+var toast = UC.toastStack('#toasts', { icons: true, fade: true, duration: 3000 });
+function showModal(title, bodyHTML){ UC.showModalFramed('#modalRoot', title, bodyHTML); }
+function closeModal(){ UC.closeModal('#modalRoot'); }
 function showDrawer(title, bodyHTML, footHTML){
   $('#drawerRoot').innerHTML =
     '<div class="drawer-mask" onclick="closeDrawer()"></div>' +
@@ -1923,7 +1908,7 @@ function fetchSales(force){
 var DASH_RANGE = 'today'; // 时间范围: today/week/month/quarter
 var DASH_RANGE_LABEL = {today: '今日', week: '本周', month: '本月', quarter: '本季'};
 var DASH_PERF = [];       // 业绩榜缓存(行点击详情 drawer 用)
-function nz(n){ return Number(n) || 0; } // NaN/undefined 兜底为 0
+var nz = UC.num; // NaN/undefined 兜底为 0
 function switchDashRange(r){
   DASH_RANGE = r;
   $$('#dashRangeTabs .tab').forEach(function(b){ b.classList.toggle('active', b.dataset.r === r); });

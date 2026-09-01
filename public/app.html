@@ -382,9 +382,12 @@ details.faq .fabody{padding:0 14px 13px;font-size:12px;color:var(--mut);line-hei
 
   <div class="toast" id="toast"></div>
 </div>
+<script src="/assets/format.js"></script>
+<script src="/assets/api.js"></script>
+<script src="/assets/feedback.js"></script>
 <script>
 'use strict';
-/* ================= 基础配置与工具 ================= */
+/* ================= 基础配置与工具(公共模块委托) ================= */
 var BASE = (location.port === '5177') ? '' : 'http://localhost:5177';
 var MERCHANTS = ['Amazon','Apple Store','Noon','Careem','Starbucks','Talabat','Netflix','Booking.com'];
 var LEVELS = {
@@ -409,9 +412,9 @@ var S = { uid:null, me:null, txs:[], tasks:null, products:[], orders:[], points:
 
 function $(id){ return document.getElementById(id); }
 function p2(n){ return String(n).padStart(2,'0'); }
-function fmtUSD(n){ return '$' + Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+var fmtUSD = UC.money;
 function fmtPts(n){ return Number(n||0).toLocaleString('en-US'); }
-function fmtTime(ts){ var d = new Date(ts||0); return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())+' '+p2(d.getHours())+':'+p2(d.getMinutes()); }
+var fmtTime = UC.time;
 function maskCard(no){
   var g = String(no||'').split(' ');
   if (g.length !== 4) return '5533 68** **** 1234';
@@ -419,7 +422,7 @@ function maskCard(no){
 }
 function avatar(s){ var h = 0; for (var ch of String(s)) h = (h*31 + ch.codePointAt(0)) >>> 0; return AVS[h % AVS.length]; }
 function catGrad(c){ return CATG[c] || 'linear-gradient(135deg,#64748b,#475569)'; }
-function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+var esc = UC.esc;
 
 /* ---- 语言切换(Demo: 仅 tab 标题与「我的」页标签) ---- */
 function T(zh, en){ return S.lang === 'en' ? (en || zh) : zh; }
@@ -441,25 +444,14 @@ function starsHtml(n){
   return '<span style="color:#f59e0b;letter-spacing:1px">' + '★★★★★'.slice(0, n) + '</span><span style="color:#cbd5e1;letter-spacing:1px">' + '★★★★★'.slice(0, 5 - n) + '</span>';
 }
 
-async function api(path, opts){
-  opts = opts || {};
-  var headers = { 'Content-Type':'application/json' };
-  if (S.uid) headers['x-user'] = S.uid;
-  var res = await fetch(BASE + path, { method: opts.method || 'GET', headers: headers, body: opts.body || null });
-  var data = {};
-  try { data = await res.json(); } catch(e) {}
-  return data;
-}
+var api = UC.createClient({
+  base: BASE,
+  headers: function(){ return S.uid ? { 'x-user': S.uid } : {}; },
+  throwOnError: false, // 用户端语义: 永不抛错, 解析失败返回 {}
+});
 
 /* ================= toast / 弹层 / 全屏页 / 动画 ================= */
-var toastTimer = null;
-function toast(msg, type){
-  var t = $('toast'); t.textContent = msg;
-  var cls = 'toast' + (type==='ok' ? ' ok' : type==='err' ? ' err' : '');
-  t.className = cls + ' on';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ t.className = cls; }, type==='err' ? 3600 : 2600);
-}
+var toast = UC.toastSingle('#toast');
 function openSheet(html){ $('sheet').innerHTML = html; $('mask').classList.add('on'); }
 function closeSheet(){ $('mask').classList.remove('on'); }
 function openPage(title, html){ $('fpTitle').textContent = title; $('fpBody').innerHTML = html; $('fpage').classList.add('on'); }

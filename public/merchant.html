@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>U-Card 商户平台</title>
+<link rel="stylesheet" href="/assets/tokens.css">
+<link rel="stylesheet" href="/assets/common.css">
 <style>
-:root{--pri:#4f46e5;--pri2:#7c3aed;--ok:#16a34a;--warn:#f59e0b;--bad:#dc2626;--ink:#0f172a;--mut:#64748b;--bg:#eef1f7;--line:#e5e9f2;}
 *{margin:0;padding:0;box-sizing:border-box}
 body{min-height:100vh;background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--ink)}
-.num{font-variant-numeric:tabular-nums;font-family:"SF Mono",Consolas,Menlo,monospace}
 /* ---------- 登录页 ---------- */
 .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-card{width:100%;max-width:400px;background:#fff;border-radius:20px;padding:34px 30px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
@@ -51,12 +51,8 @@ body{min-height:100vh;background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%)
 .tbl td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
 .tbl tr:last-child td{border-bottom:none}
 .tblwrap{overflow-x:auto}
-.pill{display:inline-block;border-radius:99px;padding:2.5px 10px;font-size:11.5px;font-weight:600;white-space:nowrap}
-.p-green{background:#dcfce7;color:#15803d}.p-amber{background:#fef3c7;color:#b45309}.p-red{background:#fee2e2;color:#b91c1c}.p-gray{background:#f1f5f9;color:#475569}.p-blue{background:#e0e7ff;color:#4338ca}.p-indigo{background:#e0e7ff;color:#5b21b6}
 .dim{color:var(--mut)}
 .sub{font-size:11.5px;color:var(--mut);margin-top:2px}
-.empty{text-align:center;color:var(--mut);padding:28px 10px;font-size:13px}
-.load{text-align:center;color:var(--mut);padding:28px 10px;font-size:13px}
 /* 工具条 */
 .bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
 .bar .sel{width:auto;min-width:130px;padding:9px 12px;font-size:13.5px;border-radius:10px}
@@ -83,9 +79,6 @@ body{min-height:100vh;background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%)
 .mfoot{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
 .note{background:#eef2ff;border-radius:12px;padding:11px 14px;font-size:12.5px;color:#3730a3;line-height:1.7;margin-bottom:14px}
 textarea.ta{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:11px;font-size:14px;outline:none;background:#f8fafc;font-family:inherit;resize:vertical}
-.toastbox{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:8px;align-items:center}
-.toast{background:#0f172a;color:#fff;border-radius:99px;padding:10px 20px;font-size:13.5px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.3);max-width:88vw}
-.toast.err{background:var(--bad)}
 @media (max-width:560px){.tbl{font-size:12px}.stat .v{font-size:19px}}
 </style>
 </head>
@@ -191,35 +184,23 @@ textarea.ta{width:100%;border:1.5px solid var(--line);border-radius:12px;padding
   </div>
 </div>
 
+<script src="/assets/format.js"></script>
+<script src="/assets/api.js"></script>
+<script src="/assets/feedback.js"></script>
+<script src="/assets/modal.js"></script>
+<script src="/assets/demo-auth.js"></script>
 <script>
-/* ================= 基础 ================= */
+/* ================= 基础(公共模块委托) ================= */
 var API = location.protocol.indexOf('http') === 0 ? '' : 'http://localhost:5177';
 function $(s){ return document.querySelector(s); }
-function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
-function fmtMoney(n){ return '$' + Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
-function fmtMoney0(n){ return '$' + Math.round(Number(n || 0)).toLocaleString('en-US'); }
-function nz(n){ return Number(n) || 0; }
-function pad2(n){ return String(n).padStart(2, '0'); }
-function fmtTime(ts){ if (!ts) return '—'; var d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
-function toast(msg, isErr){
-  var b = document.createElement('div');
-  b.className = 'toast' + (isErr ? ' err' : '');
-  b.textContent = (isErr ? '❌ ' : '✅ ') + msg;
-  $('#toasts').appendChild(b);
-  setTimeout(function(){ b.remove(); }, 3200);
-}
-function mreq(path, opts){
-  opts = opts || {};
-  // ME 未就绪时(首笔 /api/mch/me)回退 localStorage 的 mchId, 否则首请求带 x-mch:0 必 401
-  opts.headers = {'Content-Type': 'application/json', 'x-mch': String(ME ? ME.id : (parseInt(localStorage.getItem('mchId') || '0', 10) || 0))};
-  if (opts.body) opts.body = JSON.stringify(opts.body);
-  return fetch(API + path, opts).then(function(res){
-    return res.json().catch(function(){ return {}; }).then(function(data){
-      if (!res.ok){ var e = new Error(data.error || ('HTTP ' + res.status)); e.status = res.status; throw e; }
-      return data;
-    });
-  });
-}
+var MCH_ID = UC.demoId('mchId');
+var esc = UC.esc, fmtMoney = UC.money, fmtMoney0 = UC.money0, nz = UC.num, pad2 = UC.pad2, fmtTime = UC.time;
+var toast = UC.toastStack('#toasts');
+// ME 未就绪时(首笔 /api/mch/me)回退 localStorage 的 mchId, 否则首请求带 x-mch:0 必 401
+var mreq = UC.createClient({
+  base: API,
+  headers: function(){ return { 'x-mch': String(ME ? ME.id : MCH_ID.get()) }; },
+});
 function mget(path){ return mreq(path); }
 function mpost(path, body){ return mreq(path, {method: 'POST', body: body}); }
 var ORDER_ST = {paid: '<span class="pill p-green">已支付</span>', refunded: '<span class="pill p-gray">已退款</span>', disputed: '<span class="pill p-red">拒付处理中</span>'};
@@ -239,15 +220,15 @@ function loadMerchantList(){
 function doLogin(){
   var id = +$('#mchSel').value;
   if (!id){ toast('请选择商户', true); return; }
-  localStorage.setItem('mchId', String(id));
+  MCH_ID.set(id);
   enterPortal();
 }
 function doLogout(){
-  localStorage.removeItem('mchId');
+  MCH_ID.clear();
   location.reload();
 }
 function enterPortal(){
-  var id = parseInt(localStorage.getItem('mchId') || '0', 10);
+  var id = MCH_ID.get();
   if (!id) return;
   $('#appView').style.display = '';
   $('#loginView').style.display = 'none';
@@ -260,7 +241,7 @@ function enterPortal(){
     go('home');
   }).catch(function(e){
     toast(e.message, true);
-    localStorage.removeItem('mchId');
+    MCH_ID.clear();
     $('#appView').style.display = 'none';
     $('#loginView').style.display = '';
   });
@@ -347,15 +328,13 @@ function openRefundApply(orderId){
   var apply = function(list){
     var paid = list.filter(function(o){ return o.status === 'paid'; });
     if (!paid.length){ toast('没有可退款的「已支付」订单', true); return; }
-    $('#modalRoot').innerHTML =
-      '<div class="mask" onclick="if(event.target===this)closeModal()"><div class="modal"><h3>↩️ 发起退款</h3>' +
+    UC.showModal('#modalRoot', '↩️ 发起退款',
       '<div class="note">仅「已支付」订单可申请; 提交后由平台审核, 通过后原路退回付款人。</div>' +
       '<div class="field"><label>选择订单</label><select class="sel" id="rfOrder">' +
       paid.map(function(o){ return '<option value="' + o.id + '">' + esc(o.orderNo) + ' · ' + fmtMoney(o.amount) + ' · ' + esc(o.payer) + '</option>'; }).join('') +
       '</select></div>' +
       '<div class="field"><label>退款原因(必填)</label><textarea class="ta" id="rfReason" rows="2" placeholder="如: 客户投诉商品破损 / 重复扣款"></textarea></div>' +
-      '<div class="mfoot"><button class="obtn" onclick="closeModal()">取消</button><button class="mbtn" onclick="refundApplyDo()">提交申请</button></div>' +
-      '</div></div>';
+      '<div class="mfoot"><button class="obtn" onclick="closeModal()">取消</button><button class="mbtn" onclick="refundApplyDo()">提交申请</button></div>');
   };
   if (orderId != null){
     mget('/api/mch/orders').then(function(d){
@@ -376,7 +355,7 @@ function refundApplyDo(){
     LOADED.refunds = 1; loadRefunds(); loadOrders();
   }).catch(function(e){ toast(e.message, true); });
 }
-function closeModal(){ $('#modalRoot').innerHTML = ''; }
+function closeModal(){ UC.closeModal('#modalRoot'); }
 
 /* ================= 结算记录 ================= */
 function loadSettles(){
@@ -433,7 +412,7 @@ function copyKey(){
 
 /* ================= 启动 ================= */
 loadMerchantList();
-if (localStorage.getItem('mchId')) enterPortal();
+if (MCH_ID.has()) enterPortal();
 </script>
 </body>
 </html>
