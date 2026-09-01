@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+const apiDir = new URL('../src/api/', import.meta.url);
+const files = fs.readdirSync(apiDir).filter(n => n.endsWith('.js'));
+const read = f => fs.readFileSync(f, 'utf8');
+const oldSrc = [read('.tmp-core-head.js'), ...files.map(n => read(new URL(n, apiDir).pathname.replace(/^\/([A-Z]:)/, '$1')))].join('\n');
+const newSrc = [read(new URL('../core.js', import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1')), ...files.map(n => read(new URL(n, apiDir).pathname.replace(/^\/([A-Z]:)/, '$1')))].join('\n');
+const scan = s => new Set([...s.matchAll(/["'](\/api\/[^"']+)["']/g)].map(m => m[1]));
+const oldS = scan(oldSrc); const newS = scan(newSrc);
+console.log('missing now:');
+for (const p of [...oldS].sort()) if (!newS.has(p)) console.log('  ' + p);
+console.log('added:');
+for (const p of [...newS].sort()) if (!oldS.has(p)) console.log('  ' + p);
