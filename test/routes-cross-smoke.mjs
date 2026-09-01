@@ -2,7 +2,7 @@
 const B = 'http://localhost:5177';
 let pass = 0, fail = 0;
 const resetDemo = async () => {
-  const r = await fetch(B + '/api/demo/reset', { method: 'POST' });
+  const r = await fetch(B + '/api/demo/reset', { method: 'POST', headers: { 'x-sales': '1' } });
   if (!r.ok) throw new Error(`无法恢复测试种子: HTTP ${r.status}`);
 };
 const ok = (name, cond, detail = '') => cond ? (pass++, console.log(`  ✓ ${name}`)) : (fail++, console.log(`  ✗ ${name}  ${detail}`));

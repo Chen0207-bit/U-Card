@@ -6,12 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "deploy": "wrangler deploy",
-    "check": "node --check core.js && node --check server.js && node --check worker.js && node --check do.js",
+    "check": "node --check core.js && node --check server.js && node --check worker.js && node --check do.js && node --check src/app/create-app.js && node --check src/app/request-context.js && node --check src/api/router.js && node --check src/api/ops-routes.js && node --check src/auth/demo-auth.js && node --check src/auth/authorize.js && node --check src/config.js && node --check src/runtime/http.js && node --check src/runtime/static-routes.js",
+    "test:arch": "node test/architecture.mjs",
     "test:contract": "node test/api-contract.mjs",
     "test:core": "node test/regress.mjs",
     "test:http:user": "node test/route1-smoke.mjs",
     "test:http:cross": "node test/routes-cross-smoke.mjs",
     "test:http": "npm run test:http:user && npm run test:http:cross",
-    "test:all": "npm run check && npm run test:contract && npm run test:core && npm run test:http"
+    "test:all": "npm run check && npm run test:arch && npm run test:contract && npm run test:core && npm run test:http"
   }
 }

@@ -1077,9 +1077,10 @@ function subtreeIds(salesId) { // 本人 + 全部后代
   walk(salesId);
   return out;
 }
-const scopeOf = (headers) => { // 数据范围: 未传=总监全量; 传销售 id=其子树
-  const sid = parseInt(headers['x-sales'] || headers['x-Sales'] || '0', 10);
-  if (!sid || sid === 1) return { sid: 1, ids: salesReps.map(s => s.id) };
+const scopeOf = (headers, actorId = null) => { // 数据范围: 身份已由适配器解析; 直调测试兼容 x-sales
+  const sid = actorId || parseInt(headers['x-sales'] || headers['x-Sales'] || '0', 10);
+  if (sid === 1) return { sid: 1, ids: salesReps.map(s => s.id) };
+  if (!sid) return { sid: 0, ids: [] };
   return { sid, ids: subtreeIds(sid) };
 };
 
@@ -2903,6 +2904,10 @@ function opsBackupData() {
   };
 }
 
+function appendOpsLog(module, action, target, operator = 'Noura Al-Faisal', result = '成功') {
+  opLogs.unshift({ id: opLogs.length ? Math.max(...opLogs.map(o => o.id)) + 1 : 910100, createdAt: now(), operator, module, action, target, result });
+}
+
 // 数据恢复控制台只暴露状态摘要, 不回显备份中的敏感字段
 function opsDataState() {
   const counts = {
@@ -2923,9 +2928,25 @@ function opsDataState() {
   };
 }
 
+function ensureSeeded() { if (!inited) initSeed(); }
+export function getOpsDataState() { ensureSeeded(); return opsDataState(); }
+export function exportOpsBackup() {
+  ensureSeeded();
+  const backup = opsBackupData();
+  appendOpsLog('运维中心', '数据备份导出', '全量内存 JSON · ' + Object.keys(backup.counts).length + ' 个集合 / ' + Object.values(backup.counts).reduce((sum, n) => sum + n, 0) + ' 条');
+  return backup;
+}
+export function restoreOpsSeed(reason = 'console_restore') {
+  demoSeedReason = reason;
+  inited = false;
+  initSeed();
+  appendOpsLog('运维中心', reason === 'console_restore' ? '恢复演示数据' : '重置演示数据', '全量重建初始种子');
+  return { ok: true, at: now(), state: opsDataState() };
+}
+
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
-export function handleApi(method, p, q = {}, b = {}, h = {}) {
+export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
   if (!inited) initSeed(); // 懒初始化: 首个请求时生成种子(此时 Date.now() 为真实时间)
   const J = (data, status = 200) => ({ status, json: data });
   // 演示数据一键重置: 重建全部种子, 清空现场操作产生的数据(须在 J 声明后)
@@ -2933,15 +2954,17 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
 
   // ============ 运营后台 / 销售工作台 ============
   if (p.startsWith('/api/admin')) {
-    const { sid, ids } = scopeOf(h);
+    if (p === '/api/admin/accounts') { // demo 登录账号列表(匿名可见)
+      return J(salesReps.map(s => ({ id: s.id, name: s.name, role: s.role, level: s.level, region: s.region, parentId: s.parentId, parentName: repById(s.parentId)?.name || '—', teamSize: subtreeIds(s.id).length - 1 })));
+    }
+    const actorSid = context.actor?.type === 'sales' ? context.actor.id : parseInt(h['x-sales'] || h['x-Sales'] || '0', 10);
+    if (!repById(actorSid)) return J({ error: '请先选择运营后台账号', code: 'AUTH_REQUIRED' }, 401);
+    const { sid, ids } = scopeOf(h, actorSid);
     const me = repById(sid);
     const scopedUserIds = users.filter(u => ids.includes(u.salesRepId)).map(u => u.id);
     const today = new Date().toDateString();
     const isToday = (ts) => new Date(ts).toDateString() === today;
 
-    if (p === '/api/admin/accounts') { // demo 登录账号列表
-      return J(salesReps.map(s => ({ id: s.id, name: s.name, role: s.role, level: s.level, region: s.region, parentId: s.parentId, parentName: repById(s.parentId)?.name || '—', teamSize: subtreeIds(s.id).length - 1 })));
-    }
     if (p === '/api/admin/me') return J({ ...me, scope: '全部数据', teamIds: subtreeIds(sid) });
 
     if (p === '/api/admin/dashboard') {
@@ -4675,9 +4698,10 @@ export function handleApi(method, p, q = {}, b = {}, h = {}) {
 
   // ============ 用户端 H5 ============
   if (p.startsWith('/api/app')) {
-    const uid = parseInt(h['x-user'] || '0', 10);
-    const me = () => users.find(u => u.id === uid);
     if (p === '/api/app/users') return J(users.map(u => ({ id: u.id, name: u.name, phone: u.phone, kycLevel: u.kycLevel, points: u.points })));
+    const uid = context.actor?.type === 'user' ? context.actor.id : parseInt(h['x-user'] || '0', 10);
+    const me = () => users.find(u => u.id === uid);
+    if (!me()) return J({ error: '未登录', code: 'AUTH_REQUIRED' }, 401);
     if (p === '/api/app/me') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(pubUser(u)); }
     if (p === '/api/app/transactions') { const u = me(); if (!u) return J({ error: '未登录' }, 401); return J(transactions.filter(t => t.userId === uid).slice(0, 50)); }
     if (p === '/api/app/topup' && method === 'POST') return J(doTopup(uid, +b.amount, b.method));
