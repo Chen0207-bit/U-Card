@@ -22,23 +22,54 @@
   button{font-family:inherit;cursor:pointer}
 
   /* ---------- 布局: sidebar + main ---------- */
-  .sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;background:#0f172a;display:flex;flex-direction:column;overflow-y:auto;z-index:40}
+  .sidebar{position:fixed;top:0;left:0;bottom:0;width:220px;background:#0f172a;display:flex;flex-direction:column;overflow-y:auto;z-index:40;transition:width .2s ease}
   .logo{display:flex;align-items:center;gap:10px;padding:18px 16px 14px}
   .logo-card{width:34px;height:24px;border-radius:5px;background:var(--grad);position:relative;overflow:hidden;flex:none;box-shadow:0 2px 6px rgba(79,70,229,.5)}
   .logo-card::before{content:'';position:absolute;left:0;right:0;top:8px;height:5px;background:rgba(255,255,255,.38)}
   .logo-name{color:#fff;font-weight:700;font-size:15px;letter-spacing:.3px}
   .logo-sub{color:#64748b;font-size:11px;margin-top:1px}
   .nav{flex:1;padding:4px 0 12px}
-  .nav-cap{font-size:11px;color:#64748b;margin:14px 0 6px 22px;letter-spacing:1px}
+  /* 分组折叠菜单(芋道 el-menu 风格): nav-cap=组头(图标+组名+caret), nav-sub=子项容器 */
+  .nav-cap{display:flex;align-items:center;gap:8px;font-size:11px;color:#64748b;margin:12px 8px 4px;padding:5px 12px;border-radius:6px;letter-spacing:1px;cursor:pointer;user-select:none;transition:color .15s,background .15s}
+  .nav-cap:hover{color:#cbd5e1;background:rgba(255,255,255,.05)}
+  .nav-gic{display:block;font-size:13px;flex:none;line-height:1}
+  .nav-cap-name{display:block;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nav-caret{display:inline-block;font-size:10px;flex:none;opacity:.75;transform:rotate(0deg);transition:transform .2s ease}
+  .nav-group.open > .nav-cap{color:#cbd5e1}
+  .nav-group.open > .nav-cap .nav-caret{transform:rotate(90deg)} /* 展开时 caret 旋转 90° */
+  .nav-sub{overflow:hidden;max-height:0;transition:max-height .2s ease}
   .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;margin:2px 10px;border-radius:8px;color:#94a3b8;font-size:13.5px;transition:all .15s}
   .nav-item:hover{color:#e2e8f0;background:rgba(255,255,255,.06)}
   .nav-item.active{color:#fff;background:linear-gradient(135deg,rgba(79,70,229,.5),rgba(124,58,237,.5));box-shadow:inset 0 0 0 1px rgba(129,140,248,.35)}
   .nav-ic{width:18px;text-align:center;flex:none}
   .side-foot{border-top:1px solid rgba(255,255,255,.08);padding:14px 20px;display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:12.5px}
   .side-avatar{width:30px;height:30px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+  .side-info{min-width:0}
   .side-ver{color:#475569;font-size:11px;margin-top:2px}
 
-  .main{margin-left:220px;min-height:100vh;display:flex;flex-direction:column}
+  /* mini 折叠模式: 侧栏收窄到 64px, 只显示组图标(logo 方块/身份头像) */
+  body.nav-mini .sidebar{width:64px}
+  body.nav-mini .logo{padding:18px 0 14px;justify-content:center}
+  body.nav-mini .logo-txt{display:none}
+  body.nav-mini .nav-cap{width:40px;height:40px;margin:8px auto;padding:0;justify-content:center;border-radius:8px}
+  body.nav-mini .nav-cap .nav-cap-name,body.nav-mini .nav-cap .nav-caret{display:none}
+  body.nav-mini .nav-gic{font-size:16px}
+  body.nav-mini .nav-sub{display:none}
+  body.nav-mini .side-foot{padding:14px 0;justify-content:center}
+  body.nav-mini .side-info{display:none}
+
+  /* mini 模式 hover 浮层(芋道 collapse popper): 从组图标右侧弹出的绝对定位面板 */
+  .nav-pop{position:fixed;z-index:60;min-width:200px;background:#1e293b;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:6px;box-shadow:0 12px 32px rgba(0,0,0,.4);display:none}
+  .nav-pop.show{display:block}
+  .nav-pop-cap{font-size:11px;color:#94a3b8;letter-spacing:1px;padding:7px 10px 5px}
+  .nav-pop .nav-item{margin:0}
+
+  .main{margin-left:220px;min-height:100vh;display:flex;flex-direction:column;transition:margin-left .2s ease}
+  body.nav-mini .main{margin-left:64px}
+  .nav-fold-btn{flex:none;width:34px;height:34px;border:1px solid var(--line);background:#fff;border-radius:8px;font-size:15px;color:var(--ink2);display:flex;align-items:center;justify-content:center;transition:all .15s}
+  .nav-fold-btn:hover{color:var(--pri);border-color:var(--pri);background:#eef2ff}
+  .topbar-left{display:flex;align-items:center;gap:12px;min-width:0}
+  .topbar-left h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .topbar{position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--line);height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 26px}
   .topbar h1{font-size:17px;font-weight:600}
   .topbar-user{display:flex;align-items:center;gap:9px;color:var(--ink2);font-size:13.5px}
@@ -327,6 +358,22 @@
 .rl-log .bad{color:#fca5a5}
 .tl-type.tl-ops{background:#f3e8ff;color:#7c3aed}
 @media (max-width:980px){ .ops-layer .ops-cmp{grid-template-columns:1fr} .ops-layer .ops-lab{width:70px;font-size:12px} }
+
+/* ---------- 左侧菜单: mini 模式在移动端禁用(<768px 始终 220px 完整菜单) ---------- */
+@media (max-width:768px){
+  .nav-fold-btn{display:none}
+  body.nav-mini .sidebar{width:220px}
+  body.nav-mini .main{margin-left:220px}
+  body.nav-mini .logo{padding:18px 16px 14px;justify-content:flex-start}
+  body.nav-mini .logo-txt{display:block}
+  body.nav-mini .nav-cap{width:auto;height:auto;margin:12px 8px 4px;padding:5px 12px;justify-content:flex-start;border-radius:6px}
+  body.nav-mini .nav-cap .nav-cap-name{display:block}
+  body.nav-mini .nav-cap .nav-caret{display:inline-block}
+  body.nav-mini .nav-gic{font-size:13px}
+  body.nav-mini .nav-sub{display:block}
+  body.nav-mini .side-foot{padding:14px 20px;justify-content:flex-start}
+  body.nav-mini .side-info{display:block}
+}
 </style>
 </head>
 <body>
@@ -346,7 +393,7 @@
 <div class="sidebar">
   <div class="logo">
     <div class="logo-card"></div>
-    <div>
+    <div class="logo-txt">
       <div class="logo-name">U-Card</div>
       <div class="logo-sub">优卡运营后台</div>
     </div>
@@ -354,10 +401,15 @@
   <nav class="nav" id="nav"></nav>
   <div class="side-foot" id="sideFoot"></div>
 </div>
+<!-- mini 模式 hover 浮层(从组图标右侧弹出) -->
+<div class="nav-pop" id="navPop"></div>
 
 <div class="main">
   <header class="topbar">
-    <h1 id="pageTitle">驾驶舱</h1>
+    <div class="topbar-left">
+      <button class="nav-fold-btn" id="navFoldBtn" onclick="toggleNavMini()" title="折叠菜单">☰</button>
+      <h1 id="pageTitle">驾驶舱</h1>
+    </div>
     <div class="topbar-user" id="topbarUser"></div>
   </header>
   <div class="content">
@@ -1674,25 +1726,25 @@ var LOADERS = {};
 // 总监(level 0)= 全部菜单 + 分销链路; 一级/二级/三级销售 = 工作台六页(含名下客户交易流水)
 var SALES_PAGES = ['dashboard', 'crm', 'perf', 'commission', 'chain', 'tx', 'goals'];
 var MENU = [
-  {cap:'概览', items:[['dashboard','📊','驾驶舱']]},
-  {cap:'经营管理', lv0:true, items:[['goals','🎯','目标管理']]},
-  {cap:'U卡支付运营', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核']]},
-  {cap:'CRM 销售', items:[['crm','👥','客户管理'],['tx','💸','客户交易'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
-  {cap:'积分商城', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]},
-  {cap:'风控中心', lv0:true, items:[['risk','🚨','风险事件'],['riskRules','📐','风险规则'],['engine','🧠','规则引擎'],['riskLists','⛔','黑白名单'],['riskTags','🏷️','风险标签']]},
-  {cap:'财务结算', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]},
-  {cap:'资金账本', lv0:true, items:[['ledgerAccounts','📒','账户总览'],['ledgerEntries','🧾','资金流水'],['ledgerSnapshots','📸','余额快照']]},
-  {cap:'系统管理', lv0:true, items:[['accounts','👤','账号管理'],['roles','🧩','角色管理'],['perms','🔐','权限配置'],['org','🌳','组织架构'],['params','⚙️','系统参数'],['dicts','📚','字典管理'],['loginlogs','📝','登录日志'],['oplogs','🗒️','操作日志']]},
-  {cap:'平台管理', lv0:true, items:[['tenants','🏢','租户管理'],['tenantConfig','🎛️','租户配置']]},
-  {cap:'开放平台', lv0:true, items:[['apps','🔌','应用管理'],['keys','🔑','API 密钥'],['webhooks','🪝','Webhook'],['apilogs','📊','API 日志'],['docs','📘','接口文档']]},
-  {cap:'消息中心', lv0:true, items:[['templates','📨','通知模板'],['sends','📤','发送记录'],['channels','📻','渠道配置']]},
-  {cap:'审批中心', lv0:true, items:[['approvals','📝','审批中心']]},
-  {cap:'支付编排', lv0:true, items:[['orchAdapters','🔌','适配器注册'],['orchRoutes','🧭','渠道路由'],['orchHealth','🩺','健康检查'],['orchCompare','💰','费率比较'],['orchTx','⚙️','交易状态机'],['orchIdem','🛡️','幂等控制'],['orchCallback','📨','异步回调'],['orchRecon','🧮','对账差异']]},
-  {cap:'合规中心', lv0:true, items:[['compKyc','🪪','C端KYC案例'],['compKyb','🏢','企业KYB'],['compScreen','🔍','AML筛查'],['compSanctions','⛔','制裁名单'],['compPeps','👥','PEP名单'],['compStr','📋','可疑报告'],['compDocs','📇','证件管理'],['compCases','🗂️','合规案件'],['compCountries','🌍','国家政策']]},
-  {cap:'企业服务', lv0:true, items:[['entAccounts','🏢','企业列表'],['entBudget','🏗️','部门预算'],['entCards','💳','企业卡管理'],['entApprovals','✅','消费审批'],['entBills','🧾','账单发票'],['entReport','📊','部门报表']]},
-  {cap:'商户平台', lv0:true, items:[['mchOnboard','🏪','商户入驻'],['mchRates','⚙️','费率配置'],['mchOrders','🧾','收款订单'],['mchRefunds','↩️','退款管理'],['mchSettles','💰','结算管理'],['mchSplits','✂️','分账管理'],['mchRisk','🚨','商户风控'],['mchReport','📈','经营报表']]},
-  {cap:'数据中心', lv0:true, items:[['biOverview','📡','实时指标'],['biTx','💸','交易分析'],['biUsers','👥','用户分析'],['biSales','🏆','销售分析'],['biFunnel','🔻','转化漏斗'],['biReport','🧾','自定义报表']]},
-  {cap:'运维中心', lv0:true, items:[['opsArch','🏗️','架构总览'],['opsFlags','🎚️','Feature Flag'],['opsRate','🚦','API 限流'],['opsAudit','📜','审计日志'],['opsMonitor','🩺','服务监控'],['opsAlerts','🔔','错误告警'],['opsTrace','🧬','链路追踪'],['opsBackup','💾','备份灾备']]}
+  {cap:'概览', ic:'📊', items:[['dashboard','📊','驾驶舱']]},
+  {cap:'经营管理', ic:'🎯', lv0:true, items:[['goals','🎯','目标管理']]},
+  {cap:'U卡支付运营', ic:'💳', lv0:true, items:[['cards','💳','U卡管理'],['kyc','🛡️','KYC 审核']]},
+  {cap:'CRM 销售', ic:'👥', items:[['crm','👥','客户管理'],['tx','💸','客户交易'],['perf','🏆','业绩排行'],['commission','💰','佣金管理'],['chain','🔗','分销链路']]},
+  {cap:'积分商城', ic:'🛍️', lv0:true, items:[['points','⭐','积分管理'],['shop','🛍️','商城管理'],['orders','📦','兑换订单']]},
+  {cap:'风控中心', ic:'🚨', lv0:true, items:[['risk','🚨','风险事件'],['riskRules','📐','风险规则'],['engine','🧠','规则引擎'],['riskLists','⛔','黑白名单'],['riskTags','🏷️','风险标签']]},
+  {cap:'财务结算', ic:'💰', lv0:true, items:[['recon','🧮','对账中心'],['financeDiff','🔍','差异清单'],['merchant','🏪','商户结算'],['financeReport','📈','财务报表']]},
+  {cap:'资金账本', ic:'📒', lv0:true, items:[['ledgerAccounts','📒','账户总览'],['ledgerEntries','🧾','资金流水'],['ledgerSnapshots','📸','余额快照']]},
+  {cap:'系统管理', ic:'⚙️', lv0:true, items:[['accounts','👤','账号管理'],['roles','🧩','角色管理'],['perms','🔐','权限配置'],['org','🌳','组织架构'],['params','⚙️','系统参数'],['dicts','📚','字典管理'],['loginlogs','📝','登录日志'],['oplogs','🗒️','操作日志']]},
+  {cap:'平台管理', ic:'🏢', lv0:true, items:[['tenants','🏢','租户管理'],['tenantConfig','🎛️','租户配置']]},
+  {cap:'开放平台', ic:'🔌', lv0:true, items:[['apps','🔌','应用管理'],['keys','🔑','API 密钥'],['webhooks','🪝','Webhook'],['apilogs','📊','API 日志'],['docs','📘','接口文档']]},
+  {cap:'消息中心', ic:'📨', lv0:true, items:[['templates','📨','通知模板'],['sends','📤','发送记录'],['channels','📻','渠道配置']]},
+  {cap:'审批中心', ic:'📝', lv0:true, items:[['approvals','📝','审批中心']]},
+  {cap:'支付编排', ic:'🧭', lv0:true, items:[['orchAdapters','🔌','适配器注册'],['orchRoutes','🧭','渠道路由'],['orchHealth','🩺','健康检查'],['orchCompare','💰','费率比较'],['orchTx','⚙️','交易状态机'],['orchIdem','🛡️','幂等控制'],['orchCallback','📨','异步回调'],['orchRecon','🧮','对账差异']]},
+  {cap:'合规中心', ic:'🛡️', lv0:true, items:[['compKyc','🪪','C端KYC案例'],['compKyb','🏢','企业KYB'],['compScreen','🔍','AML筛查'],['compSanctions','⛔','制裁名单'],['compPeps','👥','PEP名单'],['compStr','📋','可疑报告'],['compDocs','📇','证件管理'],['compCases','🗂️','合规案件'],['compCountries','🌍','国家政策']]},
+  {cap:'企业服务', ic:'🏢', lv0:true, items:[['entAccounts','🏢','企业列表'],['entBudget','🏗️','部门预算'],['entCards','💳','企业卡管理'],['entApprovals','✅','消费审批'],['entBills','🧾','账单发票'],['entReport','📊','部门报表']]},
+  {cap:'商户平台', ic:'🏪', lv0:true, items:[['mchOnboard','🏪','商户入驻'],['mchRates','⚙️','费率配置'],['mchOrders','🧾','收款订单'],['mchRefunds','↩️','退款管理'],['mchSettles','💰','结算管理'],['mchSplits','✂️','分账管理'],['mchRisk','🚨','商户风控'],['mchReport','📈','经营报表']]},
+  {cap:'数据中心', ic:'📈', lv0:true, items:[['biOverview','📡','实时指标'],['biTx','💸','交易分析'],['biUsers','👥','用户分析'],['biSales','🏆','销售分析'],['biFunnel','🔻','转化漏斗'],['biReport','🧾','自定义报表']]},
+  {cap:'运维中心', ic:'🖥️', lv0:true, items:[['opsArch','🏗️','架构总览'],['opsFlags','🎚️','Feature Flag'],['opsRate','🚦','API 限流'],['opsAudit','📜','审计日志'],['opsMonitor','🩺','服务监控'],['opsAlerts','🔔','错误告警'],['opsTrace','🧬','链路追踪'],['opsBackup','💾','备份灾备']]}
 ];
 function allowedPage(key){
   if (!ME) return false;
@@ -1706,11 +1758,117 @@ function navigate(){
   $$('.nav-item').forEach(function(a){ a.classList.toggle('active', a.dataset.page === key); });
   $$('.page').forEach(function(s){ s.classList.toggle('show', s.id === 'page-' + key); });
   $('#pageTitle').textContent = PAGES[key];
-  closeDrawer(); closeModal();
+  closeDrawer(); closeModal(); hideNavPop();
   if (LOADERS[key]) LOADERS[key]();
   syncPoll();
+  ensureGroupOpen(key); // 当前页所在组强制展开(切换到另一组时目标组展开、原组收起)
 }
 window.addEventListener('hashchange', navigate);
+
+/* ================= 左侧菜单: 分组手风琴 + mini 折叠 + 浮层(芋道 el-menu 风格) ================= */
+function openNavGroup(g){
+  if (!g || g.classList.contains('open')) return;
+  g.classList.add('open');
+  var sub = $('.nav-sub', g);
+  sub.style.maxHeight = sub.scrollHeight + 'px';
+  var settle = function(){ if (g.classList.contains('open')) sub.style.maxHeight = 'none'; }; // 过渡完成后放开高度, 窗口缩放不裁切
+  sub.addEventListener('transitionend', function h(e){ if (e.propertyName === 'max-height'){ sub.removeEventListener('transitionend', h); settle(); } });
+  setTimeout(settle, 260); // 兜底: 标签页后台时 transitionend 可能不触发
+}
+function collapseNavGroup(g){
+  if (!g || !g.classList.contains('open')) return;
+  var sub = $('.nav-sub', g);
+  sub.style.maxHeight = sub.scrollHeight + 'px';
+  void sub.offsetHeight;                    // 强制回流, 让收起动画从当前高度起跳
+  sub.style.maxHeight = '0px';
+  g.classList.remove('open');
+}
+/* 组头点击: 展开/收起; unique-opened 手风琴 —— 展开新组前先收起其他所有组 */
+function toggleNavGroup(capEl){
+  var g = capEl.parentElement;
+  if (document.body.classList.contains('nav-mini')){ showNavPop(g); return; } // mini 模式: 点组图标 = 弹浮层
+  if (g.classList.contains('open')){
+    collapseNavGroup(g);
+    localStorage.setItem('navOpenGroup', '');
+  } else {
+    $$('.nav-group.open').forEach(collapseNavGroup);
+    openNavGroup(g);
+    localStorage.setItem('navOpenGroup', g.dataset.group);
+  }
+}
+/* 当前页所在组强制展开(不被手风琴收起), 并写入记忆 */
+function ensureGroupOpen(key){
+  var target = null;
+  $$('#nav .nav-group').forEach(function(g){
+    if ($$('.nav-item', g).some(function(a){ return a.dataset.page === key; })) target = g;
+  });
+  if (!target) return;
+  if (!target.classList.contains('open')){
+    $$('.nav-group.open').forEach(collapseNavGroup);
+    openNavGroup(target);
+  }
+  localStorage.setItem('navOpenGroup', target.dataset.group);
+}
+/* 菜单渲染后恢复展开状态: 优先当前页所在组; 其次上次记住的组(被身份过滤掉则忽略); 兜底第一组 */
+function restoreNavState(){
+  var groups = $$('#nav .nav-group');
+  if (!groups.length) return;
+  var key = (location.hash || '#dashboard').slice(1);
+  if (!PAGES[key] || !allowedPage(key)) key = 'dashboard';
+  var target = null;
+  groups.forEach(function(g){
+    if ($$('.nav-item', g).some(function(a){ return a.dataset.page === key; })) target = g;
+  });
+  var want = localStorage.getItem('navOpenGroup');
+  if (!target && want) groups.forEach(function(g){ if (!target && g.dataset.group === want) target = g; });
+  if (!target) target = groups[0];
+  groups.forEach(collapseNavGroup);
+  openNavGroup(target);
+  localStorage.setItem('navOpenGroup', target.dataset.group);
+}
+/* ---- mini 整栏折叠(64px 只显组图标) ---- */
+function toggleNavMini(){ applyNavMini(!document.body.classList.contains('nav-mini')); }
+function applyNavMini(mini){
+  document.body.classList.toggle('nav-mini', !!mini);
+  localStorage.setItem('navMini', mini ? '1' : '0');
+  var btn = $('#navFoldBtn');
+  if (btn){ btn.textContent = mini ? '»' : '☰'; btn.title = mini ? '展开菜单' : '折叠菜单'; }
+  hideNavPop();
+  if (!mini){ // 从 display:none 恢复: 重算已展开组的实际高度(小屏 media query 下 mini 样式被覆盖, 同样受益)
+    $$('#nav .nav-group.open').forEach(function(g){ var sub = $('.nav-sub', g); sub.style.maxHeight = sub.scrollHeight + 'px'; });
+    setTimeout(function(){ $$('#nav .nav-group.open').forEach(function(g){ if (g.classList.contains('open')) $('.nav-sub', g).style.maxHeight = 'none'; }); }, 240);
+  }
+}
+/* ---- mini 模式 hover 浮层: 从组图标右侧弹出, 含组名+子项, 移出关闭 ---- */
+var navPopHideT = null;
+function showNavPop(g){
+  if (!document.body.classList.contains('nav-mini') || !g) return;
+  clearTimeout(navPopHideT);
+  var cap = $('.nav-cap', g), pop = $('#navPop');
+  if (!cap || !pop) return;
+  pop.innerHTML = '<div class="nav-pop-cap">' + (g.dataset.ic ? g.dataset.ic + ' ' : '') + esc(g.dataset.group) + '</div>' + $('.nav-sub', g).innerHTML;
+  pop.classList.add('show');
+  var r = cap.getBoundingClientRect();
+  pop.style.left = (r.right + 8) + 'px';
+  pop.style.top = Math.max(8, Math.min(r.top, window.innerHeight - pop.offsetHeight - 10)) + 'px';
+}
+function hideNavPop(){
+  clearTimeout(navPopHideT);
+  var pop = $('#navPop');
+  if (pop) pop.classList.remove('show');
+}
+/* hover 委托绑在 #nav / #navPop 容器上, 菜单重渲染(applyIdentity)不丢事件 */
+$('#nav').addEventListener('mouseover', function(e){
+  if (!document.body.classList.contains('nav-mini')) return;
+  var cap = e.target.closest('.nav-cap');
+  if (cap) showNavPop(cap.parentElement);
+});
+$('#nav').addEventListener('mouseleave', function(){
+  if (document.body.classList.contains('nav-mini')){ clearTimeout(navPopHideT); navPopHideT = setTimeout(hideNavPop, 160); }
+});
+$('#navPop').addEventListener('mouseenter', function(){ clearTimeout(navPopHideT); });
+$('#navPop').addEventListener('mouseleave', function(){ clearTimeout(navPopHideT); navPopHideT = setTimeout(hideNavPop, 160); });
+$('#navPop').addEventListener('click', function(){ hideNavPop(); }); // 点击子项(含同页重复点击)即关浮层
 
 /* ================= 实时自动监听(轮询) ================= */
 // 驾驶舱/分销链路/客户交易等展示型页面定时重拉, 用户端每笔操作数秒内自动出现, 无需手动刷新
@@ -6835,16 +6993,21 @@ function doResetDemo(){
 }
 function applyIdentity(){
   document.body.classList.remove('login-mode');
-  $('#sideFoot').innerHTML = '<div class="side-avatar">👤</div><div><div>' + esc(ME.name) + '</div><div class="side-ver">' + esc(ME.role) + ' · ' + esc(ME.region) + '</div></div>';
+  $('#sideFoot').innerHTML = '<div class="side-avatar">👤</div><div class="side-info"><div>' + esc(ME.name) + '</div><div class="side-ver">' + esc(ME.role) + ' · ' + esc(ME.region) + '</div></div>';
   $('#topbarUser').innerHTML = (ME.level === 0 ? '<a class="btn-outline btn-sm" style="margin-right:6px" href="/data-console" target="_blank" title="查看状态、备份与恢复演示数据">数据控制台</a><button class="btn-outline btn-sm" style="margin-right:10px" onclick="resetDemo()" title="重建种子数据, 清空现场操作">♻️ 重置演示数据</button>' : '') +
     '<span class="avatar">👤</span><span>' + esc(ME.name) + '</span>' +
     '<span class="role-pill role-' + ME.level + '">' + esc(ME.role) + '</span>' +
     '<button class="btn-outline btn-sm" onclick="logout()">切换账号</button>';
+  /* 分组折叠菜单: nav-cap 组头(组图标+组名+caret, 可点击) + nav-sub 子项容器; 组过滤规则与原版一致 */
   $('#nav').innerHTML = MENU.filter(function(g){ return ME.level === 0 || !g.lv0; }).map(function(g){
-    return '<div class="nav-cap">' + g.cap + '</div>' + g.items.map(function(it){
-      return '<a class="nav-item" href="#' + it[0] + '" data-page="' + it[0] + '"><span class="nav-ic">' + it[1] + '</span>' + it[2] + '</a>';
-    }).join('');
+    return '<div class="nav-group" data-group="' + esc(g.cap) + '" data-ic="' + (g.ic || '') + '">' +
+      '<div class="nav-cap" onclick="toggleNavGroup(this)"><span class="nav-gic">' + (g.ic || '·') + '</span><span class="nav-cap-name">' + esc(g.cap) + '</span><span class="nav-caret">▸</span></div>' +
+      '<div class="nav-sub">' + g.items.map(function(it){
+        return '<a class="nav-item" href="#' + it[0] + '" data-page="' + it[0] + '"><span class="nav-ic">' + it[1] + '</span>' + it[2] + '</a>';
+      }).join('') + '</div></div>';
   }).join('');
+  applyNavMini(localStorage.getItem('navMini') === '1'); // mini 状态跨刷新/重登保持
+  restoreNavState();                                     // 展开组记忆(当前展开组被身份过滤掉则回退第一组)
 }
 
 /* ================= 启动 ================= */
