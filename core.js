@@ -10,6 +10,7 @@ import { createNotificationService } from './src/domain/notification/notificatio
 import { createSystemService } from './src/domain/system/system-service.js';
 import { createOpsManagementService } from './src/domain/ops/ops-management-service.js';
 import { createMerchantPortalService } from './src/domain/merchant/merchant-portal-service.js';
+import { createAppUserService } from './src/domain/app/app-user-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -5018,6 +5019,15 @@ const merchantPortalService = createMerchantPortalService({
   nextId: nid,
   now,
 });
+const appUserService = createAppUserService({
+  users: () => { ensureSeeded(); return users; }, cards: () => { ensureSeeded(); return cards; },
+  transactions: () => { ensureSeeded(); return transactions; }, pointsLogs: () => { ensureSeeded(); return pointsLogs; },
+  tasks: () => { ensureSeeded(); return tasks; }, products: () => { ensureSeeded(); return products; }, orders: () => { ensureSeeded(); return orders; },
+  notificationRead: () => notifRead,
+  presentUser: pubUser, presentOrder: pubOrder, topup: doTopup, pay: doPay, redeem: doRedeem,
+  addPoints: addPointsLog, pointsSummary, productLimit, productRating, notifications: appNotificationsFor,
+  featureEnabled: ffOn, randomInt: ri, now,
+});
 
 return {
   getOpsDataState,
@@ -5036,6 +5046,7 @@ return {
   systemService,
   opsManagementService,
   merchantPortalService,
+  appUserService,
 };
 }
 

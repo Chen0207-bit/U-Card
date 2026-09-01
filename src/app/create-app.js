@@ -10,6 +10,7 @@ import { registerNotificationRoutes } from '../api/notification-routes.js';
 import { registerSystemRoutes } from '../api/system-routes.js';
 import { registerOpsManagementRoutes } from '../api/ops-management-routes.js';
 import { registerMerchantPortalRoutes } from '../api/merchant-portal-routes.js';
+import { registerAppUserRoutes } from '../api/app-user-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -32,6 +33,7 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
   registerSystemRoutes(router, core.systemService);
   registerOpsManagementRoutes(router, core.opsManagementService);
   registerMerchantPortalRoutes(router, core.merchantPortalService);
+  registerAppUserRoutes(router, core.appUserService);
 
   return {
     config,

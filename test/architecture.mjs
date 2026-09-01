@@ -17,7 +17,7 @@ const check = (name, condition, detail = '') => {
 
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
-check('Router 注册首批领域路由', demo.routes.length === 50, demo.routes.join(','));
+check('Router 注册首批领域路由', demo.routes.length === 70, demo.routes.join(','));
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
