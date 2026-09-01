@@ -5112,7 +5112,7 @@ LOADERS.compKyc = function(){
   ]).then(function(rs){
     CK_LIST = rs[0].list || [];
     CS_LIST = rs[1].list || CS_LIST;
-    var s = d.summary || {};
+    var s = rs[0].summary || {};
     var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
     $('#ckSum').innerHTML =
       sc('🛡️', '#e0f2fe', s.total, '持卡人档案') + sc('⚪', '#f1f5f9', s.low, 'L0 基础档') + sc('🔵', '#dbeafe', s.mid, 'L1 初级') +
@@ -5179,7 +5179,7 @@ LOADERS.compKyb = function(){
   ]).then(function(rs){
     KB_LIST = rs[0].list || [];
     CS_LIST = rs[1].list || CS_LIST;
-    var s = d.summary || {};
+    var s = rs[0].summary || {};
     var sc = function(ic, bg, v, k){ return '<div class="sum-card"><div class="ic" style="background:' + bg + '">' + ic + '</div><div><div class="v num">' + nz(v) + '</div><div class="k">' + k + '</div></div></div>'; };
     $('#kbSum').innerHTML =
       sc('🏢', '#e0f2fe', s.total, 'KYB 案件') + sc('⏳', '#fef3c7', s.pending, '待审核') +
