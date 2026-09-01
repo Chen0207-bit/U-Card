@@ -4,25 +4,22 @@ import { createRouter } from '../api/router.js';
 import { registerOpsRoutes } from '../api/ops-routes.js';
 import { registerDemoEntryRoutes } from '../api/demo-entry-routes.js';
 import { registerCardRoutes } from '../api/card-routes.js';
-import {
-  handleApi as legacyHandleApi, getOpsDataState, exportOpsBackup, restoreOpsSeed,
-  getAdminAccountChoices, getAppAccountChoices, getMerchantAccountChoices, changeAppCardStatus,
-} from '../../core.js';
+import { defaultCoreRuntime } from '../../core.js';
 
-export function createApp({ env = {}, defaults = {} } = {}) {
+export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
   const config = createConfig(env, defaults);
   const router = createRouter();
   registerOpsRoutes(router, {
-    getState: getOpsDataState,
-    exportBackup: exportOpsBackup,
-    restoreSeed: restoreOpsSeed,
+    getState: core.getOpsDataState,
+    exportBackup: core.exportOpsBackup,
+    restoreSeed: core.restoreOpsSeed,
   }, config);
   registerDemoEntryRoutes(router, {
-    getAdminAccounts: getAdminAccountChoices,
-    getAppAccounts: getAppAccountChoices,
-    getMerchantAccounts: getMerchantAccountChoices,
+    getAdminAccounts: core.getAdminAccountChoices,
+    getAppAccounts: core.getAppAccountChoices,
+    getMerchantAccounts: core.getMerchantAccountChoices,
   });
-  registerCardRoutes(router, { changeStatus: changeAppCardStatus });
+  registerCardRoutes(router, { changeStatus: core.changeAppCardStatus });
 
   return {
     config,
@@ -31,7 +28,7 @@ export function createApp({ env = {}, defaults = {} } = {}) {
       const context = createRequestContext({ method, pathname, query, headers, config });
       const request = { method, pathname, query, body, headers: context.headers, context };
       const routed = await router.dispatch(request);
-      const result = routed || legacyHandleApi(method, pathname, query, body, context.headers, context);
+      const result = routed || core.handleApi(method, pathname, query, body, context.headers, context);
       return { ...result, requestId: context.requestId };
     },
   };

@@ -2,7 +2,7 @@ import { createApp } from '../src/app/create-app.js';
 import { createConfig } from '../src/config.js';
 import { corsHeaders } from '../src/runtime/http.js';
 import { resolveStaticPath } from '../src/runtime/static-routes.js';
-import { exportInternalSnapshot, importInternalSnapshot, handleApi, restoreOpsSeed } from '../core.js';
+import { createCoreRuntime, exportInternalSnapshot, importInternalSnapshot, handleApi, restoreOpsSeed } from '../core.js';
 import { AppState } from '../do.js';
 import { MemorySnapshotRepository } from '../src/repositories/memory-repository.js';
 import { DurableSnapshotRepository, RUNTIME_SNAPSHOT_KEY } from '../src/repositories/durable-repository.js';
@@ -40,6 +40,12 @@ check('卡片冻结由新 Router 和状态机处理', r.status === 200 && r.json
 r = await demo.handleApi('POST', '/api/app/card/unfreeze', {}, {}, { 'x-user': '1' });
 check('卡片解冻由新 Router 和状态机处理', r.status === 200 && r.json.status === 'active', JSON.stringify(r));
 check('挂失状态不能自助解冻', transitionCardStatus('lost', 'unfreeze').ok === false);
+const isolatedA = createCoreRuntime();
+const isolatedB = createCoreRuntime();
+const isolatedBefore = isolatedB.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance;
+isolatedA.handleApi('POST', '/api/app/topup', {}, { amount: 88, method: 'usdt' }, { 'x-user': '1' });
+const isolatedAfter = isolatedB.handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance;
+check('不同 StateContainer 实例互不串数据', isolatedAfter === isolatedBefore, `${isolatedAfter} != ${isolatedBefore}`);
 
 const production = createConfig({ APP_MODE: 'production' });
 check('生产模式默认 session 且禁止 reset', production.authMode === 'session' && production.allowDemoReset === false, JSON.stringify(production));
@@ -64,7 +70,7 @@ const changedMe = handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).jso
 const changedBalance = changedMe.card.balance;
 check('快照测试充值改变余额', topup.status === 200 && changedBalance > beforeBalance, JSON.stringify({ topup, before: beforeBalance, after: changedBalance }));
 const snapshot = exportInternalSnapshot();
-check('内部快照带版本和必要集合', snapshot.schemaVersion === 1 && snapshot.data.users.length >= 1 && snapshot.data.ledgerEntries.length >= 1);
+check('内部快照带版本、checksum 和必要集合', snapshot.schemaVersion === 2 && snapshot.checksum && snapshot.data.users.length >= 1 && snapshot.data.ledgerEntries.length >= 1);
 restoreOpsSeed('snapshot_test_reset');
 importInternalSnapshot(snapshot);
 const restoredMe = handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json;
@@ -72,7 +78,29 @@ check('内部快照可恢复业务状态', restoredMe.card.balance === changedBa
 let badSnapshotRejected = false;
 try { importInternalSnapshot({ schemaVersion: 999, data: {}, counters: {} }); } catch { badSnapshotRejected = true; }
 check('拒绝未知快照版本', badSnapshotRejected);
+let corruptSnapshotRejected = false;
+const balanceBeforeCorruptImport = handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance;
+try { const corrupt = structuredClone(snapshot); corrupt.data.users[0].name = 'tampered'; importInternalSnapshot(corrupt); } catch { corruptSnapshotRejected = true; }
+check('拒绝 checksum 不匹配的损坏快照', corruptSnapshotRejected);
+check('损坏快照恢复失败不破坏当前状态', handleApi('GET', '/api/app/me', {}, {}, { 'x-user': '1' }).json.card.balance === balanceBeforeCorruptImport);
+const legacySnapshot = structuredClone(snapshot);
+legacySnapshot.schemaVersion = 1;
+delete legacySnapshot.checksum;
+let legacyAccepted = true;
+try { importInternalSnapshot(legacySnapshot); } catch { legacyAccepted = false; }
+check('兼容读取线上既有 schema v1 快照', legacyAccepted);
 restoreOpsSeed('snapshot_test_cleanup');
+
+const deterministicRuntime = createCoreRuntime();
+deterministicRuntime.restoreOpsSeed('deterministic_first');
+const deterministicFirst = deterministicRuntime.exportInternalSnapshot();
+deterministicRuntime.handleApi('POST', '/api/app/topup', {}, { amount: 33, method: 'usdt' }, { 'x-user': '1' });
+deterministicRuntime.restoreOpsSeed('deterministic_second');
+const deterministicSecond = deterministicRuntime.exportInternalSnapshot();
+check('重复恢复会重置随机种子与 ID 基线',
+  deterministicFirst.data.users[0].phone === deterministicSecond.data.users[0].phone
+  && deterministicFirst.data.cards[0].number === deterministicSecond.data.cards[0].number
+  && deterministicFirst.data.transactions[0].id === deterministicSecond.data.transactions[0].id);
 
 console.log('\n== Snapshot Repository ==');
 const memoryRepository = new MemorySnapshotRepository();
@@ -81,6 +109,8 @@ await memoryRepository.save({ schemaVersion: 1, data: { marker: 'memory' } });
 const memoryLoaded = await memoryRepository.load();
 memoryLoaded.data.marker = 'mutated';
 check('Memory Repository 保存隔离副本', (await memoryRepository.load()).data.marker === 'memory');
+await memoryRepository.reset({ schemaVersion: 1, data: { marker: 'reset' } });
+check('Memory Repository reset 与脱敏投影可用', (await memoryRepository.exportRedacted(s => ({ marker: s.data.marker }))).marker === 'reset');
 
 const durableMemory = new Map();
 const fakeState = {
@@ -107,6 +137,13 @@ const durable2 = new AppState(fakeState, durableEnv);
 durableResponse = await durable2.fetch(new Request('http://do/api/app/me', { headers: { 'x-user': '1' } }));
 const durableMe = await durableResponse.json();
 check('DO 重建后从 storage 恢复最后余额', durableResponse.status === 200 && durableMe.card.balance === durableBalance, `${durableMe.card?.balance} != ${durableBalance}`);
+const failingState = {
+  storage: { get: async () => null, put: async () => { throw new Error('storage unavailable'); } },
+  blockConcurrencyWhile: (fn) => fn(),
+};
+const failingDurable = new AppState(failingState, durableEnv);
+const failingResponse = await failingDurable.fetch(new Request('http://do/api/app/me', { headers: { 'x-user': '1' } }));
+check('Repository 写入失败不会返回业务成功', failingResponse.status === 500);
 restoreOpsSeed('durable_test_cleanup');
 
 console.log(`\n===== ARCH PASS ${pass} FAIL ${fail} =====`);

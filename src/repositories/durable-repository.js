@@ -17,6 +17,15 @@ export class DurableSnapshotRepository {
     await this.storage.put(this.key, snapshot);
   }
 
+  async reset(snapshot) {
+    await this.save(snapshot);
+  }
+
+  async exportRedacted(redactor) {
+    if (typeof redactor !== 'function') throw new TypeError('exportRedacted 需要脱敏投影函数');
+    return redactor(await this.load());
+  }
+
   async hasSnapshot() {
     return Boolean(await this.storage.get(this.key));
   }

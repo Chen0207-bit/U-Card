@@ -5,6 +5,13 @@
 import { createVersionedSnapshot, validateVersionedSnapshot } from './src/state/snapshot-codec.js';
 import { transitionCardStatus } from './src/domain/card/card-state-machine.js';
 
+/**
+ * 创建一个彼此隔离的业务状态容器。
+ * 所有数组、计数器和业务函数都封闭在实例内，Node、测试和每个 Durable Object
+ * 必须显式持有自己的 runtime，避免模块单例导致跨实例串数据。
+ */
+export function createCoreRuntime() {
+
 // ---------------- 工具 ----------------
 let seed = 42;
 function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
@@ -56,6 +63,9 @@ let ffFlags, opsRateCfg, rlBuckets; // P5.6 运维中心: Feature Flag 开关 / 
 let inited = false;
 let demoSeededAt = 0, demoRestoreCount = 0, demoLastAction = 'cold_start', demoSeedReason = 'cold_start';
 function initSeed() {
+  seed = 42;
+  idSeq = 1000;
+  notifRead = {};
   demoSeededAt = now();
   demoRestoreCount += 1;
   demoLastAction = demoSeedReason;
@@ -2932,14 +2942,14 @@ function opsDataState() {
 }
 
 function ensureSeeded() { if (!inited) initSeed(); }
-export function getOpsDataState() { ensureSeeded(); return opsDataState(); }
-export function exportOpsBackup() {
+function getOpsDataState() { ensureSeeded(); return opsDataState(); }
+function exportOpsBackup() {
   ensureSeeded();
   const backup = opsBackupData();
   appendOpsLog('运维中心', '数据备份导出', '全量内存 JSON · ' + Object.keys(backup.counts).length + ' 个集合 / ' + Object.values(backup.counts).reduce((sum, n) => sum + n, 0) + ' 条');
   return backup;
 }
-export function restoreOpsSeed(reason = 'console_restore') {
+function restoreOpsSeed(reason = 'console_restore') {
   demoSeedReason = reason;
   inited = false;
   initSeed();
@@ -2948,7 +2958,7 @@ export function restoreOpsSeed(reason = 'console_restore') {
 }
 
 // 内部运行快照: 未脱敏，仅供受控 Repository/DO storage 使用，不能直接下载给前端。
-export function exportInternalSnapshot() {
+function exportInternalSnapshot() {
   ensureSeeded();
   return createVersionedSnapshot({
     counters: { seed, idSeq, demoSeededAt, demoRestoreCount, demoLastAction, demoSeedReason },
@@ -2970,7 +2980,7 @@ export function exportInternalSnapshot() {
   });
 }
 
-export function importInternalSnapshot(input) {
+function importInternalSnapshot(input) {
   const snapshot = validateVersionedSnapshot(input);
   const d = structuredClone(snapshot.data);
   ({
@@ -2992,7 +3002,7 @@ export function importInternalSnapshot(input) {
   return opsDataState();
 }
 
-export function getAdminAccountChoices() {
+function getAdminAccountChoices() {
   if (!inited) initSeed();
   return salesReps.map(s => ({
     id: s.id, name: s.name, role: s.role, level: s.level, region: s.region,
@@ -3001,12 +3011,12 @@ export function getAdminAccountChoices() {
   }));
 }
 
-export function getAppAccountChoices() {
+function getAppAccountChoices() {
   if (!inited) initSeed();
   return users.map(u => ({ id: u.id, name: u.name, phone: u.phone, kycLevel: u.kycLevel, points: u.points }));
 }
 
-export function getMerchantAccountChoices() {
+function getMerchantAccountChoices() {
   if (!inited) initSeed();
   return {
     list: mchAccounts.filter(m => m.status === 'active').map(m => ({
@@ -3016,7 +3026,7 @@ export function getMerchantAccountChoices() {
   };
 }
 
-export function changeAppCardStatus(userId, action) {
+function changeAppCardStatus(userId, action) {
   if (!inited) initSeed();
   if (!users.some(u => u.id === userId)) return { status: 401, json: { error: '未登录', code: 'AUTH_REQUIRED' } };
   const card = cards.find(c => c.userId === userId);
@@ -3029,7 +3039,7 @@ export function changeAppCardStatus(userId, action) {
 
 // ---------------- API 路由(同步, 壳层负责 body 解析与响应写出) ----------------
 // 返回 {status, json}; p=pathname, q=query, b=body, h=headers
-export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
+function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
   if (!inited) initSeed(); // 懒初始化: 首个请求时生成种子(此时 Date.now() 为真实时间)
   const J = (data, status = 200) => ({ status, json: data });
   // 演示数据一键重置: 重建全部种子, 清空现场操作产生的数据(须在 J 声明后)
@@ -4953,3 +4963,29 @@ export function handleApi(method, p, q = {}, b = {}, h = {}, context = {}) {
   }
   return J({ error: 'not found: ' + p }, 404); // 未匹配的 /api/* 路径统一 404(防壳层读 null.status 崩 500)
 }
+
+return {
+  getOpsDataState,
+  exportOpsBackup,
+  restoreOpsSeed,
+  exportInternalSnapshot,
+  importInternalSnapshot,
+  getAdminAccountChoices,
+  getAppAccountChoices,
+  getMerchantAccountChoices,
+  changeAppCardStatus,
+  handleApi,
+};
+}
+
+export const defaultCoreRuntime = createCoreRuntime();
+export const getOpsDataState = (...args) => defaultCoreRuntime.getOpsDataState(...args);
+export const exportOpsBackup = (...args) => defaultCoreRuntime.exportOpsBackup(...args);
+export const restoreOpsSeed = (...args) => defaultCoreRuntime.restoreOpsSeed(...args);
+export const exportInternalSnapshot = (...args) => defaultCoreRuntime.exportInternalSnapshot(...args);
+export const importInternalSnapshot = (...args) => defaultCoreRuntime.importInternalSnapshot(...args);
+export const getAdminAccountChoices = (...args) => defaultCoreRuntime.getAdminAccountChoices(...args);
+export const getAppAccountChoices = (...args) => defaultCoreRuntime.getAppAccountChoices(...args);
+export const getMerchantAccountChoices = (...args) => defaultCoreRuntime.getMerchantAccountChoices(...args);
+export const changeAppCardStatus = (...args) => defaultCoreRuntime.changeAppCardStatus(...args);
+export const handleApi = (...args) => defaultCoreRuntime.handleApi(...args);

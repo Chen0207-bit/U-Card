@@ -13,7 +13,9 @@
 - 已将 Durable Object storage 收口到 `DurableSnapshotRepository`，同时提供可测试的 `MemorySnapshotRepository`。
 - 已迁移 4 条运维接口和 3 条免密演示入口接口到新 Router；其余接口继续由 legacy fallback 承接。
 - 已抽取统一响应/错误对象、轻量校验和卡片状态机；冻结/解冻/挂失 3 条接口已迁入新 Router，并通过真实页面交互验证。
-- 下一批：迁移用户端充值/消费服务，随后拆分账本与风控副作用。
+- 已将模块单例改为每实例独立 `CoreRuntime`/StateContainer，Node、测试和 Durable Object 显式注入实例，杜绝跨实例串数据。
+- 内部快照升级为 schema v2，包含 `createdAt` 与 checksum，同时兼容线上 schema v1；Repository 已补齐 reset、脱敏投影和写失败保护。
+- 迁移实时状态与剩余路径计数见 `docs/migration-status.md`。
 
 ## 1. 目标与边界
 
