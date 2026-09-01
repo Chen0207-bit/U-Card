@@ -5,6 +5,7 @@
 import { createApp } from './src/app/create-app.js';
 import { createCoreRuntime } from './core.js';
 import { DurableSnapshotRepository } from './src/repositories/durable-repository.js';
+import { createUnitOfWork } from './src/domain/shared/unit-of-work.js';
 
 export class AppState {
   constructor(state, env) {
@@ -13,6 +14,10 @@ export class AppState {
     this.core = createCoreRuntime();
     this.app = createApp({ env, core: this.core });
     this.repository = new DurableSnapshotRepository(state.storage);
+    this.uow = createUnitOfWork({
+      exportSnapshot: () => this.core.exportInternalSnapshot(),
+      importSnapshot: (snapshot) => this.core.importInternalSnapshot(snapshot),
+    });
     this.hasSnapshot = false;
     this.ready = state.blockConcurrencyWhile(async () => {
       const snapshot = await this.repository.load();
@@ -28,8 +33,20 @@ export class AppState {
       const url = new URL(req.url);
       const b = req.method === 'GET' ? {} : await req.json().catch(() => ({}));
       const h = Object.fromEntries(req.headers.entries()); // Headers → 普通对象(小写键), 与 node 壳一致
+      if (req.method !== 'GET') {
+        // 写请求走 UnitOfWork: 业务失败或 storage 写入失败都整体回滚内存状态
+        const outcome = await this.uow.run(
+          () => this.app.handleApi(req.method, url.pathname, Object.fromEntries(url.searchParams), b || {}, h),
+          () => this.repository.save(this.core.exportInternalSnapshot()),
+        );
+        if (!outcome.committed) {
+          return Response.json({ error: outcome.stage === 'persist' ? '持久化失败, 已回滚本次写入' : String(outcome.error) }, { status: 500 });
+        }
+        this.hasSnapshot = true;
+        return Response.json(outcome.result.json, { status: outcome.result.status, headers: { 'X-Request-Id': outcome.result.requestId } });
+      }
       const r = await this.app.handleApi(req.method, url.pathname, Object.fromEntries(url.searchParams), b || {}, h);
-      if (!this.hasSnapshot || req.method !== 'GET') {
+      if (!this.hasSnapshot) { // 首个 GET 也会把种子快照落盘, 保持与旧实现一致
         await this.repository.save(this.core.exportInternalSnapshot());
         this.hasSnapshot = true;
       }
