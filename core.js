@@ -12,6 +12,14 @@ import { createOpsManagementService } from './src/domain/ops/ops-management-serv
 import { createMerchantPortalService } from './src/domain/merchant/merchant-portal-service.js';
 import { createAppUserService } from './src/domain/app/app-user-service.js';
 import { createOpenApiMockService } from './src/domain/open-api/open-api-mock-service.js';
+import { createFinanceReconciliationService } from './src/domain/finance/finance-reconciliation-service.js';
+import { createLedgerService } from './src/domain/ledger/ledger-service.js';
+import { createBasicOperationsService } from './src/domain/admin/basic-operations-service.js';
+import { createCrmService } from './src/domain/crm/crm-service.js';
+import { createAdminShopService } from './src/domain/shop/admin-shop-service.js';
+import { createComplianceService } from './src/domain/compliance/compliance-service.js';
+import { createBiService } from './src/domain/bi/bi-service.js';
+import { createMerchantAdminPlatformService } from './src/domain/merchant/merchant-admin-platform-service.js';
 
 /**
  * 创建一个彼此隔离的业务状态容器。
@@ -5002,6 +5010,59 @@ const openApiMockService = createOpenApiMockService({
   orders: () => { ensureSeeded(); return orders; }, pointsSummary, presentTransaction: pubTx, presentOrder: pubOrder,
   maskCardNumber: maskCardNo, generateCardNumber: genCardNo, randomInt: ri, now, logCall: logOpenApi,
 });
+const financeReconciliationService = createFinanceReconciliationService({
+  transactions: () => { ensureSeeded(); return transactions; }, financeMeta: () => { ensureSeeded(); return financeMeta; },
+  commissions: () => { ensureSeeded(); return commissions; }, cards: () => { ensureSeeded(); return cards; },
+  cardLevels: CARD_LEVELS, round: lgR2, dayKey, isoDay, d2, now, ensureMerchantLedgerAccount, postLedgerTx,
+});
+const ledgerService = createLedgerService({
+  ledgerAccounts: () => { ensureSeeded(); return ledgerAccounts; }, ledgerEntries: () => { ensureSeeded(); return ledgerEntries; },
+  balanceSnapshots: () => { ensureSeeded(); return balanceSnapshots; }, frozenBalances: () => { ensureSeeded(); return frozenBalances; },
+  typeLabels: LEDGER_TYPE_LABEL, round: lgR2, now, isoDay, verifyLedger,
+});
+const seeded = value => () => { ensureSeeded(); return value(); };
+const basicOperationsService = createBasicOperationsService({
+  salesReps: seeded(() => salesReps), users: seeded(() => users), cards: seeded(() => cards), transactions: seeded(() => transactions),
+  orders: seeded(() => orders), commissions: seeded(() => commissions), customers: seeded(() => customers), pointsLogs: seeded(() => pointsLogs),
+  repById, subtreeIds, presentTransaction: pubTx, presentUser: pubUser, performanceRows: perfRows, cardLevels: CARD_LEVELS,
+  now, nextId: nid, randomInt: ri, pick, daysAgo, rangeStartTs, buildTrend, generateCardNo: genCardNo,
+  addCommissions, addPointsLog, ensureCardLedgerAccount, ledgerForMonthlyFee, ledgerForAdjust, ledgerForRefund,
+});
+const crmService = createCrmService({
+  salesReps: seeded(() => salesReps), users: seeded(() => users), cards: seeded(() => cards), transactions: seeded(() => transactions),
+  customers: seeded(() => customers), followups: seeded(() => followups), commissions: seeded(() => commissions), pointsLogs: seeded(() => pointsLogs),
+  repById, subtreeIds, presentCustomer: pubCustomer, presentCommission: pubCommission, performanceRows: perfRows, recentChains,
+  cardLevels: CARD_LEVELS, commissionRules: COMMISSION, tierLabels: TIER_LABELS, now, nextId: nid, ledgerForCommissionSettle,
+});
+const adminShopService = createAdminShopService({
+  salesReps: seeded(() => salesReps), users: seeded(() => users), pointsLogs: seeded(() => pointsLogs), products: seeded(() => products), orders: seeded(() => orders),
+  repById, subtreeIds, presentOrder: pubOrder, pointsPerUsd: POINTS_PER_USD, cardLevels: CARD_LEVELS, commissionRules: COMMISSION,
+  now, randomInt: ri, addPointsLog,
+});
+const complianceService = createComplianceService({
+  users: seeded(() => users), userDocs: seeded(() => userDocs), approvals: seeded(() => approvals), kybCases: seeded(() => kybCases),
+  sanctions: seeded(() => sanctions), peps: seeded(() => peps), strReports: seeded(() => strReports), riskEvents: seeded(() => riskEvents),
+  engineRules: seeded(() => engineRules), cases: seeded(() => compCases), countryRules: seeded(() => countryRules),
+  kycLimits: KYC_LIMITS, kybStatusLabels: KYB_STATUS_LABEL, strStatusLabels: STR_STATUS_LABEL, caseTypeLabels: COMP_CASE_TYPE_LABEL,
+  now, daysAgo, isoDay, nextId: nid, screenName, complianceScreenings, docTier, operatorName: id => repById(id)?.name || '运营总监',
+});
+const biService = createBiService({
+  transactions: seeded(() => transactions), salesReps: seeded(() => salesReps), cardLevels: CARD_LEVELS, metrics: BI_METRICS, dims: BI_DIMS,
+  parseQuery: biParseQ, context: biCtx, repById, overviewData: biOverviewData, usersData: biUsersData, rowMetrics: biRowMetrics,
+  successful: biSucc, gmv: biGmv, commissionScoped: biCommissionScoped, groupTransactions: biGroupTxs,
+  dimValue: biDimValue, d2, trend: biTrend, salesData: biSalesData, funnelData: biFunnelData,
+});
+const merchantAdminPlatformService = createMerchantAdminPlatformService({
+  accounts: seeded(() => mchAccounts), orders: seeded(() => mchOrders), refunds: seeded(() => mchRefunds),
+  settles: seeded(() => mchSettles), splits: seeded(() => mchSplits), risks: seeded(() => mchRisk),
+  accountById: mchById, orderById: mchOrderById, ordersOf: mchOrdersOf, kybOf,
+  presentAccount: pubMchAccount, presentOrder: pubMchOrder, presentRefund: pubMchRefund, presentSettle: pubMchSettle, reportRows: mchReportRows,
+  generateMerchantNumber: genMchNo, generateMerchantApiKey: genMchApiKey, timelineAdd: mchTimelineAdd,
+  postRefundLedger: mchRefundLedgerPost, recomputeSettle: mchBatchRecompute, postSettleLedger: mchSettleLedgerPost,
+  now, round: lgR2, operatorName: id => repById(id)?.name || '运营总监', merchantStatusLabels: MCH_STATUS_LABEL,
+  kybStatusLabels: KYB_STATUS_LABEL, refundStatusLabels: MCH_REFUND_STATUS_LABEL, orderStatusLabels: MCH_ORDER_STATUS_LABEL,
+  settleStatusLabels: MCH_SETTLE_STATUS_LABEL, splitTypeLabels: SPLIT_TYPE_LABEL, mccLabels: MCC_LABEL, riskThreshold: MCH_RISK_THRESHOLD,
+});
 
 return {
   getOpsDataState,
@@ -5022,6 +5083,14 @@ return {
   merchantPortalService,
   appUserService,
   openApiMockService,
+  financeReconciliationService,
+  ledgerService,
+  basicOperationsService,
+  crmService,
+  adminShopService,
+  complianceService,
+  biService,
+  merchantAdminPlatformService,
 };
 }
 

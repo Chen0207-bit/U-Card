@@ -12,6 +12,14 @@ import { registerOpsManagementRoutes } from '../api/ops-management-routes.js';
 import { registerMerchantPortalRoutes } from '../api/merchant-portal-routes.js';
 import { registerAppUserRoutes } from '../api/app-user-routes.js';
 import { registerOpenApiMockRoutes } from '../api/open-api-mock-routes.js';
+import { registerFinanceReconciliationRoutes } from '../api/finance-reconciliation-routes.js';
+import { registerLedgerRoutes } from '../api/ledger-routes.js';
+import { registerBasicOperationsRoutes } from '../api/basic-operations-routes.js';
+import { registerCrmRoutes } from '../api/crm-routes.js';
+import { registerAdminShopRoutes } from '../api/admin-shop-routes.js';
+import { registerComplianceRoutes } from '../api/compliance-routes.js';
+import { registerBiRoutes } from '../api/bi-routes.js';
+import { registerMerchantAdminPlatformRoutes } from '../api/merchant-admin-platform-routes.js';
 import { defaultCoreRuntime } from '../../core.js';
 
 export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime } = {}) {
@@ -36,6 +44,14 @@ export function createApp({ env = {}, defaults = {}, core = defaultCoreRuntime }
   registerMerchantPortalRoutes(router, core.merchantPortalService);
   registerAppUserRoutes(router, core.appUserService);
   registerOpenApiMockRoutes(router, core.openApiMockService);
+  registerFinanceReconciliationRoutes(router, core.financeReconciliationService);
+  registerLedgerRoutes(router, core.ledgerService);
+  registerBasicOperationsRoutes(router, core.basicOperationsService);
+  registerCrmRoutes(router, core.crmService);
+  registerAdminShopRoutes(router, core.adminShopService);
+  registerComplianceRoutes(router, core.complianceService);
+  registerBiRoutes(router, core.biService);
+  registerMerchantAdminPlatformRoutes(router, core.merchantAdminPlatformService);
 
   return {
     config,

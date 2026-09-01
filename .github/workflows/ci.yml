@@ -1,0 +1,34 @@
+name: U-Card quality gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Start demo server
+        run: |
+          npm start > /tmp/ucard-server.log 2>&1 &
+          echo $! > /tmp/ucard-server.pid
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:5177/api/admin/accounts >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/ucard-server.log
+          exit 1
+      - name: Run architecture and behavior gates
+        run: npm run test:all
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/ucard-server.log

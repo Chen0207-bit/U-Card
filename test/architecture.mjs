@@ -17,7 +17,7 @@ const check = (name, condition, detail = '') => {
 
 console.log('\n== 架构边界 ==');
 const demo = createApp({ env: { APP_MODE: 'demo', AUTH_MODE: 'demo-header', ALLOW_DEMO_RESET: 'true', CORS_ORIGINS: '*' } });
-check('Router 注册首批领域路由', demo.routes.length === 75, demo.routes.join(','));
+check('Router 注册首批领域路由', demo.routes.length === 142, demo.routes.join(','));
 
 let r = await demo.handleApi('GET', '/api/admin/users');
 check('后台无身份返回 401', r.status === 401, JSON.stringify(r));
@@ -42,6 +42,10 @@ const openMock = await demo.handleApi('POST', '/api/open/balance.query', {}, { u
 check('开放 API mock 由新 Router/Service 提供', openMock.status === 200 && openMock.json.endpoint === 'balance.query', JSON.stringify(openMock).slice(0, 120));
 const openMockUnauthorized = await demo.handleApi('POST', '/api/open/balance.query');
 check('开放 API mock 拒绝无 AppKey 请求', openMockUnauthorized.status === 401, JSON.stringify(openMockUnauthorized));
+const ledgerVerify = await demo.handleApi('GET', '/api/admin/ledger/verify', {}, {}, { 'x-sales': '1' });
+check('资金账本由新 Router/Service 提供且保持平衡', ledgerVerify.status === 200 && ledgerVerify.json.balanced === true, JSON.stringify(ledgerVerify).slice(0, 160));
+const financeRecon = await demo.handleApi('GET', '/api/admin/finance/recon', { type: 'consume' }, {}, { 'x-sales': '1' });
+check('财务对账由新 Router/Service 提供', financeRecon.status === 200 && financeRecon.json.type === 'consume', JSON.stringify(financeRecon).slice(0, 120));
 r = await demo.handleApi('GET', '/api/admin/notify/channels', {}, {}, { 'x-sales': '1' });
 check('消息渠道由新 Router/Service 提供', r.status === 200 && Array.isArray(r.json.list), JSON.stringify(r).slice(0, 120));
 r = await demo.handleApi('GET', '/api/admin/sys/roles', {}, {}, { 'x-sales': '1' });
