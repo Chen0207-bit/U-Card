@@ -20,5 +20,6 @@ export function registerBasicOperationsRoutes(router, service) {
   router.register('GET', '/api/admin/users', sales((request, actorId) => service.listUsers(actorId)));
   router.register('POST', '/api/admin/users', sales((request, actorId) => service.createUser(actorId, request.body)));
   router.register('POST', '/api/admin/sales', sales((request, actorId) => service.createSales(actorId, request.body)));
-  router.register('GET', '/api/admin/goals', sales((request, actorId) => service.goals(actorId, request.query)));
+  // legacy 分支无方法守卫: POST /api/admin/goals(目标配置保存演示)与 GET 返回同一数据集
+  ['GET', 'POST'].forEach(m => router.register(m, '/api/admin/goals', sales((request, actorId) => service.goals(actorId, request.query))));
 }

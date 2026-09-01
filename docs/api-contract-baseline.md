@@ -19,13 +19,13 @@
 从 `core.js` 与 `src/api/*.js`（不含 `src/api/staging/`）字面路径提取，排序后以换行连接：
 
 ```text
-总计：174
-admin：137
+总计：171
+admin：135
 app：25
 merchant：7
 open：2
-other：3
-SHA-256：f794b12e2d8e3f4171dbdb9e79292dfd96ae8689de5fd7740bedb8f1bef25d1d
+other：2
+SHA-256：0c37fb711770ee7b08d7637409495b954e47caaef06bd677a9ba47ca65d3df82
 ```
 
 ### 基线变更记录
@@ -34,6 +34,7 @@ SHA-256：f794b12e2d8e3f4171dbdb9e79292dfd96ae8689de5fd7740bedb8f1bef25d1d
 - **173 → 176（P5.1 支付编排接入）**：`src/api/payment-orchestration-routes.js` 从 staging 移入后，其 4 个前缀注册中的 3 个带尾斜杠字面量 `/api/admin/orch/adapters/`、`/api/admin/orch/tx/`、`/api/admin/orch/diff/` 进入扫描（旧 `core.js` 以正则字面量匹配同样端点，不被扫描）；9 个精确路径全部为既有端点，未新增公开能力。173 → 176（admin 136 → 139）。
 - **176 → 178（P1.5 经典风控接入）**：`src/api/classic-risk-routes.js` 移入后新增 2 个带尾斜杠前缀字面量 `/api/admin/risk/rules/`、`/api/admin/risk/lists/`（旧 `core.js` 以正则字面量匹配同样端点）；`/api/admin/risk/` 与 4 个精确路径均为既有字面量。176 → 178（admin 139 → 141）。
 - **178 → 174（legacy 分支删除批次 A）**：物理删除 `core.js` 中 P1.5/P1.6/P3/P4.1/P4.2/P4.3/P4.4/P4.5/P4.6/P5.1/P5.2/P5.3 已接管道域的旧分支体后，4 个仅作为旧 `startsWith` 前缀守卫存在、不对应任何 endpoint 的字面量随之消失：`/api/admin/compliance`、`/api/admin/finance`、`/api/admin/orch`、`/api/admin/risk-engine`（请求这些前缀本身旧代码即返回 404，新 Router 同样 404）。公开端点集合无变化，178 → 174（admin 141 → 137）。
+- **174 → 171（legacy 分支删除批次 B）**：删除 `/api/admin` 剩余旧分支体（基础运营/CRM/积分商城/P5.4 商户后台/P5.5 BI/P5.6 运维）。消失的 3 条为旧前缀守卫字面量：`/api/admin/bi/`、`/api/admin/mch/`（admin 组）与裸 `/api/admin`（无尾斜杠，归入 other 组；请求该前缀本身旧代码即返回 404，新 Router 同样 404），均不对应 endpoint。方法矩阵补齐：`POST /api/admin/goals`（legacy 分支无方法守卫，POST 与 GET 返回同一目标数据集，核心回归依赖此行为）。公开端点集合无变化，174 → 171（admin 137 → 135，other 3 → 2）。
 
 `node test/api-contract.mjs` 会检查该集合。新增、删除或重命名路径时必须先审查兼容性，再更新基线，不能为了让测试通过而直接修改哈希。
 
