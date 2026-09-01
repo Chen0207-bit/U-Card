@@ -5,6 +5,13 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "check": "node --check core.js && node --check server.js && node --check worker.js && node --check do.js",
+    "test:contract": "node test/api-contract.mjs",
+    "test:core": "node test/regress.mjs",
+    "test:http:user": "node test/route1-smoke.mjs",
+    "test:http:cross": "node test/routes-cross-smoke.mjs",
+    "test:http": "npm run test:http:user && npm run test:http:cross",
+    "test:all": "npm run check && npm run test:contract && npm run test:core && npm run test:http"
   }
 }
