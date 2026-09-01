@@ -210,7 +210,8 @@ function toast(msg, isErr){
 }
 function mreq(path, opts){
   opts = opts || {};
-  opts.headers = {'Content-Type': 'application/json', 'x-mch': String(ME ? ME.id : 0)};
+  // ME 未就绪时(首笔 /api/mch/me)回退 localStorage 的 mchId, 否则首请求带 x-mch:0 必 401
+  opts.headers = {'Content-Type': 'application/json', 'x-mch': String(ME ? ME.id : (parseInt(localStorage.getItem('mchId') || '0', 10) || 0))};
   if (opts.body) opts.body = JSON.stringify(opts.body);
   return fetch(API + path, opts).then(function(res){
     return res.json().catch(function(){ return {}; }).then(function(data){
